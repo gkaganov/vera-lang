@@ -1,2 +1,8 @@
-print 1 + 2 - 40 + 7
-print 11 + 11 + 11
+fn main() {
+  print 1 + 2 - 40 + 7
+  print 11 + 11 + 11 + 44
+}
+
+fn test() {
+  print 1 + 1
+}
