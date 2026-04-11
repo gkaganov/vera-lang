@@ -1,4 +1,5 @@
 target/
+out/
 /src/main/**/antlr/
 
 !.mvn/wrapper/maven-wrapper.jar
