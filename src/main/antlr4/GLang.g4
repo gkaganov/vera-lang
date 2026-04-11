@@ -5,12 +5,16 @@ package org.greg.antlr4;
 }
 
 program: expr+ EOF;
-expr: term (operation term)*;
-operation: PLUS | MINUS;
+expr: prefixOperation* term (infixOperation term)* EOL;
+prefixOperation: PRINT;
+infixOperation: PLUS | MINUS;
 term: INT;
+
+PRINT: 'print';
 
 PLUS: '+';
 MINUS: '-';
 INT: [0-9]+;
 
-WS: [ \t\r\n]+ -> skip;
+EOL: '\r\n' | '\n' | '\r' ;
+WHITESPACE: ' '+ -> skip;
