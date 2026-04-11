@@ -10,7 +10,6 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.util.function.Consumer;
 
-import static java.lang.constant.ClassDesc.of;
 import static java.lang.constant.ConstantDescs.*;
 import static java.lang.reflect.AccessFlag.PUBLIC;
 import static java.lang.reflect.AccessFlag.STATIC;
@@ -49,44 +48,74 @@ class GLangVisitorImpl extends GLangBaseVisitor<Void> {
         Consumer<MethodBuilder> fn = mb -> mb
                 .withCode(fnCode);
 
-        var fnName = ctx.fnName().LETTERS().getText();
+        var fnName = ctx.FN_NAME().getText();
         // we register our method with the ClassBuilder
-        classBuilder.withMethod(
-                fnName,
-                MethodTypeDesc.of(CD_void, CD_String.arrayType()),
-                PUBLIC.mask() | STATIC.mask(),
-                fn
-        );
+        if (fnName.equals("main")) {
+            classBuilder.withMethod(
+                    fnName,
+                    MethodTypeDesc.of(CD_void, CD_String.arrayType()),
+                    PUBLIC.mask() | STATIC.mask(),
+                    fn
+            );
+        } else {
+            classBuilder.withMethod(
+                    fnName,
+                    MethodTypeDesc.of(CD_void),
+                    PUBLIC.mask() | STATIC.mask(),
+                    fn
+            );
+        }
         return null;
     }
 
     @Override
     public Void visitExpr(GLangParser.ExprContext ctx) {
-        visitTerm(ctx.term(0));
-        for (int i = 0; i < ctx.infixOperation().size(); i++) {
-            visitTerm(ctx.term(i + 1));
-            visitInfixOperation(ctx.infixOperation(i));
+        if (!ctx.term().isEmpty()) {
+            visitTerm(ctx.term(0));
+            for (int i = 0; i < ctx.infixOperation().size(); i++) {
+                visitTerm(ctx.term(i + 1));
+                visitInfixOperation(ctx.infixOperation(i));
+            }
         }
 
         // after calculating the terms pass the result to the prefixOperation (e.g. print)
-        if (ctx.prefixOperation(0) != null) {
-            visitPrefixOperation(ctx.prefixOperation(0));
+        if (ctx.prefixOperation() != null) {
+            visitPrefixOperation(ctx.prefixOperation());
         }
         return null;
     }
 
     @Override
     public Void visitPrefixOperation(GLangParser.PrefixOperationContext ctx) {
+        if (ctx.fnBuiltinCall() != null) {
+            visitFnBuiltinCall(ctx.fnBuiltinCall());
+        } else if (ctx.fnCall() != null) {
+            visitFnCall(ctx.fnCall());
+        }
+        return null;
+    }
+
+    @Override
+    public Void visitFnBuiltinCall(GLangParser.FnBuiltinCallContext ctx) {
         //noinspection SwitchStatementWithTooFewBranches
         switch (ctx.getStart().getType()) {
             case GLangParser.PRINT:
                 var system = ClassDesc.of("java.lang", "System");
-                var printStream = of("java.io", "PrintStream");
+                var printStream = ClassDesc.of("java.io", "PrintStream");
                 currentCodeBuilder.getstatic(system, "out", printStream);
                 currentCodeBuilder.swap();
                 currentCodeBuilder.invokevirtual(printStream, "println", MethodTypeDesc.of(CD_void, CD_int));
                 break;
         }
+        return null;
+    }
+
+    @Override
+    public Void visitFnCall(GLangParser.FnCallContext ctx) {
+        var main = ClassDesc.of("Main");
+        var fnName = ctx.FN_NAME().getText();
+        var methodType = MethodTypeDesc.of(CD_void);
+        currentCodeBuilder.invokestatic(main, fnName, methodType);
         return null;
     }
 
