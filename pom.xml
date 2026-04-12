@@ -42,7 +42,6 @@
                     <!-- https://www.antlr.org/api/maven-plugin/latest/antlr4-mojo.html -->
                     <outputDirectory>${project.basedir}/target/generated-sources/org/greg/antlr4</outputDirectory>
                     <listener>false</listener>
-                    <visitor>true</visitor>
                 </configuration>
             </plugin>
         </plugins>
