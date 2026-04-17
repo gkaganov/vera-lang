@@ -1,5 +1,5 @@
-import org.greg.GLangCompiler;
+import org.greg.VeraCompiler;
 
 void main() throws IOException {
-    new GLangCompiler().compile(Path.of("main.gl"));
+    new VeraCompiler().compile(Path.of("main.gl"));
 }
