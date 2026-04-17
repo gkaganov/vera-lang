@@ -1,5 +1,7 @@
 import org.greg.VeraCompiler;
 
 void main() throws IOException {
-    new VeraCompiler().compile(Path.of("main.gl"));
+    var inputPath = Path.of("examples", "main.vera");
+    var outputPath = Path.of("out", "Main.class");
+    new VeraCompiler().compile(inputPath, outputPath);
 }
