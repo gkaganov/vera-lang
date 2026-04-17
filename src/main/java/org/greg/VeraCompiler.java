@@ -75,24 +75,23 @@ public class VeraCompiler {
         }
     }
 
-    public void compile(Path inputFile) throws IOException {
+    public void compile(Path inputFile, Path outputFile) throws IOException {
         var code = Files.readString(inputFile);
+        var bytecode = compile(code);
+
+        Files.createDirectories(outputFile.getParent());
+        Files.write(outputFile, bytecode);
+    }
+
+    public byte[] compile(String code) {
         var lexer = new VeraLexer(CharStreams.fromString(code));
         var parser = new VeraParser(new BufferedTokenStream(lexer));
         var program = parser.program();
 
-        System.out.println(program.toStringTree(parser));
-
-        var outPath = Path.of("out");
-        Files.createDirectories(outPath);
-        var className = "Main";
-        var classfilePath = outPath.resolve(className + ".class");
-        Files.deleteIfExists(classfilePath);
-
         // create an empty consumer and extend it with compiler logic
         Consumer<ClassBuilder> mainClass = processProgram(program, _ -> {});
         // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
-        ClassFile.of().buildTo(classfilePath, ClassDesc.of(className), mainClass);
+        return ClassFile.of().build(ClassDesc.of("Main"), mainClass);
     }
 
     private Consumer<ClassBuilder> processProgram(ProgramContext ctx, Consumer<ClassBuilder> classBuilder) {
@@ -216,6 +215,7 @@ public class VeraCompiler {
         PrimaryExpressionResult(FunctionState fnState) {
             this(fnState, Option.none());
         }
+
         PrimaryExpressionResult(FunctionState fnState, String pendingSymbol) {
             this(fnState, Option.of(pendingSymbol));
         }

@@ -1,5 +1,5 @@
 fn main(args: String) {
-  print(1)
+  print(50)
   print(156)
   var myvar = 42
   test()
