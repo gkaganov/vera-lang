@@ -13,8 +13,12 @@
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
+        <!-- grammar, parser, lexer -->
         <antlr.version>4.13.2</antlr.version>
+        <!-- immutable collections -->
         <vavr.version>1.0.1</vavr.version>
+        <!-- testing -->
+        <junit.version>6.0.3</junit.version>
     </properties>
 
     <dependencies>
@@ -29,6 +33,13 @@
             <artifactId>vavr</artifactId>
             <version>${vavr.version}</version>
             <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
