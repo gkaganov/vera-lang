@@ -1,6 +1,11 @@
-# build output
-target/
+# vera compiler build output
 out/
+
+# gradle build output
+build/
+
+# gradle config
+.gradle/
 
 # intellij config
 .idea/
