@@ -4,54 +4,64 @@ import org.antlr.v4.runtime.BufferedTokenStream
 import org.antlr.v4.runtime.CharStreams
 import org.greg.antlr.VeraLexer
 import org.greg.antlr.VeraParser
-import org.greg.antlr.VeraParser.*
-import java.io.IOException
+import org.greg.antlr.VeraParser.ArgumentListContext
+import org.greg.antlr.VeraParser.BindStatementContext
+import org.greg.antlr.VeraParser.ChainedExpressionContext
+import org.greg.antlr.VeraParser.ExpressionContext
+import org.greg.antlr.VeraParser.FunctionDeclarationContext
+import org.greg.antlr.VeraParser.PrimaryExpressionContext
+import org.greg.antlr.VeraParser.ProgramContext
+import org.greg.antlr.VeraParser.StatementContext
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.ClassFile
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.MethodBuilder
 import java.lang.constant.ClassDesc
-import java.lang.constant.ConstantDescs
+import java.lang.constant.ConstantDescs.CD_String
+import java.lang.constant.ConstantDescs.CD_int
+import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
-import java.nio.file.Files
 import java.nio.file.Path
-import java.util.function.Consumer
+import kotlin.io.path.createDirectories
+import kotlin.io.path.readText
+import kotlin.io.path.writeBytes
+
+private data class LocalSlot(val slot: Int)
+
+private data class FnState(
+    val codeEmitter: CodeBuilder.() -> Unit = {},
+    val nextFreeLocalSlot: LocalSlot = LocalSlot(0),
+    private val locals: Map<String, LocalSlot> = emptyMap()
+) {
+    fun emit(block: CodeBuilder.() -> Unit): FnState =
+        copy(codeEmitter = {
+            codeEmitter()
+            block()
+        })
+
+    /** Bind a local name to the current free slot, then advance the slot counter. */
+    fun declareLocal(name: String): FnState =
+        copy(locals = locals + (name to nextFreeLocalSlot), nextFreeLocalSlot = LocalSlot(nextFreeLocalSlot.slot + 1))
+
+    fun getLocalSlot(name: String): LocalSlot? = locals[name]
+}
+
+private enum class Builtin(val keyword: String) {
+    PRINT("print");
+
+    companion object {
+        private val byKeyword = entries.associateBy { it.keyword }
+        fun from(keyword: String): Builtin? = byKeyword[keyword]
+    }
+}
 
 class VeraCompiler(private val mainClassName: String) {
-    @JvmRecord
-    private data class LocalSlot(val slot: Int)
 
-    @JvmRecord
-    private data class FunctionState(val cb: Consumer<CodeBuilder?>?, val localVars: Map<String?, LocalSlot?>?) {
-        constructor() : this(Consumer { `_`: CodeBuilder? -> }, emptyMap())
-
-        fun withCodeBuilder(cb: Consumer<CodeBuilder?>?): FunctionState {
-            return FunctionState(cb, localVars)
-        }
-
-        fun withLocalVars(localVars: Map<String?, LocalSlot?>?): FunctionState {
-            return FunctionState(cb, localVars)
-        }
-    }
-
-    private enum class Builtin(val text: String) {
-        PRINT("print");
-
-        companion object {
-            fun fromLabel(label: String?): Builtin? {
-                return entries.firstOrNull { it.text == label }
-            }
-        }
-    }
-
-    @Throws(IOException::class)
     fun compile(inputFile: Path, outputFile: Path) {
-        val code = Files.readString(inputFile)
-        val bytecode = compile(code)
-
-        Files.createDirectories(outputFile.parent)
-        Files.write(outputFile, bytecode)
+        val bytecode = compile(inputFile.readText())
+        outputFile.parent?.createDirectories()
+        outputFile.writeBytes(bytecode)
     }
 
     fun compile(code: String): ByteArray {
@@ -59,92 +69,81 @@ class VeraCompiler(private val mainClassName: String) {
         val parser = VeraParser(BufferedTokenStream(lexer))
         val program = parser.program()
 
-        // create an empty consumer and extend it with compiler logic
-        val mainClass = processProgram(program) { `_`: ClassBuilder? -> }
-        // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
-        return ClassFile.of().build(ClassDesc.of(mainClassName), mainClass)
+        val mainClassEmitter = processProgram(program)
+        return ClassFile.of().build(ClassDesc.of(mainClassName), mainClassEmitter)
     }
 
-    private fun processProgram(ctx: ProgramContext, classBuilder: Consumer<ClassBuilder?>): Consumer<ClassBuilder?> {
-        var classBuilder = classBuilder
-        for (i in ctx.declaration().indices) {
-            if (ctx.declaration(i).functionDeclaration() != null) {
-                classBuilder = processFunction(ctx.declaration(i).functionDeclaration(), classBuilder)
-            }
+    private fun processProgram(ctx: ProgramContext): ClassBuilder.() -> Unit {
+        var classEmitter: ClassBuilder.() -> Unit = {}
+        for (declaration in ctx.declaration()) {
+            val fn = declaration.functionDeclaration() ?: continue
+            classEmitter = processFunction(fn, classEmitter)
         }
-        return classBuilder.andThen(Consumer { cb: ClassBuilder? -> cb!!.withFlags(AccessFlag.PUBLIC) })
+        return {
+            classEmitter()
+            withFlags(AccessFlag.PUBLIC)
+        }
     }
 
-    private fun processFunction(
-        ctx: FunctionDeclarationContext,
-        classBuilder: Consumer<ClassBuilder?>
-    ): Consumer<ClassBuilder?> {
-        // CodeBuilder and MethodBuilder work like ClassBuilder - define compiler logic in the consumer, which will later be passed to ClassFile for execution
-        var fnState = FunctionState()
+    private fun processFunction(ctx: FunctionDeclarationContext, classEmitter: ClassBuilder.() -> Unit): ClassBuilder.() -> Unit {
+        var fnState = FnState()
         if (ctx.parameterClause().parameters() != null) {
             // TODO number and type of params
-            fnState = fnState.withLocalVars(mapOf("args" to LocalSlot(0)))
+            fnState = fnState.declareLocal("args")
         }
-        for (i in ctx.block().statement().indices) {
-            fnState = processStatement(ctx.block().statement(i), fnState)
+        for (statement in ctx.block().statement()) {
+            fnState = processStatement(statement, fnState)
         }
-        fnState = fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { obj: CodeBuilder? -> obj!!.return_() }))
+        fnState = fnState.emit { return_() }
 
         val fnName = ctx.IDENTIFIER().text
-        val fnType = if (fnName == "main") MethodTypeDesc.of(
-            ConstantDescs.CD_void,
-            ConstantDescs.CD_String.arrayType()
-        ) else MethodTypeDesc.of(
-            ConstantDescs.CD_void
-        )
-        val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
-        val finalFnState = fnState
-        val fnDefinition = Consumer { mb: MethodBuilder? ->
-            mb!!
-                .withCode(finalFnState.cb)
+        val fnType = if (fnName == "main") {
+            MethodTypeDesc.of(CD_void, CD_String.arrayType())
+        } else {
+            MethodTypeDesc.of(CD_void)
         }
-        return classBuilder.andThen(Consumer { cb: ClassBuilder? ->
-            cb!!.withMethod(
-                fnName,
-                fnType,
-                fnFlags,
-                fnDefinition
-            )
-        })
+        val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
+        val fnDefinition: MethodBuilder.() -> Unit = { withCode(fnState.codeEmitter) }
+        return {
+            classEmitter()
+            withMethod(fnName, fnType, fnFlags, fnDefinition)
+        }
     }
 
-    private fun processStatement(ctx: StatementContext, fnState: FunctionState): FunctionState {
+    private fun processStatement(ctx: StatementContext, fnState: FnState): FnState {
         return if (ctx.bindStatement() != null) {
             processBindStatement(ctx.bindStatement(), fnState)
         } else if (ctx.expression() != null) {
             processExpression(ctx.expression(), fnState)
         } else {
-            throw IllegalStateException("Statement type " + ctx.bindStatement().getStart().text + " is invalid.")
+            error("Invalid statement: ${ctx.text}")
         }
     }
 
-    private fun processBindStatement(ctx: BindStatementContext, fnState: FunctionState): FunctionState {
+    private fun processBindStatement(ctx: BindStatementContext, fnState: FnState): FnState {
         var fnState = fnState
-        val newVarName = ctx.IDENTIFIER().text
-        val newVarPosition = LocalSlot(fnState.localVars!!.size)
-        // process expression tree
+        // process expression tree, put result on the stack
         fnState = processExpression(ctx.expression(), fnState)
-        // store result in local variable table
-        val codeWithIStore = fnState.cb!!.andThen(Consumer { cb: CodeBuilder? -> cb!!.istore(newVarPosition.slot) })
-        val newVarMap = fnState.localVars!! + (newVarName to newVarPosition)
-        return FunctionState(codeWithIStore, newVarMap)
+        // get result from stack and store it in local variable table
+        return storeLocalVar(fnState, ctx.IDENTIFIER().text)
     }
 
-    private fun processExpression(ctx: ExpressionContext, fnState: FunctionState): FunctionState {
+    private fun storeLocalVar(fnState: FnState, name: String): FnState {
+        return fnState
+            .emit { istore(fnState.nextFreeLocalSlot.slot) }
+            .declareLocal(name)
+    }
+
+    private fun processExpression(ctx: ExpressionContext, fnState: FnState): FnState {
         // TODO more chain links
         return processChainedExpression(ctx.chainedExpression(0), fnState)
     }
 
-    private fun processChainedExpression(ctx: ChainedExpressionContext, fnState: FunctionState): FunctionState {
+    private fun processChainedExpression(ctx: ChainedExpressionContext, fnState: FnState): FnState {
         var fnState = fnState
         val result = processPrimaryExpression(ctx.primaryExpression(), fnState)
-        val pendingSymbol = result.pendingSymbol
-        fnState = result.fnState
+        val pendingSymbol = result.second
+        fnState = result.first
 
         // no pending symbol -> done processing
         if (pendingSymbol == null) {
@@ -155,7 +154,7 @@ class VeraCompiler(private val mainClassName: String) {
             if (!ctx.argumentList().isEmpty()) {
                 fnState = processArguments(ctx.argumentList().first(), fnState)
             }
-            val builtin = Builtin.fromLabel(pendingSymbol)
+            val builtin = Builtin.from(pendingSymbol)
             fnState = if (builtin != null) {
                 processBuiltinCall(fnState, builtin)
             } else {
@@ -165,7 +164,7 @@ class VeraCompiler(private val mainClassName: String) {
         return fnState
     }
 
-    private fun processArguments(ctx: ArgumentListContext, fnState: FunctionState): FunctionState {
+    private fun processArguments(ctx: ArgumentListContext, fnState: FnState): FnState {
         var fnState = fnState
         if (ctx.arguments() == null) {
             return fnState
@@ -176,71 +175,41 @@ class VeraCompiler(private val mainClassName: String) {
         return fnState
     }
 
-    private fun processBuiltinCall(fnState: FunctionState, builtin: Builtin): FunctionState {
+    private fun processBuiltinCall(fnState: FnState, builtin: Builtin): FnState {
         return when (builtin) {
             Builtin.PRINT -> {
                 val system = ClassDesc.of("java.lang", "System")
                 val printStream = ClassDesc.of("java.io", "PrintStream")
-                fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
-                    cb!!.getstatic(system, "out", printStream)
-                    cb.swap()
-                    cb.invokevirtual(
-                        printStream,
-                        "println",
-                        MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int)
-                    )
-                }))
+                fnState.emit {
+                    getstatic(system, "out", printStream)
+                    swap()
+                    invokevirtual(printStream, "println", MethodTypeDesc.of(CD_void, CD_int))
+                }
             }
         }
     }
 
-    private fun processFunctionCall(fnState: FunctionState, fnName: String?): FunctionState {
+    private fun processFunctionCall(fnState: FnState, fnName: String): FnState {
         val mainClass = ClassDesc.of(mainClassName)
-        val fnType = MethodTypeDesc.of(ConstantDescs.CD_void)
-        return fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
-            cb!!.invokestatic(
-                mainClass,
-                fnName,
-                fnType
-            )
-        }))
+        val fnType = MethodTypeDesc.of(CD_void)
+        return fnState.emit { invokestatic(mainClass, fnName, fnType) }
     }
 
-    @JvmRecord
-    private data class PrimaryExpressionResult(val fnState: FunctionState, val pendingSymbol: String?) {
-        constructor(fnState: FunctionState) : this(fnState, null)
-    }
-
-    private fun processPrimaryExpression(
-        ctx: PrimaryExpressionContext,
-        fnState: FunctionState
-    ): PrimaryExpressionResult {
+    private fun processPrimaryExpression(ctx: PrimaryExpressionContext, fnState: FnState): Pair<FnState, String?> {
         if (ctx.literal() != null) {
-            return PrimaryExpressionResult(
-                fnState.withCodeBuilder(
-                    fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
-                        cb?.loadConstant(
-                            ctx.literal().text.toInt()
-                        )
-                    })
-                )
-            )
-        } else if (ctx.IDENTIFIER() != null) {
+            return fnState.emit { loadConstant(ctx.literal().text.toInt()) } to null
+        }
+        if (ctx.IDENTIFIER() != null) {
             val name = ctx.IDENTIFIER().text
-            val local = fnState.localVars!![name]
-
-            // the identifier is not a local variable so it must be a function
-            if (local != null) {
-                return PrimaryExpressionResult(
-                    fnState.withCodeBuilder(
-                        fnState.cb!!.andThen(Consumer { cb: CodeBuilder? -> cb!!.iload(local.slot) })
-                    )
-                )
+            val localSlot = fnState.getLocalSlot(name)
+            return if (localSlot != null) {
+                fnState.emit { iload(localSlot.slot) } to null
+            } else {
+                // not a local, could be builtin/function name
+                fnState to name
             }
-            // not a local; could be builtin/function name
-            return PrimaryExpressionResult(fnState, name)
         } else if (ctx.expression() != null) {
-            return PrimaryExpressionResult(processExpression(ctx.expression(), fnState))
+            return processExpression(ctx.expression(), fnState) to null
         } else {
             throw UnsupportedOperationException()
         }
