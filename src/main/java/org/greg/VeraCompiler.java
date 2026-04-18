@@ -37,6 +37,12 @@ import static java.lang.reflect.AccessFlag.STATIC;
 
 public class VeraCompiler {
 
+    private final String mainClassName;
+
+    public VeraCompiler(String mainClassName) {
+        this.mainClassName = mainClassName;
+    }
+
     private record LocalSlot(int slot) {}
 
     private record FunctionState(Consumer<CodeBuilder> cb, Map<String, LocalSlot> localVars) {
@@ -91,7 +97,7 @@ public class VeraCompiler {
         // create an empty consumer and extend it with compiler logic
         Consumer<ClassBuilder> mainClass = processProgram(program, _ -> {});
         // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
-        return ClassFile.of().build(ClassDesc.of("Main"), mainClass);
+        return ClassFile.of().build(ClassDesc.of(mainClassName), mainClass);
     }
 
     private Consumer<ClassBuilder> processProgram(ProgramContext ctx, Consumer<ClassBuilder> classBuilder) {
@@ -206,7 +212,7 @@ public class VeraCompiler {
     }
 
     private FunctionState processFunctionCall(FunctionState fnState, String fnName) {
-        var mainClass = ClassDesc.of("Main");
+        var mainClass = ClassDesc.of(mainClassName);
         var fnType = MethodTypeDesc.of(CD_void);
         return fnState.withCodeBuilder(fnState.cb.andThen(cb -> cb.invokestatic(mainClass, fnName, fnType)));
     }
@@ -248,56 +254,4 @@ public class VeraCompiler {
             throw new UnsupportedOperationException();
         }
     }
-    //fnState = fnState.withCodeBuilder(fnState.cb.andThen(cb -> cb.ldc(ctx.literal().getText())));
-
-    //if (Arrays.stream(Builtin.values()).anyMatch(val -> val.label.equals(ctx.IDENTIFIER().getText()))) {
 }
-
-    /*
-    private Consumer<CodeBuilder> processPrefixOperation(
-            VeraParser.PrefixOperationContext ctx,
-            Consumer<CodeBuilder> codeBuilder
-    ) {
-        if (ctx.fnBuiltinCall() != null) {
-            return processBuiltinCall(ctx.fnBuiltinCall(), codeBuilder);
-        } else if (ctx.fnCall() != null) {
-            return processFnCall(ctx.fnCall(), codeBuilder);
-        } else if (ctx.letDefinition() != null) {
-            return processLetDefinition(ctx.letDefinition(), codeBuilder, localVars);
-        } else {
-            throw new RuntimeException(ctx.getStart().getText() + " is an invalid PrefixOperation.");
-        }
-    }
-
-    private Consumer<CodeBuilder> processFnCall(VeraParser.FnCallContext ctx, Consumer<CodeBuilder> codeBuilder) {
-        var main = ClassDesc.of("Main");
-        var fnName = ctx.FN_NAME().getText();
-        var fnType = MethodTypeDesc.of(CD_void);
-        //var x = new process()
-        return codeBuilder.andThen(cb -> cb.invokestatic(main, fnName, fnType));
-    }
-
-    private Consumer<CodeBuilder> processLetDefinition(VeraParser.LetDefinitionContext ctx, Consumer<CodeBuilder> codeBuilder, HashMap<String, Integer> localVars) {
-        var varName = ctx.VAR_NAME().getText();
-        // the result of the expression is put on the stack
-        codeBuilder = processStatement(ctx.expr(), codeBuilder, localVars);
-        codeBuilder = codeBuilder.andThen(cb -> cb.istore(localVars.size()));
-        localVars.put(varName, localVars.size());
-        return codeBuilder;
-    }
-
-    private Consumer<CodeBuilder> processInfixOperation(VeraParser.InfixOperationContext ctx, Consumer<CodeBuilder> codeBuilder) {
-        int operationType = ctx.getStart().getType();
-        return switch (operationType) {
-            case VeraParser.PLUS -> codeBuilder.andThen(CodeBuilder::iadd);
-            case VeraParser.MINUS -> codeBuilder.andThen(CodeBuilder::isub);
-            default -> throw new RuntimeException("OperationType " + operationType + " is not a valid InfixOperation.");
-        };
-    }
-
-    private Consumer<CodeBuilder> processTerm(VeraParser.TermContext ctx, Consumer<CodeBuilder> codeBuilder) {
-        int value = Integer.parseInt(ctx.INT().getText());
-        return codeBuilder.andThen(cb -> cb.ldc(value));
-    }
-}
-*/
