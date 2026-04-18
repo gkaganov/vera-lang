@@ -1,7 +1,8 @@
-import org.greg.VeraCompiler;
+import org.greg.VeraCompiler
+import java.nio.file.Path
 
-void main() throws IOException {
-    var inputPath = Path.of("examples", "main.vera");
-    var outputPath = Path.of("out", "Main.class");
-    new VeraCompiler("Main").compile(inputPath, outputPath);
+fun main() {
+    val inputPath = Path.of("examples", "main.vera")
+    val outputPath = Path.of("out", "Main.class")
+    VeraCompiler("Main").compile(inputPath, outputPath)
 }

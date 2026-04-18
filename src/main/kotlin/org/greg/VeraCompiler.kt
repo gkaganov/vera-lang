@@ -1,257 +1,248 @@
-package org.greg;
+package org.greg
 
-import io.vavr.collection.Array;
-import io.vavr.collection.HashMap;
-import io.vavr.collection.List;
-import io.vavr.collection.Map;
-import io.vavr.control.Option;
-import org.antlr.v4.runtime.BufferedTokenStream;
-import org.antlr.v4.runtime.CharStreams;
-import org.greg.antlr4.VeraLexer;
-import org.greg.antlr4.VeraParser;
-import org.greg.antlr4.VeraParser.ArgumentListContext;
-import org.greg.antlr4.VeraParser.BindStatementContext;
-import org.greg.antlr4.VeraParser.ChainedExpressionContext;
-import org.greg.antlr4.VeraParser.ExpressionContext;
-import org.greg.antlr4.VeraParser.FunctionDeclarationContext;
-import org.greg.antlr4.VeraParser.PrimaryExpressionContext;
-import org.greg.antlr4.VeraParser.ProgramContext;
-import org.greg.antlr4.VeraParser.StatementContext;
+import org.antlr.v4.runtime.BufferedTokenStream
+import org.antlr.v4.runtime.CharStreams
+import org.greg.antlr4.VeraLexer
+import org.greg.antlr4.VeraParser
+import org.greg.antlr4.VeraParser.*
+import java.io.IOException
+import java.lang.classfile.ClassBuilder
+import java.lang.classfile.ClassFile
+import java.lang.classfile.CodeBuilder
+import java.lang.classfile.MethodBuilder
+import java.lang.constant.ClassDesc
+import java.lang.constant.ConstantDescs
+import java.lang.constant.MethodTypeDesc
+import java.lang.reflect.AccessFlag
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.function.Consumer
 
-import java.io.IOException;
-import java.lang.classfile.ClassBuilder;
-import java.lang.classfile.ClassFile;
-import java.lang.classfile.CodeBuilder;
-import java.lang.classfile.MethodBuilder;
-import java.lang.constant.ClassDesc;
-import java.lang.constant.MethodTypeDesc;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.function.Consumer;
+class VeraCompiler(private val mainClassName: String) {
+    @JvmRecord
+    private data class LocalSlot(val slot: Int)
 
-import static java.lang.constant.ConstantDescs.CD_String;
-import static java.lang.constant.ConstantDescs.CD_int;
-import static java.lang.constant.ConstantDescs.CD_void;
-import static java.lang.reflect.AccessFlag.PUBLIC;
-import static java.lang.reflect.AccessFlag.STATIC;
+    @JvmRecord
+    private data class FunctionState(val cb: Consumer<CodeBuilder?>?, val localVars: Map<String?, LocalSlot?>?) {
+        constructor() : this(Consumer { `_`: CodeBuilder? -> }, emptyMap())
 
-public class VeraCompiler {
-
-    private final String mainClassName;
-
-    public VeraCompiler(String mainClassName) {
-        this.mainClassName = mainClassName;
-    }
-
-    private record LocalSlot(int slot) {}
-
-    private record FunctionState(Consumer<CodeBuilder> cb, Map<String, LocalSlot> localVars) {
-        FunctionState() {
-            this(_ -> {}, HashMap.empty());
+        fun withCodeBuilder(cb: Consumer<CodeBuilder?>?): FunctionState {
+            return FunctionState(cb, localVars)
         }
 
-        FunctionState withCodeBuilder(Consumer<CodeBuilder> cb) {
-            return new FunctionState(cb, localVars);
-        }
-
-        FunctionState withLocalVars(Map<String, LocalSlot> localVars) {
-            return new FunctionState(cb, localVars);
+        fun withLocalVars(localVars: Map<String?, LocalSlot?>?): FunctionState {
+            return FunctionState(cb, localVars)
         }
     }
 
-    private enum Builtin {
+    private enum class Builtin(val text: String) {
         PRINT("print");
 
-        final String text;
-
-        Builtin(String text) {
-            this.text = text;
-        }
-
-        static List<String> textValues() {
-            return Array.of(values()).map(val -> val.text).toList();
-        }
-
-        static Option<Builtin> fromLabel(Option<String> label) {
-            return label
-                    .fold(
-                            Option::none,
-                            lbl -> Array.of(values()).find(b -> b.text.equals(lbl))
-                    );
-        }
-    }
-
-    public void compile(Path inputFile, Path outputFile) throws IOException {
-        var code = Files.readString(inputFile);
-        var bytecode = compile(code);
-
-        Files.createDirectories(outputFile.getParent());
-        Files.write(outputFile, bytecode);
-    }
-
-    public byte[] compile(String code) {
-        var lexer = new VeraLexer(CharStreams.fromString(code));
-        var parser = new VeraParser(new BufferedTokenStream(lexer));
-        var program = parser.program();
-
-        // create an empty consumer and extend it with compiler logic
-        Consumer<ClassBuilder> mainClass = processProgram(program, _ -> {});
-        // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
-        return ClassFile.of().build(ClassDesc.of(mainClassName), mainClass);
-    }
-
-    private Consumer<ClassBuilder> processProgram(ProgramContext ctx, Consumer<ClassBuilder> classBuilder) {
-        for (int i = 0; i < ctx.declaration().size(); i++) {
-            if (ctx.declaration(i).functionDeclaration() != null) {
-                classBuilder = processFunction(ctx.declaration(i).functionDeclaration(), classBuilder);
+        companion object {
+            fun fromLabel(label: String?): Builtin? {
+                return entries.firstOrNull { it.text == label }
             }
         }
-        return classBuilder.andThen(cb -> cb.withFlags(PUBLIC));
     }
 
-    private Consumer<ClassBuilder> processFunction(FunctionDeclarationContext ctx, Consumer<ClassBuilder> classBuilder) {
+    @Throws(IOException::class)
+    fun compile(inputFile: Path, outputFile: Path) {
+        val code = Files.readString(inputFile)
+        val bytecode = compile(code)
+
+        Files.createDirectories(outputFile.getParent())
+        Files.write(outputFile, bytecode)
+    }
+
+    fun compile(code: String): ByteArray {
+        val lexer = VeraLexer(CharStreams.fromString(code))
+        val parser = VeraParser(BufferedTokenStream(lexer))
+        val program = parser.program()
+
+        // create an empty consumer and extend it with compiler logic
+        val mainClass = processProgram(program, Consumer { `_`: ClassBuilder? -> })
+        // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
+        return ClassFile.of().build(ClassDesc.of(mainClassName), mainClass)
+    }
+
+    private fun processProgram(ctx: ProgramContext, classBuilder: Consumer<ClassBuilder?>): Consumer<ClassBuilder?> {
+        var classBuilder = classBuilder
+        for (i in ctx.declaration().indices) {
+            if (ctx.declaration(i).functionDeclaration() != null) {
+                classBuilder = processFunction(ctx.declaration(i).functionDeclaration(), classBuilder)
+            }
+        }
+        return classBuilder.andThen(Consumer { cb: ClassBuilder? -> cb!!.withFlags(AccessFlag.PUBLIC) })
+    }
+
+    private fun processFunction(
+        ctx: FunctionDeclarationContext,
+        classBuilder: Consumer<ClassBuilder?>
+    ): Consumer<ClassBuilder?> {
         // CodeBuilder and MethodBuilder work like ClassBuilder - define compiler logic in the consumer, which will later be passed to ClassFile for execution
-        var fnState = new FunctionState();
+        var fnState = FunctionState()
         if (ctx.parameterClause().parameters() != null) {
             // TODO number and type of params
-            fnState = fnState.withLocalVars(HashMap.of("args", new LocalSlot(0)));
+            fnState = fnState.withLocalVars(mapOf("args" to LocalSlot(0)))
         }
-        for (int i = 0; i < ctx.block().statement().size(); i++) {
-            fnState = processStatement(ctx.block().statement(i), fnState);
+        for (i in ctx.block().statement().indices) {
+            fnState = processStatement(ctx.block().statement(i), fnState)
         }
-        fnState = fnState.withCodeBuilder(fnState.cb.andThen(CodeBuilder::return_));
+        fnState = fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { obj: CodeBuilder? -> obj!!.return_() }))
 
-        var fnName = ctx.IDENTIFIER().getText();
-        var fnType = fnName.equals("main") ? MethodTypeDesc.of(CD_void, CD_String.arrayType()) : MethodTypeDesc.of(CD_void);
-        var fnFlags = PUBLIC.mask() | STATIC.mask();
-        var finalFnState = fnState;
-        Consumer<MethodBuilder> fnDefinition = mb -> mb
-                .withCode(finalFnState.cb);
-        return classBuilder.andThen(cb -> cb.withMethod(
+        val fnName = ctx.IDENTIFIER().getText()
+        val fnType = if (fnName == "main") MethodTypeDesc.of(
+            ConstantDescs.CD_void,
+            ConstantDescs.CD_String.arrayType()
+        ) else MethodTypeDesc.of(
+            ConstantDescs.CD_void
+        )
+        val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
+        val finalFnState = fnState
+        val fnDefinition = Consumer { mb: MethodBuilder? ->
+            mb!!
+                .withCode(finalFnState.cb)
+        }
+        return classBuilder.andThen(Consumer { cb: ClassBuilder? ->
+            cb!!.withMethod(
                 fnName,
                 fnType,
                 fnFlags,
                 fnDefinition
-        ));
+            )
+        })
     }
 
-    private FunctionState processStatement(StatementContext ctx, FunctionState fnState) {
+    private fun processStatement(ctx: StatementContext, fnState: FunctionState): FunctionState {
         if (ctx.bindStatement() != null) {
-            return processBindStatement(ctx.bindStatement(), fnState);
+            return processBindStatement(ctx.bindStatement(), fnState)
         } else if (ctx.expression() != null) {
-            return processExpression(ctx.expression(), fnState);
+            return processExpression(ctx.expression(), fnState)
         } else {
-            throw new IllegalStateException("Statement type " + ctx.bindStatement().getStart().getText() + " is invalid.");
+            throw IllegalStateException("Statement type " + ctx.bindStatement().getStart().getText() + " is invalid.")
         }
     }
 
-    private FunctionState processBindStatement(BindStatementContext ctx, FunctionState fnState) {
-        var newVarName = ctx.IDENTIFIER().getText();
-        var newVarPosition = new LocalSlot(fnState.localVars.size());
+    private fun processBindStatement(ctx: BindStatementContext, fnState: FunctionState): FunctionState {
+        var fnState = fnState
+        val newVarName = ctx.IDENTIFIER().text
+        val newVarPosition = LocalSlot(fnState.localVars!!.size)
         // process expression tree
-        fnState = processExpression(ctx.expression(), fnState);
+        fnState = processExpression(ctx.expression(), fnState)
         // store result in local variable table
-        var codeWithIStore = fnState.cb.andThen(cb -> cb.istore(newVarPosition.slot));
-        var newVarMap = fnState.localVars.put(newVarName, newVarPosition);
-        return new FunctionState(codeWithIStore, newVarMap);
+        val codeWithIStore = fnState.cb!!.andThen(Consumer { cb: CodeBuilder? -> cb!!.istore(newVarPosition.slot) })
+        val newVarMap = fnState.localVars!! + (newVarName to newVarPosition)
+        return FunctionState(codeWithIStore, newVarMap)
     }
 
-    private FunctionState processExpression(ExpressionContext ctx, FunctionState fnState) {
+    private fun processExpression(ctx: VeraParser.ExpressionContext, fnState: FunctionState): FunctionState {
         // TODO more chain links
-        return processChainedExpression(ctx.chainedExpression(0), fnState);
+        return processChainedExpression(ctx.chainedExpression(0), fnState)
     }
 
-    @SuppressWarnings("StatementWithEmptyBody")
-    private FunctionState processChainedExpression(ChainedExpressionContext ctx, FunctionState fnState) {
-        var result = processPrimaryExpression(ctx.primaryExpression(), fnState);
-        var pendingSymbol = result.pendingSymbol;
-        fnState = result.fnState;
+    private fun processChainedExpression(ctx: ChainedExpressionContext, fnState: FunctionState): FunctionState {
+        var fnState = fnState
+        val result = processPrimaryExpression(ctx.primaryExpression(), fnState)
+        val pendingSymbol = result.pendingSymbol
+        fnState = result.fnState
 
         // no pending symbol -> done processing
-        if (pendingSymbol.isEmpty()) {
-            return fnState;
+        if (pendingSymbol == null) {
+            return fnState
         }
         // pending symbol -> function/builtin call
         if (ctx.argumentList() != null) {
             if (!ctx.argumentList().isEmpty()) {
-                fnState = processArguments(ctx.argumentList().getFirst(), fnState);
+                fnState = processArguments(ctx.argumentList().first(), fnState)
             }
-            Option<Builtin> builtin = Builtin.fromLabel(pendingSymbol);
-            if (builtin.isDefined()) {
-                fnState = processBuiltinCall(fnState, builtin.get());
+            val builtin = Builtin.fromLabel(pendingSymbol)
+            fnState = if (builtin != null) {
+                processBuiltinCall(fnState, builtin)
             } else {
-                fnState = processFunctionCall(fnState, pendingSymbol.get());
+                processFunctionCall(fnState, pendingSymbol)
             }
-        } else if (ctx.memberAccess() != null) {
         }
-        return fnState;
+        return fnState
     }
 
-    private FunctionState processArguments(ArgumentListContext ctx, FunctionState fnState) {
+    private fun processArguments(ctx: ArgumentListContext, fnState: FunctionState): FunctionState {
+        var fnState = fnState
         if (ctx.arguments() == null) {
-            return fnState;
+            return fnState
         }
-        for (var expr : ctx.arguments().expression()) {
-            fnState = processExpression(expr, fnState);
+        for (expr in ctx.arguments().expression()) {
+            fnState = processExpression(expr, fnState)
         }
-        return fnState;
+        return fnState
     }
 
-    private FunctionState processBuiltinCall(FunctionState fnState, Builtin builtin) {
-        return switch (builtin) {
-            case Builtin.PRINT -> {
-                var system = ClassDesc.of("java.lang", "System");
-                var printStream = ClassDesc.of("java.io", "PrintStream");
-                yield fnState.withCodeBuilder(fnState.cb.andThen(cb -> {
-                    cb.getstatic(system, "out", printStream);
-                    cb.swap();
-                    cb.invokevirtual(printStream, "println", MethodTypeDesc.of(CD_void, CD_int));
-                }));
-            }
-        };
-    }
-
-    private FunctionState processFunctionCall(FunctionState fnState, String fnName) {
-        var mainClass = ClassDesc.of(mainClassName);
-        var fnType = MethodTypeDesc.of(CD_void);
-        return fnState.withCodeBuilder(fnState.cb.andThen(cb -> cb.invokestatic(mainClass, fnName, fnType)));
-    }
-
-    private record PrimaryExpressionResult(FunctionState fnState, Option<String> pendingSymbol) {
-        PrimaryExpressionResult(FunctionState fnState) {
-            this(fnState, Option.none());
-        }
-
-        PrimaryExpressionResult(FunctionState fnState, String pendingSymbol) {
-            this(fnState, Option.of(pendingSymbol));
-        }
-    }
-
-    private PrimaryExpressionResult processPrimaryExpression(PrimaryExpressionContext ctx, FunctionState fnState) {
-        if (ctx.literal() != null) {
-            return new PrimaryExpressionResult(
-                    fnState.withCodeBuilder(
-                            fnState.cb.andThen(cb -> cb.ldc(Integer.parseInt(ctx.literal().getText())))
+    private fun processBuiltinCall(fnState: FunctionState, builtin: Builtin): FunctionState {
+        return when (builtin) {
+            Builtin.PRINT -> {
+                val system = ClassDesc.of("java.lang", "System")
+                val printStream = ClassDesc.of("java.io", "PrintStream")
+                fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
+                    cb!!.getstatic(system, "out", printStream)
+                    cb.swap()
+                    cb.invokevirtual(
+                        printStream,
+                        "println",
+                        MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int)
                     )
-            );
+                }))
+            }
+        }
+    }
+
+    private fun processFunctionCall(fnState: FunctionState, fnName: String?): FunctionState {
+        val mainClass = ClassDesc.of(mainClassName)
+        val fnType = MethodTypeDesc.of(ConstantDescs.CD_void)
+        return fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
+            cb!!.invokestatic(
+                mainClass,
+                fnName,
+                fnType
+            )
+        }))
+    }
+
+    @JvmRecord
+    private data class PrimaryExpressionResult(val fnState: FunctionState, val pendingSymbol: String?) {
+        constructor(fnState: FunctionState) : this(fnState, null)
+    }
+
+    private fun processPrimaryExpression(
+        ctx: PrimaryExpressionContext,
+        fnState: FunctionState
+    ): PrimaryExpressionResult {
+        if (ctx.literal() != null) {
+            return PrimaryExpressionResult(
+                fnState.withCodeBuilder(
+                    fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
+                        cb?.loadConstant(
+                            ctx.literal().getText().toInt()
+                        )
+                    })
+                )
+            )
         } else if (ctx.IDENTIFIER() != null) {
-            var name = ctx.IDENTIFIER().getText();
-            var local = fnState.localVars.get(name);
+            val name = ctx.IDENTIFIER().text
+            val local = fnState.localVars!![name]
 
             // the identifier is not a local variable so it must be a function
-            if (!local.isEmpty()) {
-                return new PrimaryExpressionResult(
-                        fnState.withCodeBuilder(
-                                fnState.cb.andThen(cb -> cb.iload(local.get().slot))
-                        )
-                );
+            if (local != null) {
+                return PrimaryExpressionResult(
+                    fnState.withCodeBuilder(
+                        fnState.cb!!.andThen(Consumer { cb: CodeBuilder? -> cb!!.iload(local.slot) })
+                    )
+                )
             }
             // not a local; could be builtin/function name
-            return new PrimaryExpressionResult(fnState, name);
+            return PrimaryExpressionResult(fnState, name)
         } else if (ctx.expression() != null) {
-            return new PrimaryExpressionResult(processExpression(ctx.expression(), fnState));
+            return PrimaryExpressionResult(processExpression(ctx.expression(), fnState))
         } else {
-            throw new UnsupportedOperationException();
+            throw UnsupportedOperationException()
         }
     }
 }
