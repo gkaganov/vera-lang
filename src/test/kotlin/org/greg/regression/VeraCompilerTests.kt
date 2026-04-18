@@ -1,35 +1,31 @@
-package org.greg.regression;
+package org.greg.regression
 
-import io.vavr.collection.HashMap;
-import org.greg.VeraCompiler;
-import org.greg.lib.classloader.ByteArrayClassLoader;
-import org.junit.jupiter.api.Test;
+import org.greg.VeraCompiler
+import org.greg.lib.classloader.ByteArrayClassLoader
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicLong
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class VeraCompilerTests {
-
-    private static final String EOL = System.lineSeparator();
-    private static final AtomicLong CLASS_ID = new AtomicLong();
-
+class VeraCompilerTests {
     @Test
-    void printBuiltinPrintsToSystemOut() throws Exception {
-        var source = """
+    @Throws(Exception::class)
+    fun printBuiltinPrintsToSystemOut() {
+        val source = """
                     fn testMethod() {
                         print(65)
                     }
-                """;
-        assertProgramPrints(source, 65 + EOL);
+                
+                """.trimIndent()
+        assertProgramPrints(source, "65$EOL")
     }
 
     @Test
-    void functionsCanBeCalled() throws Exception {
-        var source = """
+    @Throws(Exception::class)
+    fun functionsCanBeCalled() {
+        val source = """
                     fn testMethod() {
                         print1()
                         print2()
@@ -40,13 +36,15 @@ public class VeraCompilerTests {
                     fn print2() {
                         print(2)
                     }
-                """;
-        assertProgramPrints(source, 1 + EOL + 2 + EOL);
+                
+                """.trimIndent()
+        assertProgramPrints(source, "1${EOL}2${EOL}")
     }
 
     @Test
-    void varCanBeBoundAndAccessed() throws Exception {
-        var source = """
+    @Throws(Exception::class)
+    fun varCanBeBoundAndAccessed() {
+        val source = """
                     fn testMethod() {
                         var myVar1 = 50
                         var myVar2 = 51
@@ -54,35 +52,43 @@ public class VeraCompilerTests {
                         print(myVar2)
                         print(52)
                     }
-                """;
-        assertProgramPrints(source, 50 + EOL + 51 + EOL + 52 + EOL);
+                
+                """.trimIndent()
+        assertProgramPrints(source, 50.toString() + EOL + 51 + EOL + 52 + EOL)
     }
 
-    private void assertProgramPrints(String source, String expectedOutput) throws ReflectiveOperationException {
-        var mainMethodName = "testMethod";
-        var className = "CompiledTestClass" + CLASS_ID.getAndIncrement();
-        var bytecode = new VeraCompiler(className).compile(source);
-        var oldOut = System.out;
-        var baos = new ByteArrayOutputStream();
-        var classLoader = new ByteArrayClassLoader(HashMap.of(className, bytecode));
-        var testMethod = classLoader.loadClass(className).getMethod(mainMethodName);
+    @Throws(ReflectiveOperationException::class)
+    private fun assertProgramPrints(source: String, expectedOutput: String?) {
+        val mainMethodName = "testMethod"
+        val className = "CompiledTestClass" + CLASS_ID.getAndIncrement()
+        val bytecode = VeraCompiler(className).compile(source)
+        val oldOut = System.out
+        val baos = ByteArrayOutputStream()
+        val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
+        val testMethod = classLoader.loadClass(className).getMethod(mainMethodName)
         try {
-            System.setOut(new PrintStream(baos));
-            testMethod.invoke(null);
+            System.setOut(PrintStream(baos))
+            testMethod.invoke(null)
         } finally {
-            System.setOut(oldOut);
+            System.setOut(oldOut)
         }
-        assertEquals(expectedOutput, baos.toString(StandardCharsets.UTF_8));
+        Assertions.assertEquals(expectedOutput, baos.toString(StandardCharsets.UTF_8))
     }
 
-    @SuppressWarnings("unused")
-    private void assertProgramReturns(String source, Object expected) throws ReflectiveOperationException {
-        var methodName = "testMethod";
-        var className = "CompiledTestClass" + System.nanoTime();
-        var bytecode = new VeraCompiler(className).compile(source);
-        var classLoader = new ByteArrayClassLoader(HashMap.of(className, bytecode));
-        var testMethod = classLoader.loadClass(className).getMethod(methodName);
-        var actual = testMethod.invoke(null);
-        assertEquals(expected, actual);
+    @Suppress("unused")
+    @Throws(ReflectiveOperationException::class)
+    private fun assertProgramReturns(source: String, expected: Any?) {
+        val methodName = "testMethod"
+        val className = "CompiledTestClass" + System.nanoTime()
+        val bytecode = VeraCompiler(className).compile(source)
+        val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
+        val testMethod = classLoader.loadClass(className).getMethod(methodName)
+        val actual = testMethod.invoke(null)
+        Assertions.assertEquals(expected, actual)
+    }
+
+    companion object {
+        private val EOL: String? = System.lineSeparator()
+        private val CLASS_ID = AtomicLong()
     }
 }

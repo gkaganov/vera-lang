@@ -1,18 +1,14 @@
-package org.greg.lib.classloader;
+package org.greg.lib.classloader
 
-import io.vavr.collection.Map;
-
-public class ByteArrayClassLoader extends ClassLoader {
-    private final Map<String, byte[]> classes;
-
-    public ByteArrayClassLoader(Map<String, byte[]> classes) {
-        super(ByteArrayClassLoader.class.getClassLoader());
-        this.classes = classes;
-    }
-
-    @Override
-    protected Class<?> findClass(String name) throws ClassNotFoundException {
-        byte[] bytes = classes.get(name).getOrElseThrow(() -> new ClassNotFoundException(name));
-        return defineClass(name, bytes, 0, bytes.length);
+class ByteArrayClassLoader(private val classes: Map<String?, ByteArray>) :
+    ClassLoader(ByteArrayClassLoader::class.java.classLoader) {
+    @Throws(ClassNotFoundException::class)
+    override fun findClass(name: String?): Class<*>? {
+        val bytes = classes[name];
+        if (bytes == null) {
+            throw ClassNotFoundException()
+        } else {
+            return defineClass(name, classes[name], 0, classes[name]?.size ?: 0)
+        }
     }
 }
