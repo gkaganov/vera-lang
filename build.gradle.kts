@@ -1,30 +1,17 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-
-plugins {
-    kotlin("jvm") version "2.3.20"
-    id("antlr")
-}
-
 group = "org.greg"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
-}
+val antlrVersion: String by project
+val junitVersion: String by project
+val jvmVersion: String by project
 
-val javaVersion = 25
-val antlrVersion = "4.13.2"
-val junitVersion = "6.0.3"
+repositories.mavenCentral()
+java.toolchain.languageVersion.set(JavaLanguageVersion.of(jvmVersion))
+kotlin.jvmToolchain(jvmVersion.toInt())
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(javaVersion))
-    }
-}
-
-kotlin {
-    jvmToolchain(javaVersion)
+plugins {
+    kotlin("jvm")
+    id("antlr")
 }
 
 dependencies {
@@ -35,31 +22,12 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-sourceSets {
-    main {
-        kotlin.srcDir("src/main/kotlin")
-        kotlin.srcDir(layout.buildDirectory.dir("generated-src/antlr/main"))
-    }
-    test {
-        kotlin.srcDir("src/test/kotlin")
-    }
-}
+tasks.compileKotlin.configure { dependsOn(tasks.generateGrammarSource) }
 
 tasks.generateGrammarSource {
+    packageName = "${project.group}.antlr"
     arguments = arguments + listOf("-no-listener")
-    outputDirectory = layout.buildDirectory.dir("generated-src/antlr/main/org/greg/antlr4").get().asFile
+    outputDirectory = layout.buildDirectory.dir("generated/sources/antlr/main").get().asFile
 }
 
-tasks.withType<KotlinJvmCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.fromTarget(javaVersion.toString()))
-    }
-}
-
-tasks.compileKotlin {
-    dependsOn(tasks.generateGrammarSource)
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
+tasks.test.configure { useJUnitPlatform() }

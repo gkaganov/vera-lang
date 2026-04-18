@@ -1,7 +1,5 @@
 grammar Vera;
 
-@header { package org.greg.antlr4; }
-
 /* Program */
 program: (layout declaration)* layout EOF;
 declaration: functionDeclaration;

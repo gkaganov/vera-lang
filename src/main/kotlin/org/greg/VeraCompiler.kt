@@ -2,9 +2,9 @@ package org.greg
 
 import org.antlr.v4.runtime.BufferedTokenStream
 import org.antlr.v4.runtime.CharStreams
-import org.greg.antlr4.VeraLexer
-import org.greg.antlr4.VeraParser
-import org.greg.antlr4.VeraParser.*
+import org.greg.antlr.VeraLexer
+import org.greg.antlr.VeraParser
+import org.greg.antlr.VeraParser.*
 import java.io.IOException
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.ClassFile
@@ -50,7 +50,7 @@ class VeraCompiler(private val mainClassName: String) {
         val code = Files.readString(inputFile)
         val bytecode = compile(code)
 
-        Files.createDirectories(outputFile.getParent())
+        Files.createDirectories(outputFile.parent)
         Files.write(outputFile, bytecode)
     }
 
@@ -60,7 +60,7 @@ class VeraCompiler(private val mainClassName: String) {
         val program = parser.program()
 
         // create an empty consumer and extend it with compiler logic
-        val mainClass = processProgram(program, Consumer { `_`: ClassBuilder? -> })
+        val mainClass = processProgram(program) { `_`: ClassBuilder? -> }
         // ClassFile will create a ClassBuilder instance and apply the compiler logic to it
         return ClassFile.of().build(ClassDesc.of(mainClassName), mainClass)
     }
@@ -90,7 +90,7 @@ class VeraCompiler(private val mainClassName: String) {
         }
         fnState = fnState.withCodeBuilder(fnState.cb!!.andThen(Consumer { obj: CodeBuilder? -> obj!!.return_() }))
 
-        val fnName = ctx.IDENTIFIER().getText()
+        val fnName = ctx.IDENTIFIER().text
         val fnType = if (fnName == "main") MethodTypeDesc.of(
             ConstantDescs.CD_void,
             ConstantDescs.CD_String.arrayType()
@@ -114,12 +114,12 @@ class VeraCompiler(private val mainClassName: String) {
     }
 
     private fun processStatement(ctx: StatementContext, fnState: FunctionState): FunctionState {
-        if (ctx.bindStatement() != null) {
-            return processBindStatement(ctx.bindStatement(), fnState)
+        return if (ctx.bindStatement() != null) {
+            processBindStatement(ctx.bindStatement(), fnState)
         } else if (ctx.expression() != null) {
-            return processExpression(ctx.expression(), fnState)
+            processExpression(ctx.expression(), fnState)
         } else {
-            throw IllegalStateException("Statement type " + ctx.bindStatement().getStart().getText() + " is invalid.")
+            throw IllegalStateException("Statement type " + ctx.bindStatement().getStart().text + " is invalid.")
         }
     }
 
@@ -135,7 +135,7 @@ class VeraCompiler(private val mainClassName: String) {
         return FunctionState(codeWithIStore, newVarMap)
     }
 
-    private fun processExpression(ctx: VeraParser.ExpressionContext, fnState: FunctionState): FunctionState {
+    private fun processExpression(ctx: ExpressionContext, fnState: FunctionState): FunctionState {
         // TODO more chain links
         return processChainedExpression(ctx.chainedExpression(0), fnState)
     }
@@ -220,7 +220,7 @@ class VeraCompiler(private val mainClassName: String) {
                 fnState.withCodeBuilder(
                     fnState.cb!!.andThen(Consumer { cb: CodeBuilder? ->
                         cb?.loadConstant(
-                            ctx.literal().getText().toInt()
+                            ctx.literal().text.toInt()
                         )
                     })
                 )
