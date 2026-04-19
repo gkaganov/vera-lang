@@ -1,7 +1,7 @@
 package org.greg
 
-import org.antlr.v4.runtime.BufferedTokenStream
-import org.antlr.v4.runtime.CharStreams
+import org.antlr.v4.kotlinruntime.BufferedTokenStream
+import org.antlr.v4.kotlinruntime.CharStreams
 import org.greg.antlr.VeraLexer
 import org.greg.antlr.VeraParser
 import org.greg.antlr.VeraParser.ArgumentListContext
@@ -23,13 +23,14 @@ import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
 import java.nio.file.Path
-import kotlin.io.path.createDirectories
+import kotlin.io.path.createParentDirectories
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
 
 private data class LocalSlot(val slot: Int)
 
 private data class FnState(
+    val typeDesc: MethodTypeDesc = MethodTypeDesc.of(CD_void),
     val codeEmitter: CodeBuilder.() -> Unit = {},
     val nextFreeLocalSlot: LocalSlot = LocalSlot(0),
     private val locals: Map<String, LocalSlot> = emptyMap()
@@ -60,7 +61,7 @@ class VeraCompiler(private val mainClassName: String) {
 
     fun compile(inputFile: Path, outputFile: Path) {
         val bytecode = compile(inputFile.readText())
-        outputFile.parent?.createDirectories()
+        outputFile.createParentDirectories()
         outputFile.writeBytes(bytecode)
     }
 
@@ -76,8 +77,7 @@ class VeraCompiler(private val mainClassName: String) {
     private fun processProgram(ctx: ProgramContext): ClassBuilder.() -> Unit {
         var classEmitter: ClassBuilder.() -> Unit = {}
         for (declaration in ctx.declaration()) {
-            val fn = declaration.functionDeclaration() ?: continue
-            classEmitter = processFunction(fn, classEmitter)
+            classEmitter = processFunction(declaration.functionDeclaration(), classEmitter)
         }
         return {
             classEmitter()
@@ -85,39 +85,63 @@ class VeraCompiler(private val mainClassName: String) {
         }
     }
 
-    private fun processFunction(ctx: FunctionDeclarationContext, classEmitter: ClassBuilder.() -> Unit): ClassBuilder.() -> Unit {
+    private fun processFunction(
+        ctx: FunctionDeclarationContext,
+        classEmitter: ClassBuilder.() -> Unit
+    ): ClassBuilder.() -> Unit {
         var fnState = FnState()
+        var terminates = false
+        for (statement in ctx.block().statement()) {
+            val (newState, explicitReturn) = processStatement(statement, fnState)
+            fnState = newState
+            terminates = explicitReturn
+        }
+        if (!terminates) {
+            fnState = fnState.emit { return_() }
+        }
+
+        val fnName = ctx.IDENTIFIER().text
+        fnState = fnState.copy(
+            typeDesc = if (fnName == "main") {
+                MethodTypeDesc.of(CD_void, CD_String.arrayType())
+            } else if (terminates) {
+                // TODO return type here
+                MethodTypeDesc.of(CD_int)
+            } else {
+                MethodTypeDesc.of(CD_void)
+            }
+        )
         if (ctx.parameterClause().parameters() != null) {
             // TODO number and type of params
             fnState = fnState.declareLocal("args")
         }
-        for (statement in ctx.block().statement()) {
-            fnState = processStatement(statement, fnState)
-        }
-        fnState = fnState.emit { return_() }
 
-        val fnName = ctx.IDENTIFIER().text
-        val fnType = if (fnName == "main") {
-            MethodTypeDesc.of(CD_void, CD_String.arrayType())
-        } else {
-            MethodTypeDesc.of(CD_void)
-        }
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
         val fnDefinition: MethodBuilder.() -> Unit = { withCode(fnState.codeEmitter) }
         return {
             classEmitter()
-            withMethod(fnName, fnType, fnFlags, fnDefinition)
+            withMethod(fnName, fnState.typeDesc, fnFlags, fnDefinition)
         }
     }
 
-    private fun processStatement(ctx: StatementContext, fnState: FnState): FnState {
-        return if (ctx.bindStatement() != null) {
-            processBindStatement(ctx.bindStatement(), fnState)
-        } else if (ctx.expression() != null) {
-            processExpression(ctx.expression(), fnState)
-        } else {
-            error("Invalid statement: ${ctx.text}")
+    /** Emits the statement and returns a Pair of new FnState and Boolean (explicit return on all paths?) */
+    private fun processStatement(ctx: StatementContext, fnState: FnState): Pair<FnState, Boolean> {
+        ctx.bindStatement()?.let {
+            return processBindStatement(it, fnState) to false
         }
+        ctx.expression()?.let {
+            return processExpression(it, fnState) to false
+        }
+        ctx.returnStatement()?.let { returnStmt ->
+            val returnExpression = returnStmt.expression()
+            return if (returnExpression != null) {
+                val newState = processExpression(returnExpression, fnState)
+                newState.emit { ireturn() } to true
+            } else {
+                fnState.emit { return_() } to true
+            }
+        }
+        error("Invalid statement: ${ctx.text}")
     }
 
     private fun processBindStatement(ctx: BindStatementContext, fnState: FnState): FnState {
@@ -136,7 +160,8 @@ class VeraCompiler(private val mainClassName: String) {
 
     private fun processExpression(ctx: ExpressionContext, fnState: FnState): FnState {
         // TODO more chain links
-        return processChainedExpression(ctx.chainedExpression(0), fnState)
+        val firstExpr = ctx.chainedExpression(0) ?: error("first chainedExpr is never null")
+        return processChainedExpression(firstExpr, fnState)
     }
 
     private fun processChainedExpression(ctx: ChainedExpressionContext, fnState: FnState): FnState {
@@ -149,30 +174,27 @@ class VeraCompiler(private val mainClassName: String) {
         if (pendingSymbol == null) {
             return fnState
         }
+
         // pending symbol -> function/builtin call
-        if (ctx.argumentList() != null) {
-            if (!ctx.argumentList().isEmpty()) {
-                fnState = processArguments(ctx.argumentList().first(), fnState)
-            }
-            val builtin = Builtin.from(pendingSymbol)
-            fnState = if (builtin != null) {
-                processBuiltinCall(fnState, builtin)
-            } else {
-                processFunctionCall(fnState, pendingSymbol)
-            }
+        if (ctx.argumentList().isNotEmpty()) {
+            fnState = processArguments(ctx.argumentList().first(), fnState)
+        }
+        val fnType = MethodTypeDesc.of(CD_int)
+        val builtin = Builtin.from(pendingSymbol)
+        fnState = if (builtin != null) {
+            processBuiltinCall(fnState, builtin)
+        } else {
+            processFunctionCall(fnState, pendingSymbol, fnType)
         }
         return fnState
     }
 
     private fun processArguments(ctx: ArgumentListContext, fnState: FnState): FnState {
-        var fnState = fnState
-        if (ctx.arguments() == null) {
-            return fnState
+        var state = fnState
+        for (expr in ctx.arguments()?.expression().orEmpty()) {
+            state = processExpression(expr, state)
         }
-        for (expr in ctx.arguments().expression()) {
-            fnState = processExpression(expr, fnState)
-        }
-        return fnState
+        return state
     }
 
     private fun processBuiltinCall(fnState: FnState, builtin: Builtin): FnState {
@@ -189,18 +211,23 @@ class VeraCompiler(private val mainClassName: String) {
         }
     }
 
-    private fun processFunctionCall(fnState: FnState, fnName: String): FnState {
+    private fun processFunctionCall(fnState: FnState, fnName: String, fnType: MethodTypeDesc): FnState {
         val mainClass = ClassDesc.of(mainClassName)
-        val fnType = MethodTypeDesc.of(CD_void)
+        // TODO function lookup table, search for fnType
         return fnState.emit { invokestatic(mainClass, fnName, fnType) }
     }
 
+    /** Emits a primary expression and returns new FnState and an optional String (pending symbol?) */
     private fun processPrimaryExpression(ctx: PrimaryExpressionContext, fnState: FnState): Pair<FnState, String?> {
-        if (ctx.literal() != null) {
-            return fnState.emit { loadConstant(ctx.literal().text.toInt()) } to null
+        val literal = ctx.literal()
+        if (literal != null) {
+            return fnState.emit { loadConstant(literal.text.toInt()) } to null
         }
-        if (ctx.IDENTIFIER() != null) {
-            val name = ctx.IDENTIFIER().text
+
+        val identifier = ctx.IDENTIFIER()
+        val expression = ctx.expression()
+        if (identifier != null) {
+            val name = identifier.text
             val localSlot = fnState.getLocalSlot(name)
             return if (localSlot != null) {
                 fnState.emit { iload(localSlot.slot) } to null
@@ -208,8 +235,8 @@ class VeraCompiler(private val mainClassName: String) {
                 // not a local, could be builtin/function name
                 fnState to name
             }
-        } else if (ctx.expression() != null) {
-            return processExpression(ctx.expression(), fnState) to null
+        } else if (expression != null) {
+            return processExpression(expression, fnState) to null
         } else {
             throw UnsupportedOperationException()
         }
