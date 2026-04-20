@@ -3,7 +3,6 @@ package org.greg.regression
 import org.greg.VeraCompiler
 import org.greg.lib.classloader.ByteArrayClassLoader
 import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInfo
 import java.io.ByteArrayOutputStream
@@ -32,7 +31,6 @@ class VeraCompilerTests {
         assertProgramPrints(source, "65$EOL", testInfo)
     }
 
-    @Disabled("function calls are wip")
     @Test
     fun functionsCanBeCalled(testInfo: TestInfo) {
         val source = """
@@ -48,7 +46,7 @@ class VeraCompilerTests {
                     }
                 
                 """.trimIndent()
-        assertProgramPrints(source, "1${EOL}2${EOL}", testInfo, true)
+        assertProgramPrints(source, "1${EOL}2${EOL}", testInfo)
     }
 
     @Test
@@ -69,31 +67,27 @@ class VeraCompilerTests {
     @Test
     fun intCanBeReturned(testInfo: TestInfo) {
         val source = """
-                    fn $TEST_MAIN() {
+                    fn $TEST_MAIN(): Int {
                         var numberResult = getInt()
-                        print(numberResult)
+                        return numberResult
                     }
-                    fn getInt() {
+                    fn getInt(): Int {
                         return 698
                     }
                 
                 """.trimIndent()
-        assertProgramPrints(source, "698$EOL", testInfo, true)
+        assertProgramReturns(source, 698, testInfo)
     }
 
     private fun assertProgramPrints(
         source: String,
-        expectedOutput: String,
+        expected: String,
         testInfo: TestInfo,
         compileToOut: Boolean = false,
     ) {
         val className = "CompiledTestClass" + CLASS_ID.getAndIncrement()
         val bytecode = VeraCompiler(className).compile(source)
-        if (compileToOut) {
-            val path = Path("out", testInfo.testMethod.get().name, "$className.class")
-            path.createParentDirectories()
-            path.writeBytes(bytecode)
-        }
+        if (compileToOut) Path("out", testInfo.testMethod.get().name, "$className.class").createParentDirectories().writeBytes(bytecode)
         val oldOut = System.out
         val baos = ByteArrayOutputStream()
         val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
@@ -104,13 +98,19 @@ class VeraCompilerTests {
         } finally {
             System.setOut(oldOut)
         }
-        Assertions.assertEquals(expectedOutput, baos.toString())
+        Assertions.assertEquals(expected, baos.toString())
     }
 
-    @Suppress("unused")
-    private fun assertProgramReturns(source: String, expected: Any) {
-        val className = "CompiledTestClass" + System.nanoTime()
+    @Suppress("SameParameterValue")
+    private fun assertProgramReturns(
+        source: String,
+        expected: Any,
+        testInfo: TestInfo,
+        compileToOut: Boolean = false,
+    ) {
+        val className = "CompiledTestClass" + CLASS_ID.getAndIncrement()
         val bytecode = VeraCompiler(className).compile(source)
+        if (compileToOut) Path("out", testInfo.testMethod.get().name, "$className.class").createParentDirectories().writeBytes(bytecode)
         val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
         val testMethod = classLoader.loadClass(className).getMethod(TEST_MAIN)
         val actual = testMethod.invoke(null)

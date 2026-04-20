@@ -27,14 +27,18 @@ import kotlin.io.path.createParentDirectories
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
 
-private data class LocalSlot(val slot: Int)
+private data class FnDeclaration(val name: String, val desc: MethodTypeDesc) {}
 
+// TODO this should prob be extracted
 private data class FnState(
-    val typeDesc: MethodTypeDesc = MethodTypeDesc.of(CD_void),
     val codeEmitter: CodeBuilder.() -> Unit = {},
     val nextFreeLocalSlot: LocalSlot = LocalSlot(0),
+    val visibleFunctions: Map<String, FnDeclaration> = emptyMap(),
     private val locals: Map<String, LocalSlot> = emptyMap()
 ) {
+
+    data class LocalSlot(val slot: Int)
+
     fun emit(block: CodeBuilder.() -> Unit): FnState =
         copy(codeEmitter = {
             codeEmitter()
@@ -57,6 +61,7 @@ private enum class Builtin(val keyword: String) {
     }
 }
 
+// TODO add mapping from antlr ast types to custom domain ast
 class VeraCompiler(private val mainClassName: String) {
 
     fun compile(inputFile: Path, outputFile: Path) {
@@ -75,21 +80,51 @@ class VeraCompiler(private val mainClassName: String) {
     }
 
     private fun processProgram(ctx: ProgramContext): ClassBuilder.() -> Unit {
+        // first pass - collect declarations
+        val fnDeclarations = mutableMapOf<String, FnDeclaration>()
+        for (declaration in ctx.declaration()) {
+            fnDeclarations += (getFunctionDeclaration(declaration))
+        }
+
+        // second pass - compile program
         var classEmitter: ClassBuilder.() -> Unit = {}
         for (declaration in ctx.declaration()) {
-            classEmitter = processFunction(declaration.functionDeclaration(), classEmitter)
+            classEmitter = processFunction(declaration.functionDeclaration(), classEmitter, fnDeclarations)
         }
+
         return {
             classEmitter()
             withFlags(AccessFlag.PUBLIC)
         }
     }
 
+    private fun getFunctionDeclaration(ctx: VeraParser.DeclarationContext): Pair<String, FnDeclaration> {
+        val decl = ctx.functionDeclaration()
+        val paramTypes = decl.parameterClause().parameters()?.parameter()
+            ?.map { param -> getClassDescFrom(param.typeRef().text) }
+            .orEmpty()
+        val returnType = decl.returnType()?.typeRef()?.text?.let { getClassDescFrom(it) }
+        val typeDesc = MethodTypeDesc.of(returnType ?: CD_void, paramTypes)
+        return ctx.functionDeclaration().name?.text.orEmpty() to FnDeclaration(
+            decl.name?.text ?: "this clearly exists so i dont know what it wants from me. i will have to map this...",
+            typeDesc
+        )
+    }
+
+    private fun getClassDescFrom(typeRef: String): ClassDesc {
+        return when (typeRef) {
+            "Int" -> CD_int
+            "String" -> CD_String
+            else -> error("typeRef $typeRef is not valid.")
+        }
+    }
+
     private fun processFunction(
         ctx: FunctionDeclarationContext,
-        classEmitter: ClassBuilder.() -> Unit
+        classEmitter: ClassBuilder.() -> Unit,
+        visibleFunctions: Map<String, FnDeclaration>
     ): ClassBuilder.() -> Unit {
-        var fnState = FnState()
+        var fnState = FnState().copy(visibleFunctions = visibleFunctions)
         var terminates = false
         for (statement in ctx.block().statement()) {
             val (newState, explicitReturn) = processStatement(statement, fnState)
@@ -101,16 +136,6 @@ class VeraCompiler(private val mainClassName: String) {
         }
 
         val fnName = ctx.IDENTIFIER().text
-        fnState = fnState.copy(
-            typeDesc = if (fnName == "main") {
-                MethodTypeDesc.of(CD_void, CD_String.arrayType())
-            } else if (terminates) {
-                // TODO return type here
-                MethodTypeDesc.of(CD_int)
-            } else {
-                MethodTypeDesc.of(CD_void)
-            }
-        )
         if (ctx.parameterClause().parameters() != null) {
             // TODO number and type of params
             fnState = fnState.declareLocal("args")
@@ -118,9 +143,10 @@ class VeraCompiler(private val mainClassName: String) {
 
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
         val fnDefinition: MethodBuilder.() -> Unit = { withCode(fnState.codeEmitter) }
+        val fnDesc = fnState.visibleFunctions[fnName]?.desc
         return {
             classEmitter()
-            withMethod(fnName, fnState.typeDesc, fnFlags, fnDefinition)
+            withMethod(fnName, fnDesc, fnFlags, fnDefinition)
         }
     }
 
@@ -176,15 +202,16 @@ class VeraCompiler(private val mainClassName: String) {
         }
 
         // pending symbol -> function/builtin call
+        val fnName = pendingSymbol
         if (ctx.argumentList().isNotEmpty()) {
             fnState = processArguments(ctx.argumentList().first(), fnState)
         }
-        val fnType = MethodTypeDesc.of(CD_int)
-        val builtin = Builtin.from(pendingSymbol)
+        val builtin = Builtin.from(fnName)
         fnState = if (builtin != null) {
             processBuiltinCall(fnState, builtin)
         } else {
-            processFunctionCall(fnState, pendingSymbol, fnType)
+            val fnDesc = fnState.visibleFunctions[fnName]?.desc ?: error("function $fnName not found.")
+            processFunctionCall(fnState, fnName, fnDesc)
         }
         return fnState
     }

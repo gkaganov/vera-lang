@@ -5,10 +5,10 @@ program: (layout declaration)* layout EOF;
 declaration: functionDeclaration;
 
 /* Declarations */
-functionDeclaration: FN IDENTIFIER parameterClause returnType? block;
+functionDeclaration: FN_KEYWORD name=IDENTIFIER parameterClause returnType? block;
 parameterClause: LPAREN parameters? RPAREN;
 parameters: parameter (COMMA parameter)*;
-parameter: IDENTIFIER COLON typeRef;
+parameter: name=IDENTIFIER COLON typeRef;
 returnType: COLON typeRef;
 
 /* Types */
@@ -43,7 +43,7 @@ statementTerminator: EOL+;
 layout: EOL*;
 
 /* Lexer */
-FN: 'fn';
+FN_KEYWORD: 'fn';
 VAR: 'var';
 VAL: 'val';
 INT_TYPE: 'Int';
