@@ -1,7 +1,5 @@
-package org.greg.regression
+package org.greg
 
-import org.greg.VeraCompiler
-import org.greg.lib.classloader.ByteArrayClassLoader
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInfo
@@ -21,7 +19,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun printBuiltinPrintsToSystemOut(testInfo: TestInfo) {
+    fun `print builtin prints to system-out`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
                         print(65)
@@ -32,7 +30,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun functionsCanBeCalled(testInfo: TestInfo) {
+    fun `functions can be called`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
                         print1()
@@ -50,7 +48,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun varCanBeBoundAndAccessed(testInfo: TestInfo) {
+    fun `var can be bound and accessed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
                         var myVar1 = 50
@@ -65,7 +63,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun intCanBeReturned(testInfo: TestInfo) {
+    fun `int can be returned`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
                         var numberResult = getInt()
@@ -79,6 +77,7 @@ class VeraCompilerTests {
         assertProgramReturns(source, 698, testInfo)
     }
 
+    // TODO explicit thread sync
     private fun assertProgramPrints(
         source: String,
         expected: String,
@@ -101,7 +100,6 @@ class VeraCompilerTests {
         Assertions.assertEquals(expected, baos.toString())
     }
 
-    @Suppress("SameParameterValue")
     private fun assertProgramReturns(
         source: String,
         expected: Any,

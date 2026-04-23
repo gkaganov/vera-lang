@@ -4,14 +4,6 @@ import org.antlr.v4.kotlinruntime.BufferedTokenStream
 import org.antlr.v4.kotlinruntime.CharStreams
 import org.greg.antlr.VeraLexer
 import org.greg.antlr.VeraParser
-import org.greg.antlr.VeraParser.ArgumentListContext
-import org.greg.antlr.VeraParser.BindStatementContext
-import org.greg.antlr.VeraParser.ChainedExpressionContext
-import org.greg.antlr.VeraParser.ExpressionContext
-import org.greg.antlr.VeraParser.FunctionDeclarationContext
-import org.greg.antlr.VeraParser.PrimaryExpressionContext
-import org.greg.antlr.VeraParser.ProgramContext
-import org.greg.antlr.VeraParser.StatementContext
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.ClassFile
 import java.lang.classfile.CodeBuilder
@@ -27,13 +19,11 @@ import kotlin.io.path.createParentDirectories
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
 
-private data class FnDeclaration(val name: String, val desc: MethodTypeDesc) {}
-
 // TODO this should prob be extracted
 private data class FnState(
     val codeEmitter: CodeBuilder.() -> Unit = {},
     val nextFreeLocalSlot: LocalSlot = LocalSlot(0),
-    val visibleFunctions: Map<String, FnDeclaration> = emptyMap(),
+    val visibleFunctions: Map<String, FunctionDeclaration> = emptyMap(),
     private val locals: Map<String, LocalSlot> = emptyMap()
 ) {
 
@@ -75,21 +65,27 @@ class VeraCompiler(private val mainClassName: String) {
         val parser = VeraParser(BufferedTokenStream(lexer))
         val program = parser.program()
 
-        val mainClassEmitter = processProgram(program)
+        val customAstProgram = AstMapper().mapProgram(program)
+
+        val mainClassEmitter = processProgram(customAstProgram)
         return ClassFile.of().build(ClassDesc.of(mainClassName), mainClassEmitter)
     }
 
-    private fun processProgram(ctx: ProgramContext): ClassBuilder.() -> Unit {
-        // first pass - collect declarations
-        val fnDeclarations = mutableMapOf<String, FnDeclaration>()
-        for (declaration in ctx.declaration()) {
-            fnDeclarations += (getFunctionDeclaration(declaration))
+    private fun processProgram(program: Program): ClassBuilder.() -> Unit {
+        // first pass - collect function declarations by name
+        val fnDeclarations = mutableMapOf<String, FunctionDeclaration>()
+        for (declaration in program.declarations) {
+            if (declaration is FunctionDeclaration) {
+                fnDeclarations[declaration.name] = declaration
+            }
         }
 
         // second pass - compile program
         var classEmitter: ClassBuilder.() -> Unit = {}
-        for (declaration in ctx.declaration()) {
-            classEmitter = processFunction(declaration.functionDeclaration(), classEmitter, fnDeclarations)
+        for (declaration in program.declarations) {
+            if (declaration is FunctionDeclaration) {
+                classEmitter = processFunction(declaration, classEmitter, fnDeclarations)
+            }
         }
 
         return {
@@ -98,35 +94,23 @@ class VeraCompiler(private val mainClassName: String) {
         }
     }
 
-    private fun getFunctionDeclaration(ctx: VeraParser.DeclarationContext): Pair<String, FnDeclaration> {
-        val decl = ctx.functionDeclaration()
-        val paramTypes = decl.parameterClause().parameters()?.parameter()
-            ?.map { param -> getClassDescFrom(param.typeRef().text) }
-            .orEmpty()
-        val returnType = decl.returnType()?.typeRef()?.text?.let { getClassDescFrom(it) }
-        val typeDesc = MethodTypeDesc.of(returnType ?: CD_void, paramTypes)
-        return ctx.functionDeclaration().name?.text.orEmpty() to FnDeclaration(
-            decl.name?.text ?: "this clearly exists so i dont know what it wants from me. i will have to map this...",
-            typeDesc
-        )
-    }
-
-    private fun getClassDescFrom(typeRef: String): ClassDesc {
-        return when (typeRef) {
-            "Int" -> CD_int
-            "String" -> CD_String
-            else -> error("typeRef $typeRef is not valid.")
+    private fun getClassDescFrom(type: Type): ClassDesc {
+        return when (type) {
+            Type.INT -> CD_int
+            Type.STRING -> CD_String
+            Type.VOID -> CD_void
         }
     }
 
+    // TODO merge with FnState into a new class
     private fun processFunction(
-        ctx: FunctionDeclarationContext,
+        declaration: FunctionDeclaration,
         classEmitter: ClassBuilder.() -> Unit,
-        visibleFunctions: Map<String, FnDeclaration>
+        visibleFunctions: Map<String, FunctionDeclaration>
     ): ClassBuilder.() -> Unit {
         var fnState = FnState().copy(visibleFunctions = visibleFunctions)
         var terminates = false
-        for (statement in ctx.block().statement()) {
+        for (statement in declaration.statements) {
             val (newState, explicitReturn) = processStatement(statement, fnState)
             fnState = newState
             terminates = explicitReturn
@@ -135,47 +119,56 @@ class VeraCompiler(private val mainClassName: String) {
             fnState = fnState.emit { return_() }
         }
 
-        val fnName = ctx.IDENTIFIER().text
-        if (ctx.parameterClause().parameters() != null) {
+        if (declaration.params.isNotEmpty()) {
             // TODO number and type of params
             fnState = fnState.declareLocal("args")
         }
 
+        val fnName = declaration.name
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
         val fnDefinition: MethodBuilder.() -> Unit = { withCode(fnState.codeEmitter) }
-        val fnDesc = fnState.visibleFunctions[fnName]?.desc
+        val fnDesc = getMethodTypeDescFrom(declaration)
         return {
             classEmitter()
             withMethod(fnName, fnDesc, fnFlags, fnDefinition)
         }
     }
 
-    /** Emits the statement and returns a Pair of new FnState and Boolean (explicit return on all paths?) */
-    private fun processStatement(ctx: StatementContext, fnState: FnState): Pair<FnState, Boolean> {
-        ctx.bindStatement()?.let {
-            return processBindStatement(it, fnState) to false
-        }
-        ctx.expression()?.let {
-            return processExpression(it, fnState) to false
-        }
-        ctx.returnStatement()?.let { returnStmt ->
-            val returnExpression = returnStmt.expression()
-            return if (returnExpression != null) {
-                val newState = processExpression(returnExpression, fnState)
-                newState.emit { ireturn() } to true
-            } else {
-                fnState.emit { return_() } to true
-            }
-        }
-        error("Invalid statement: ${ctx.text}")
+    private fun getMethodTypeDescFrom(functionDeclaration: FunctionDeclaration): MethodTypeDesc {
+        val paramClassDescs = functionDeclaration.params.map { param -> getClassDescFrom(param.type) }
+        return MethodTypeDesc.of(getClassDescFrom(functionDeclaration.returnType), paramClassDescs)
     }
 
-    private fun processBindStatement(ctx: BindStatementContext, fnState: FnState): FnState {
+    /** Emits the statement and returns a Pair of new FnState and Boolean (explicit return on all paths?) */
+    private fun processStatement(statement: Statement, fnState: FnState): Pair<FnState, Boolean> {
+        return when (statement) {
+            is BindStatement -> {
+                processBindStatement(statement, fnState) to false
+            }
+
+            is Expression -> {
+                processExpression(statement, fnState) to false
+            }
+
+            is ReturnStatement -> {
+                if (statement.expression != null) {
+                    val newState = processExpression(statement.expression, fnState)
+                    newState.emit { ireturn() } to true
+                } else {
+                    fnState.emit { return_() } to true
+                }
+            }
+
+            is RebindStatement -> TODO()
+        }
+    }
+
+    private fun processBindStatement(bindStatement: BindStatement, fnState: FnState): FnState {
         var fnState = fnState
         // process expression tree, put result on the stack
-        fnState = processExpression(ctx.expression(), fnState)
+        fnState = processExpression(bindStatement.expression, fnState)
         // get result from stack and store it in local variable table
-        return storeLocalVar(fnState, ctx.IDENTIFIER().text)
+        return storeLocalVar(fnState, bindStatement.name)
     }
 
     private fun storeLocalVar(fnState: FnState, name: String): FnState {
@@ -184,15 +177,15 @@ class VeraCompiler(private val mainClassName: String) {
             .declareLocal(name)
     }
 
-    private fun processExpression(ctx: ExpressionContext, fnState: FnState): FnState {
+    private fun processExpression(expression: Expression, fnState: FnState): FnState {
         // TODO more chain links
-        val firstExpr = ctx.chainedExpression(0) ?: error("first chainedExpr is never null")
+        val firstExpr = expression.chainedExpressions.first()
         return processChainedExpression(firstExpr, fnState)
     }
 
-    private fun processChainedExpression(ctx: ChainedExpressionContext, fnState: FnState): FnState {
+    private fun processChainedExpression(chainedExpression: ChainedExpression, fnState: FnState): FnState {
         var fnState = fnState
-        val result = processPrimaryExpression(ctx.primaryExpression(), fnState)
+        val result = processPrimaryExpression(chainedExpression.primaryExpression, fnState)
         val pendingSymbol = result.second
         fnState = result.first
 
@@ -203,23 +196,27 @@ class VeraCompiler(private val mainClassName: String) {
 
         // pending symbol -> function/builtin call
         val fnName = pendingSymbol
-        if (ctx.argumentList().isNotEmpty()) {
-            fnState = processArguments(ctx.argumentList().first(), fnState)
+        for (exprData in chainedExpression.data) {
+            when (exprData) {
+                is Arguments -> fnState = processArguments(exprData, fnState)
+                is MemberAccess -> TODO()
+            }
         }
         val builtin = Builtin.from(fnName)
         fnState = if (builtin != null) {
             processBuiltinCall(fnState, builtin)
         } else {
-            val fnDesc = fnState.visibleFunctions[fnName]?.desc ?: error("function $fnName not found.")
+            val fnDeclaration = fnState.visibleFunctions[fnName] ?: error("function $fnName not found.")
+            val fnDesc = getMethodTypeDescFrom(fnDeclaration)
             processFunctionCall(fnState, fnName, fnDesc)
         }
         return fnState
     }
 
-    private fun processArguments(ctx: ArgumentListContext, fnState: FnState): FnState {
+    private fun processArguments(arguments: Arguments, fnState: FnState): FnState {
         var state = fnState
-        for (expr in ctx.arguments()?.expression().orEmpty()) {
-            state = processExpression(expr, state)
+        for (expression in arguments.expressions) {
+            state = processExpression(expression, state)
         }
         return state
     }
@@ -245,27 +242,26 @@ class VeraCompiler(private val mainClassName: String) {
     }
 
     /** Emits a primary expression and returns new FnState and an optional String (pending symbol?) */
-    private fun processPrimaryExpression(ctx: PrimaryExpressionContext, fnState: FnState): Pair<FnState, String?> {
-        val literal = ctx.literal()
-        if (literal != null) {
-            return fnState.emit { loadConstant(literal.text.toInt()) } to null
-        }
-
-        val identifier = ctx.IDENTIFIER()
-        val expression = ctx.expression()
-        if (identifier != null) {
-            val name = identifier.text
-            val localSlot = fnState.getLocalSlot(name)
-            return if (localSlot != null) {
-                fnState.emit { iload(localSlot.slot) } to null
-            } else {
-                // not a local, could be builtin/function name
-                fnState to name
+    private fun processPrimaryExpression(primaryExpression: PrimaryExpression, fnState: FnState): Pair<FnState, String?> {
+        return when (primaryExpression) {
+            is Literal -> {
+                fnState.emit { loadConstant(primaryExpression.symbol.toInt()) } to null
             }
-        } else if (expression != null) {
-            return processExpression(expression, fnState) to null
-        } else {
-            throw UnsupportedOperationException()
+
+            is ExpressionIdentifier -> {
+                val name = primaryExpression.identifier
+                val localSlot = fnState.getLocalSlot(name)
+                if (localSlot != null) {
+                    fnState.emit { iload(localSlot.slot) } to null
+                } else {
+                    // not a local, could be builtin/function name
+                    fnState to name
+                }
+            }
+
+            is Expression -> {
+                processExpression(primaryExpression, fnState) to null
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-package org.greg.lib.classloader
+package org.greg
 
 class ByteArrayClassLoader(
     private val classes: Map<String, ByteArray>
