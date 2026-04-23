@@ -19,8 +19,8 @@ block: LBRACE layout statement* RBRACE;
 statement: (bindStatement | rebindStatement | returnStatement | expression) statementTerminator;
 
 /* Binding */
-bindStatement: (VAR | VAL) IDENTIFIER (COLON typeRef)? BIND expression;
-rebindStatement: IDENTIFIER REBIND rebindRhs;
+bindStatement: (VAR | VAL) name=IDENTIFIER (COLON typeRef)? BIND expression;
+rebindStatement: name=IDENTIFIER REBIND rebindRhs;
 rebindRhs: expression | updateBlock;
 updateBlock: LBRACE layout RBRACE;
 

@@ -1,7 +1,5 @@
-package org.greg.regression
+package org.greg
 
-import org.greg.VeraCompiler
-import org.greg.lib.classloader.ByteArrayClassLoader
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInfo
