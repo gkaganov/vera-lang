@@ -48,11 +48,11 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `var can be bound and accessed`(testInfo: TestInfo) {
+    fun `var with explicit type declaration can be bound and accessed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var myVar1 = 50
-                        var myVar2 = 51
+                        var myVar1: Int = 50
+                        var myVar2: Int = 51
                         print(myVar1)
                         print(myVar2)
                         print(52)
@@ -66,7 +66,7 @@ class VeraCompilerTests {
     fun `Int can be returned`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var numberResult = getInt()
+                        var numberResult: Int = getInt()
                         return numberResult
                     }
                     fn getInt(): Int {
@@ -81,7 +81,7 @@ class VeraCompilerTests {
     fun `one Int parameter can be passed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var numberResult = receiveAndReturn(369)
+                        var numberResult: Int = receiveAndReturn(369)
                         return numberResult
                     }
                     fn receiveAndReturn(int: Int): Int {
