@@ -63,7 +63,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `int can be returned`(testInfo: TestInfo) {
+    fun `Int can be returned`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
                         var numberResult = getInt()
@@ -75,6 +75,37 @@ class VeraCompilerTests {
                 
                 """.trimIndent()
         assertProgramReturns(source, 698, testInfo)
+    }
+
+    @Test
+    fun `one Int parameter can be passed`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var numberResult = receiveAndReturn(369)
+                        return numberResult
+                    }
+                    fn receiveAndReturn(int: Int): Int {
+                        return int
+                    }
+                
+                """.trimIndent()
+        assertProgramReturns(source, 369, testInfo, true)
+    }
+
+    @Test
+    fun `multiple Int parameters can be passed`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print3Ints(99, 98, 97)
+                    }
+                    fn print3Ints(int1: Int, int2: Int, int3: Int) {
+                        print(int1)
+                        print(int2)
+                        print(int3)
+                    }
+                
+                """.trimIndent()
+        assertProgramPrints(source, "99${EOL}98${EOL}97${EOL}", testInfo, true)
     }
 
     // TODO explicit thread sync

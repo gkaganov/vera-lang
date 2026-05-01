@@ -109,6 +109,11 @@ class VeraCompiler(private val mainClassName: String) {
         visibleFunctions: Map<String, FunctionDeclaration>
     ): ClassBuilder.() -> Unit {
         var fnState = FnState().copy(visibleFunctions = visibleFunctions)
+
+        for (param in declaration.params) {
+            fnState = fnState.declareLocal(param.name)
+        }
+
         var terminates = false
         for (statement in declaration.statements) {
             val (newState, explicitReturn) = processStatement(statement, fnState)
@@ -117,11 +122,6 @@ class VeraCompiler(private val mainClassName: String) {
         }
         if (!terminates) {
             fnState = fnState.emit { return_() }
-        }
-
-        if (declaration.params.isNotEmpty()) {
-            // TODO number and type of params
-            fnState = fnState.declareLocal("args")
         }
 
         val fnName = declaration.name
