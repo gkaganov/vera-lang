@@ -24,7 +24,6 @@ class VeraCompilerTests {
                     fn $TEST_MAIN() {
                         print(65)
                     }
-                
                 """.trimIndent()
         assertProgramPrints(source, "65$EOL", testInfo)
     }
@@ -42,7 +41,6 @@ class VeraCompilerTests {
                     fn print2() {
                         print(2)
                     }
-                
                 """.trimIndent()
         assertProgramPrints(source, "1${EOL}2${EOL}", testInfo)
     }
@@ -57,7 +55,6 @@ class VeraCompilerTests {
                         print(myVar2)
                         print(52)
                     }
-                
                 """.trimIndent()
         assertProgramPrints(source, 50.toString() + EOL + 51 + EOL + 52 + EOL, testInfo)
     }
@@ -72,7 +69,6 @@ class VeraCompilerTests {
                     fn getInt(): Int {
                         return 698
                     }
-                
                 """.trimIndent()
         assertProgramReturns(source, 698, testInfo)
     }
@@ -87,7 +83,6 @@ class VeraCompilerTests {
                     fn receiveAndReturn(int: Int): Int {
                         return int
                     }
-                
                 """.trimIndent()
         assertProgramReturns(source, 369, testInfo, true)
     }
@@ -103,7 +98,6 @@ class VeraCompilerTests {
                         print(int2)
                         print(int3)
                     }
-                
                 """.trimIndent()
         assertProgramPrints(source, "99${EOL}98${EOL}97${EOL}", testInfo, true)
     }
