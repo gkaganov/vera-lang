@@ -3,31 +3,33 @@ package org.greg
 import arrow.core.NonEmptyList
 import org.greg.antlr.VeraParser
 
-data class Program(val declarations: List<Declaration>)
+class VeraAst {
 
-sealed interface Declaration
-data class FunctionDeclaration(val name: String, val params: List<Parameter>, val returnType: Type, val statements: List<Statement>) : Declaration
+    data class Program(val declarations: List<Declaration>)
 
-sealed interface Statement
-data class BindStatement(val name: String, val type: Type, val expression: Expression) : Statement
-data class RebindStatement(val name: String, val expression: Expression) : Statement
-data class ReturnStatement(val expression: Expression?) : Statement
-data class Expression(val chainedExpressions: NonEmptyList<ChainedExpression>) : Statement, PrimaryExpression
+    sealed interface Declaration
+    data class FunctionDeclaration(val name: String, val params: List<Parameter>, val returnType: Type, val statements: List<Statement>) : Declaration
 
-data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
+    sealed interface Statement
+    data class BindStatement(val name: String, val type: Type, val expression: Expression) : Statement
+    data class RebindStatement(val name: String, val expression: Expression) : Statement
+    data class ReturnStatement(val expression: Expression?) : Statement
+    data class Expression(val chainedExpressions: NonEmptyList<ChainedExpression>) : Statement, PrimaryExpression
 
-sealed interface ChainedExpressionData
-data class MemberAccess(val member: String) : ChainedExpressionData
-data class Arguments(val expressions: List<Expression>) : ChainedExpressionData
+    data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
 
-sealed interface PrimaryExpression
-data class Literal(val symbol: String) : PrimaryExpression
-data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
+    sealed interface ChainedExpressionData
+    data class MemberAccess(val member: String) : ChainedExpressionData
+    data class Arguments(val expressions: List<Expression>) : ChainedExpressionData
 
-data class Parameter(val name: String, val type: Type)
-enum class Type { INT, STRING, VOID }
+    sealed interface PrimaryExpression
+    sealed interface Literal : PrimaryExpression
+    data class IntLiteral(val value: Int) : Literal
+    data class StringLiteral(val value: String) : Literal
+    data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
 
-class AstMapper {
+    data class Parameter(val name: String, val type: Type)
+    enum class Type { INT, STRING, UNIT }
 
     fun mapProgram(ctx: VeraParser.ProgramContext): Program {
         return Program(ctx.declaration().map { decl -> mapDeclaration(decl) })
@@ -57,7 +59,7 @@ class AstMapper {
 
     private fun mapType(ctx: VeraParser.TypeRefContext?): Type {
         return if (ctx == null) {
-            Type.VOID
+            Type.UNIT
         } else if (ctx.STRING_TYPE() != null) {
             Type.STRING
         } else if (ctx.INT_TYPE() != null) {
@@ -116,13 +118,26 @@ class AstMapper {
         val identifier = ctx.IDENTIFIER()
         val expression = ctx.expression()
         return if (literal != null) {
-            Literal(literal.text)
+            mapLiteral(literal)
         } else if (identifier != null) {
             ExpressionIdentifier(identifier.text)
         } else if (expression != null) {
             mapExpression(expression)
         } else {
             error("unknown chainedExpression")
+        }
+    }
+
+    private fun mapLiteral(literal: VeraParser.LiteralContext): Literal {
+        val intLiteral = literal.INT_LITERAL()
+        val stringLiteral = literal.STRING_LITERAL()
+        return if (intLiteral != null) {
+            IntLiteral(intLiteral.text.toInt())
+        } else if (stringLiteral != null) {
+            val raw = literal.text.trim('"')
+            StringLiteral(raw)
+        } else {
+            error("unknown literal")
         }
     }
 }

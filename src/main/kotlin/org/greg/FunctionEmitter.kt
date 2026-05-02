@@ -1,5 +1,19 @@
 package org.greg
 
+import arrow.core.Either
+import org.greg.VeraAst.Arguments
+import org.greg.VeraAst.BindStatement
+import org.greg.VeraAst.ChainedExpression
+import org.greg.VeraAst.Expression
+import org.greg.VeraAst.ExpressionIdentifier
+import org.greg.VeraAst.FunctionDeclaration
+import org.greg.VeraAst.IntLiteral
+import org.greg.VeraAst.MemberAccess
+import org.greg.VeraAst.PrimaryExpression
+import org.greg.VeraAst.RebindStatement
+import org.greg.VeraAst.ReturnStatement
+import org.greg.VeraAst.StringLiteral
+import org.greg.VeraAst.Type
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.MethodBuilder
@@ -10,9 +24,10 @@ import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
 
-private data class LocalSlot(val slot: Int)
+@JvmInline private value class PendingSymbol(val text: String)
 
-enum class Builtin(val keyword: String) {
+private enum class Builtin(val keyword: String) {
+
     PRINT("print");
 
     companion object {
@@ -25,16 +40,20 @@ class FunctionEmitter(
     private val className: String,
     private val visibleFunctions: Map<String, FunctionDeclaration>,
 ) {
-    private var codeEmitter: CodeBuilder.() -> Unit = {}
-    private var nextFreeLocalSlot: LocalSlot = LocalSlot(0)
-    private val locals: MutableMap<String, LocalSlot> = mutableMapOf()
+    private val locals = Locals()
+    private val operandStack = OperandStack()
 
-    fun processFunction(
+    private var codeEmitter: CodeBuilder.() -> Unit = {}
+
+    fun emitFunction(
         declaration: FunctionDeclaration,
         classEmitter: ClassBuilder.() -> Unit,
     ): ClassBuilder.() -> Unit {
         for (param in declaration.params) {
-            declareLocal(param.name)
+            locals.declare(
+                Locals.Name(param.name),
+                param.type,
+            )
         }
 
         var terminates = false
@@ -45,17 +64,14 @@ class FunctionEmitter(
             emit { return_() }
         }
 
-        val fnName = declaration.name
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
         val fnDefinition: MethodBuilder.() -> Unit = { withCode(codeEmitter) }
         val fnDesc = getMethodTypeDescFrom(declaration)
         return {
             classEmitter()
-            withMethod(fnName, fnDesc, fnFlags, fnDefinition)
+            withMethod(declaration.name, fnDesc, fnFlags, fnDefinition)
         }
     }
-
-    private fun getLocalSlot(name: String): LocalSlot? = locals[name]
 
     private fun emit(block: CodeBuilder.() -> Unit) {
         val previous = codeEmitter
@@ -71,12 +87,24 @@ class FunctionEmitter(
         return when (type) {
             Type.INT -> CD_int
             Type.STRING -> CD_String
-            Type.VOID -> CD_void
+            Type.UNIT -> CD_void
         }
     }
 
-    /** @return whether there is an explicit return statement. */
-    private fun processStatement(statement: Statement): Boolean {
+    // TODO this should not exist, always pass around Types, not ClassDesc
+    private fun getTypeFrom(classDesc: ClassDesc): Type {
+        return when (classDesc) {
+            CD_int -> Type.INT
+            CD_String -> Type.STRING
+            CD_void -> Type.UNIT
+            else -> {
+                error("No known Type for ClassDesc $classDesc")
+            }
+        }
+    }
+
+    /** @return `true` if this statement explicitly returns from the current function. */
+    private fun processStatement(statement: VeraAst.Statement): Boolean {
         return when (statement) {
             is BindStatement -> {
                 processBindStatement(statement)
@@ -104,100 +132,120 @@ class FunctionEmitter(
 
     private fun processBindStatement(bindStatement: BindStatement) {
         // process expression tree, put result on the stack
-        processExpression(bindStatement.expression)
+        val type = processExpression(bindStatement.expression)
         // get result from stack and store it in local variable table
-        return storeLocalVar(bindStatement.name)
+        return storeLocalVar(bindStatement.name, type)
     }
 
-    private fun storeLocalVar(name: String) {
-        val slot = declareLocal(name)
-        emit { istore(slot.slot) }
+    private fun storeLocalVar(name: String, type: Type) {
+        val slot = locals.declare(Locals.Name(name), (type))
+        // store operations pop one from the operand stack
+        operandStack.pop()
+        emit { istore(slot.id) }
     }
 
-    /** Reserves a new slot for the name and returns it. */
-    private fun declareLocal(name: String): LocalSlot {
-        val slot = nextFreeLocalSlot
-        locals += name to slot
-        nextFreeLocalSlot = LocalSlot(slot.slot + 1)
-        return slot
-    }
-
-    private fun processExpression(expression: Expression) {
+    private fun processExpression(expression: Expression): Type {
         // TODO more chain links
         val firstExpr = expression.chainedExpressions.first()
         return processChainedExpression(firstExpr)
     }
 
-    private fun processChainedExpression(chainedExpression: ChainedExpression) {
+    private fun processChainedExpression(chainedExpression: ChainedExpression): Type {
         // no pending symbol -> done processing
-        val pendingSymbol = processPrimaryExpression(chainedExpression.primaryExpression) ?: return
+        val expressionResult = processPrimaryExpression(chainedExpression.primaryExpression)
 
-        // pending symbol -> function/builtin call
-        val fnName = pendingSymbol
-        for (exprData in chainedExpression.data) {
-            when (exprData) {
-                is Arguments -> processArguments(exprData)
-                is MemberAccess -> TODO()
+        return expressionResult.fold(ifLeft = {
+            return it
+        }, ifRight = {
+            // pending symbol -> function/builtin call
+            val fnName = it.text
+            for (exprData in chainedExpression.data) {
+                when (exprData) {
+                    is Arguments -> processArguments(exprData)
+                    is MemberAccess -> TODO()
+                }
             }
-        }
-        val builtin = Builtin.from(fnName)
-        if (builtin != null) {
-            processBuiltinCall(builtin)
-        } else {
-            val fnDeclaration = visibleFunctions[fnName] ?: error("function $fnName not found.")
-            val fnDesc = getMethodTypeDescFrom(fnDeclaration)
-            processFunctionCall(fnName, fnDesc)
-        }
+            val builtin = Builtin.from(fnName)
+            if (builtin != null) {
+                processBuiltinCall(builtin)
+            } else {
+                val fnDeclaration = visibleFunctions[fnName] ?: error("function $fnName not found.")
+                val fnDesc = getMethodTypeDescFrom(fnDeclaration)
+                processFunctionCall(fnName, fnDesc)
+                getTypeFrom(fnDesc.returnType())
+            }
+
+        })
+
     }
 
-    private fun processArguments(arguments: Arguments) {
+    private fun processArguments(arguments: Arguments): List<Type> {
+        val types = mutableListOf<Type>()
         for (expression in arguments.expressions) {
-            processExpression(expression)
+            types.add(processExpression(expression))
         }
+        return types
     }
 
-    private fun processBuiltinCall(builtin: Builtin) {
+    // TODO remove this and add builtins as normal predefined functions
+    private fun processBuiltinCall(builtin: Builtin): Type {
         return when (builtin) {
             Builtin.PRINT -> {
                 val system = ClassDesc.of("java.lang", "System")
                 val printStream = ClassDesc.of("java.io", "PrintStream")
+                val stackValueType = operandStack.pop()
+                val stackValueTypeDesc = getClassDescFrom(stackValueType)
                 emit {
                     getstatic(system, "out", printStream)
                     swap()
-                    invokevirtual(printStream, "println", MethodTypeDesc.of(CD_void, CD_int))
+                    invokevirtual(
+                        printStream,
+                        "println",
+                        MethodTypeDesc.of(CD_void, stackValueTypeDesc)
+                    )
                 }
+                Type.UNIT
             }
         }
     }
 
     private fun processFunctionCall(fnName: String, fnType: MethodTypeDesc) {
-        val fnClass = ClassDesc.of(className)
-        return emit { invokestatic(fnClass, fnName, fnType) }
+        repeat(fnType.parameterCount()) { operandStack.pop() }
+        operandStack.push(getTypeFrom(fnType.returnType()))
+        return emit { invokestatic(ClassDesc.of(className), fnName, fnType) }
     }
 
-    /** @return pending symbol if there is one. */
-    private fun processPrimaryExpression(primaryExpression: PrimaryExpression): String? {
+    private fun processPrimaryExpression(primaryExpression: PrimaryExpression): Either<Type, PendingSymbol> {
         return when (primaryExpression) {
-            is Literal -> {
-                emit { loadConstant(primaryExpression.symbol.toInt()) }
-                null
+            is IntLiteral -> {
+                operandStack.push(Type.INT)
+                emit { loadConstant(primaryExpression.value) }
+                Either.Left(Type.INT)
+            }
+
+            is StringLiteral -> {
+                operandStack.push(Type.STRING)
+                emit { ldc(constantPool().stringEntry(primaryExpression.value)) }
+                Either.Left(Type.STRING)
             }
 
             is ExpressionIdentifier -> {
                 val name = primaryExpression.identifier
-                val localSlot = getLocalSlot(name)
-                if (localSlot != null) {
-                    emit { iload(localSlot.slot) }
-                    null
+                // is it a local?
+                val local = locals.getLocal(name)
+                if (local != null) {
+                    operandStack.push(local.type)
+                    emit { iload(local.slot.id) }
+                    Either.Left(local.type)
                 } else {
                     // not a local, could be builtin/function name
-                    name
+                    Either.Right(PendingSymbol(name))
                 }
             }
 
             is Expression -> {
-                processExpression(primaryExpression)
-                null
+                val type = processExpression(primaryExpression)
+                Either.Left(type)
             }
         }
     }

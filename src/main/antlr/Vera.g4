@@ -36,7 +36,7 @@ argumentList: LPAREN arguments? RPAREN;
 arguments: expression (COMMA expression)*;
 
 /* Literals */
-literal: INT;
+literal: INT_LITERAL | STRING_LITERAL;
 
 /* Layout */
 statementTerminator: EOL* EOF | EOL+;
@@ -61,7 +61,8 @@ RPAREN: ')';
 LBRACE: '{';
 RBRACE: '}';
 
-INT: [0-9]+;
+INT_LITERAL: [0-9]+;
+STRING_LITERAL: '"'[ a-zA-Z0-9!]*'"';
 IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
 
 EOL: '\r\n' | '\n' | '\r';

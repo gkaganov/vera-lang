@@ -19,7 +19,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `print builtin prints to system-out`(testInfo: TestInfo) {
+    fun `print function prints to system-out`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
                         print(65)
@@ -84,7 +84,7 @@ class VeraCompilerTests {
                         return int
                     }
                 """.trimIndent()
-        assertProgramReturns(source, 369, testInfo, true)
+        assertProgramReturns(source, 369, testInfo)
     }
 
     @Test
@@ -99,7 +99,17 @@ class VeraCompilerTests {
                         print(int3)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "99${EOL}98${EOL}97${EOL}", testInfo, true)
+        assertProgramPrints(source, "99${EOL}98${EOL}97${EOL}", testInfo)
+    }
+
+    @Test
+    fun `a String can be printed`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print("Hello World!")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Hello World!$EOL", testInfo)
     }
 
     // TODO explicit thread sync
