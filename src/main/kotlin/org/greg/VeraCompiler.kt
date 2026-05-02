@@ -26,17 +26,17 @@ class VeraCompiler(private val mainClassName: String) {
         val parser = VeraParser(BufferedTokenStream(lexer))
         val program = parser.program()
 
-        val customAstProgram = AstMapper().mapProgram(program)
+        val customAstProgram = VeraAst().mapProgram(program)
 
         val mainClassEmitter = processProgram(customAstProgram)
         return ClassFile.of().build(ClassDesc.of(mainClassName), mainClassEmitter)
     }
 
-    private fun processProgram(program: Program): ClassBuilder.() -> Unit {
+    private fun processProgram(program: VeraAst.Program): ClassBuilder.() -> Unit {
         // first pass - collect function declarations by name
-        val fnDeclarations = mutableMapOf<String, FunctionDeclaration>()
+        val fnDeclarations = mutableMapOf<String, VeraAst.FunctionDeclaration>()
         for (declaration in program.declarations) {
-            if (declaration is FunctionDeclaration) {
+            if (declaration is VeraAst.FunctionDeclaration) {
                 fnDeclarations[declaration.name] = declaration
             }
         }
@@ -44,9 +44,9 @@ class VeraCompiler(private val mainClassName: String) {
         // second pass - compile program
         var classEmitter: ClassBuilder.() -> Unit = {}
         for (declaration in program.declarations) {
-            if (declaration is FunctionDeclaration) {
+            if (declaration is VeraAst.FunctionDeclaration) {
                 classEmitter = FunctionEmitter(mainClassName, fnDeclarations)
-                    .processFunction(declaration, classEmitter)
+                    .emitFunction(declaration, classEmitter)
             }
         }
 
