@@ -31,10 +31,11 @@ class VeraAst {
     sealed interface Literal : PrimaryExpression
     data class IntLiteral(val value: Int) : Literal
     data class StringLiteral(val value: String) : Literal
+    enum class BoolLiteral : Literal { TRUE, FALSE }
     data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
 
     data class Parameter(val name: String, val type: Type)
-    enum class Type { INT, STRING, UNIT }
+    enum class Type { INT, STRING, BOOL, UNIT }
 
     fun mapProgram(ctx: VeraParser.ProgramContext): Program {
         return Program(ctx.declaration().map { decl -> mapDeclaration(decl) })
@@ -146,14 +147,17 @@ class VeraAst {
         }
     }
 
-    private fun mapLiteral(literal: VeraParser.LiteralContext): Literal {
-        val intLiteral = literal.INT_LITERAL()
-        val stringLiteral = literal.STRING_LITERAL()
+    private fun mapLiteral(ctx: VeraParser.LiteralContext): Literal {
+        val intLiteral = ctx.INT_LITERAL()
+        val stringLiteral = ctx.STRING_LITERAL()
+        val boolLiteral = ctx.BOOL_LITERAL()
         return if (intLiteral != null) {
             IntLiteral(intLiteral.text.toInt())
         } else if (stringLiteral != null) {
-            val raw = literal.text.trim('"')
+            val raw = ctx.text.trim('"')
             StringLiteral(raw)
+        } else if (boolLiteral != null) {
+            if (boolLiteral.text == "True") BoolLiteral.TRUE else BoolLiteral.FALSE
         } else {
             error("unknown literal")
         }
