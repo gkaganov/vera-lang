@@ -145,9 +145,35 @@ class FunctionEmitter(
     }
 
     private fun processExpression(expression: Expression): Type {
-        // TODO more chain links
-        val firstExpr = expression.chainedExpressions.first()
-        return processChainedExpression(firstExpr)
+        val mainExpression = expression.chainedExpressions.first()
+        val chainType = processChainedExpression(mainExpression)
+        val chainedExpressions = expression.chainedExpressions.tail
+
+        if (expression.chainOperators.size != chainedExpressions.size) {
+            error("the number of infix operators and chained expressions must be equal")
+        }
+
+        for (operatorExpr in expression.chainOperators.zip(chainedExpressions)) {
+            val chainedtype = processChainedExpression(operatorExpr.second)
+            if (chainedtype != chainType) error("all result types in a chained expression need to be the same")
+
+            // infix operations always pop 2 and push 1
+            val operandtypes = operandStack.pop(2)
+            if (operandtypes.any { type -> type != chainType }) error("the consumed values on the operand stack must be of the same type as the chain type")
+            operandStack.push(chainType)
+
+            emitOperator(operatorExpr.first)
+        }
+        return chainType
+    }
+
+    private fun emitOperator(operator: VeraAst.InfixOperator) {
+        when (operator) {
+            VeraAst.InfixOperator.PLUS -> emit { iadd() }
+            VeraAst.InfixOperator.MINUS -> emit { isub() }
+            VeraAst.InfixOperator.MUL -> emit { imul() }
+            VeraAst.InfixOperator.DIV -> emit { idiv() }
+        }
     }
 
     private fun processChainedExpression(chainedExpression: ChainedExpression): Type {

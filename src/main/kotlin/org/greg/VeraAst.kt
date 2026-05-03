@@ -14,13 +14,18 @@ class VeraAst {
     data class BindStatement(val name: String, val type: Type, val expression: Expression) : Statement
     data class RebindStatement(val name: String, val expression: Expression) : Statement
     data class ReturnStatement(val expression: Expression?) : Statement
-    data class Expression(val chainedExpressions: NonEmptyList<ChainedExpression>) : Statement, PrimaryExpression
+    data class Expression(
+        val chainedExpressions: NonEmptyList<ChainedExpression>,
+        val chainOperators: List<InfixOperator>,
+    ) : Statement, PrimaryExpression
 
     data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
 
     sealed interface ChainedExpressionData
     data class MemberAccess(val member: String) : ChainedExpressionData
     data class Arguments(val expressions: List<Expression>) : ChainedExpressionData
+
+    enum class InfixOperator { PLUS, MINUS, MUL, DIV }
 
     sealed interface PrimaryExpression
     sealed interface Literal : PrimaryExpression
@@ -89,16 +94,29 @@ class VeraAst {
             ReturnStatement(expression)
         } else if (expression != null) {
             val chainedExpression = ChainedExpression(mapExpression(expression))
-            Expression(NonEmptyList.of(chainedExpression))
+            val chainOperators = expression.infixOperator().map(::mapInfixOperator)
+            Expression(NonEmptyList.of(chainedExpression), chainOperators)
         } else {
             error("unknown statement")
         }
     }
 
+    private fun mapInfixOperator(ctx: VeraParser.InfixOperatorContext): InfixOperator {
+        return when (ctx.text) {
+            ctx.PLUS()?.text -> InfixOperator.PLUS
+            ctx.MINUS()?.text -> InfixOperator.MINUS
+            ctx.MUL()?.text -> InfixOperator.MUL
+            ctx.DIV()?.text -> InfixOperator.DIV
+            else -> error("unknown infix operator ${ctx.text}")
+        }
+    }
+
     private fun mapExpression(ctx: VeraParser.ExpressionContext): Expression {
-        val firstChainedExpression = mapChainedExpression(ctx.chainedExpression(0) ?: error("firstChainedExpression is always present"))
-        val chainedExpressions = NonEmptyList.of(firstChainedExpression)
-        return Expression(chainedExpressions)
+        val headChainedExpression = mapChainedExpression(ctx.chainedExpression(0) ?: error("firstChainedExpression is always present"))
+        val tailChainedExpressions = ctx.chainedExpression().drop(1).map(::mapChainedExpression)
+        val chainedExpressions = NonEmptyList.of(headChainedExpression, *tailChainedExpressions.toTypedArray())
+        val operators = ctx.infixOperator().map(::mapInfixOperator)
+        return Expression(chainedExpressions, operators)
     }
 
     private fun mapChainedExpression(ctx: VeraParser.ChainedExpressionContext): ChainedExpression {

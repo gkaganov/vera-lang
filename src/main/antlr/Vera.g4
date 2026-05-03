@@ -28,7 +28,7 @@ updateBlock: LBRACE layout RBRACE;
 returnStatement: RETURN expression?;
 
 /* Expressions */
-expression: chainedExpression (IDENTIFIER chainedExpression)*;
+expression: chainedExpression (infixOperator chainedExpression)*;
 chainedExpression: primaryExpression (memberAccess | argumentList)*;
 primaryExpression: literal | IDENTIFIER | LPAREN expression RPAREN;
 memberAccess: DOT name=IDENTIFIER;
@@ -41,6 +41,9 @@ literal: INT_LITERAL | STRING_LITERAL;
 /* Layout */
 statementTerminator: EOL* EOF | EOL+;
 layout: EOL*;
+
+/* Operators */
+infixOperator: PLUS | MINUS | MUL | DIV;
 
 /* Lexer */
 FN_KEYWORD: 'fn';
@@ -60,6 +63,10 @@ LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';
 RBRACE: '}';
+PLUS: '+';
+MINUS: '-';
+MUL: '*';
+DIV: '/';
 
 INT_LITERAL: [0-9]+;
 STRING_LITERAL: '"'[ a-zA-Z0-9!]*'"';

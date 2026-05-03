@@ -48,15 +48,13 @@ class VeraCompilerTests {
     @Test
     fun `var with explicit type declaration can be bound and accessed`(testInfo: TestInfo) {
         val source = """
-                    fn $TEST_MAIN() {
+                    fn $TEST_MAIN(): Int {
                         var myVar1: Int = 50
                         var myVar2: Int = 51
-                        print(myVar1)
-                        print(myVar2)
-                        print(52)
+                        return myVar1 + myVar2 + 52
                     }
                 """.trimIndent()
-        assertProgramPrints(source, 50.toString() + EOL + 51 + EOL + 52 + EOL, testInfo)
+        assertProgramReturns(source, 153, testInfo)
     }
 
     @Test
@@ -90,16 +88,14 @@ class VeraCompilerTests {
     @Test
     fun `multiple Int parameters can be passed`(testInfo: TestInfo) {
         val source = """
-                    fn $TEST_MAIN() {
-                        print3Ints(99, 98, 97)
+                    fn $TEST_MAIN(): Int {
+                        return add3Ints(99, 98, 97)
                     }
-                    fn print3Ints(int1: Int, int2: Int, int3: Int) {
-                        print(int1)
-                        print(int2)
-                        print(int3)
+                    fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
+                        return int1 + int2 + int3
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "99${EOL}98${EOL}97${EOL}", testInfo)
+        assertProgramReturns(source, 294, testInfo)
     }
 
     @Test
@@ -125,7 +121,65 @@ class VeraCompilerTests {
         assertProgramPrints(source, "I am a String${EOL}1000${EOL}", testInfo)
     }
 
-    // TODO explicit thread sync
+    @Test
+    fun `Ints can be added`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        val sum = 2 + 2
+                        return sum
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 4, testInfo)
+    }
+
+    @Test
+    fun `Ints can be subtracted`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        val difference = 100 - 37
+                        return difference
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 63, testInfo)
+    }
+
+    @Test
+    fun `Ints can be multiplied`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        val product = 6 * 8
+                        return product
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 48, testInfo)
+    }
+
+    @Test
+    fun `Ints can be divided if the result is an Int`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        val quotient = 16 / 4
+                        return quotient
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 4, testInfo)
+    }
+
+    private fun assertProgramReturns(
+        source: String,
+        expected: Any,
+        testInfo: TestInfo,
+        compileToOut: Boolean = false,
+    ) {
+        val className = "CompiledTestClass" + CLASS_ID.getAndIncrement()
+        val bytecode = VeraCompiler(className).compile(source)
+        if (compileToOut) Path("out", testInfo.testMethod.get().name, "$className.class").createParentDirectories().writeBytes(bytecode)
+        val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
+        val testMethod = classLoader.loadClass(className).getMethod(TEST_MAIN)
+        val actual = testMethod.invoke(null)
+        Assertions.assertEquals(expected, actual)
+    }
+
     private fun assertProgramPrints(
         source: String,
         expected: String,
@@ -146,20 +200,5 @@ class VeraCompilerTests {
             System.setOut(oldOut)
         }
         Assertions.assertEquals(expected, baos.toString())
-    }
-
-    private fun assertProgramReturns(
-        source: String,
-        expected: Any,
-        testInfo: TestInfo,
-        compileToOut: Boolean = false,
-    ) {
-        val className = "CompiledTestClass" + CLASS_ID.getAndIncrement()
-        val bytecode = VeraCompiler(className).compile(source)
-        if (compileToOut) Path("out", testInfo.testMethod.get().name, "$className.class").createParentDirectories().writeBytes(bytecode)
-        val classLoader = ByteArrayClassLoader(mapOf(className to bytecode))
-        val testMethod = classLoader.loadClass(className).getMethod(TEST_MAIN)
-        val actual = testMethod.invoke(null)
-        Assertions.assertEquals(expected, actual)
     }
 }
