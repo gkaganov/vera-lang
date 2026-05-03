@@ -112,6 +112,19 @@ class VeraCompilerTests {
         assertProgramPrints(source, "Hello World!$EOL", testInfo)
     }
 
+    @Test
+    fun `var types can be inferred when bound directly`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var inferredString = "I am a String"
+                        var inferredInt = 1000
+                        print(inferredString)
+                        print(inferredInt)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "I am a String${EOL}1000${EOL}", testInfo)
+    }
+
     // TODO explicit thread sync
     private fun assertProgramPrints(
         source: String,
