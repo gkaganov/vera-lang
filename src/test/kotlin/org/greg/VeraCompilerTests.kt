@@ -165,6 +165,19 @@ class VeraCompilerTests {
         assertProgramReturns(source, 4, testInfo)
     }
 
+    @Test
+    fun `Bools can be declared and bound to True and False`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        val trueValue = True
+                        val falseValue = False
+                        print(trueValue)
+                        print(falseValue)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,

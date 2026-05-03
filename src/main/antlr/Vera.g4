@@ -12,7 +12,7 @@ parameter: name=IDENTIFIER COLON typeRef;
 returnType: COLON typeRef;
 
 /* Types */
-typeRef: INT_TYPE | STRING_TYPE;
+typeRef: INT_TYPE | STRING_TYPE | BOOL_TYPE;
 
 /* Blocks & Statements */
 block: LBRACE layout statement* RBRACE;
@@ -36,7 +36,7 @@ argumentList: LPAREN arguments? RPAREN;
 arguments: expression (COMMA expression)*;
 
 /* Literals */
-literal: INT_LITERAL | STRING_LITERAL;
+literal: INT_LITERAL | STRING_LITERAL | BOOL_LITERAL;
 
 /* Layout */
 statementTerminator: EOL* EOF | EOL+;
@@ -51,6 +51,7 @@ VAR: 'var';
 VAL: 'val';
 INT_TYPE: 'Int';
 STRING_TYPE: 'String';
+BOOL_TYPE: 'Bool';
 RETURN: 'return';
 
 BIND: '=';
@@ -70,6 +71,7 @@ DIV: '/';
 
 INT_LITERAL: [0-9]+;
 STRING_LITERAL: '"'[ a-zA-Z0-9!]*'"';
+BOOL_LITERAL: 'True' | 'False';
 IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;
 
 EOL: '\r\n' | '\n' | '\r';

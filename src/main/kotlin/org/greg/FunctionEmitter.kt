@@ -19,6 +19,7 @@ import java.lang.classfile.CodeBuilder
 import java.lang.classfile.MethodBuilder
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs.CD_String
+import java.lang.constant.ConstantDescs.CD_boolean
 import java.lang.constant.ConstantDescs.CD_int
 import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
@@ -87,6 +88,7 @@ class FunctionEmitter(
         return when (type) {
             Type.INT -> CD_int
             Type.STRING -> CD_String
+            Type.BOOL -> CD_boolean
             Type.UNIT -> CD_void
         }
     }
@@ -96,6 +98,7 @@ class FunctionEmitter(
         return when (classDesc) {
             CD_int -> Type.INT
             CD_String -> Type.STRING
+            CD_boolean -> Type.STRING
             CD_void -> Type.UNIT
             else -> {
                 error("No known Type for ClassDesc $classDesc")
@@ -255,6 +258,12 @@ class FunctionEmitter(
                 Either.Left(Type.STRING)
             }
 
+            is VeraAst.BoolLiteral -> {
+                operandStack.push(Type.BOOL)
+                if (primaryExpression == VeraAst.BoolLiteral.TRUE) emit { iconst_1() } else emit { iconst_0() }
+                Either.Left(Type.BOOL)
+            }
+
             is ExpressionIdentifier -> {
                 val name = primaryExpression.identifier
                 // is it a local?
@@ -278,14 +287,14 @@ class FunctionEmitter(
 
     private fun emitStore(local: Locals.Local) {
         when (local.type) {
-            Type.INT -> emit { istore(local.slot.id) }
+            Type.INT, Type.BOOL -> emit { istore(local.slot.id) }
             else -> emit { astore(local.slot.id) }
         }
     }
 
     private fun emitLoad(local: Locals.Local) {
         when (local.type) {
-            Type.INT -> emit { iload(local.slot.id) }
+            Type.INT, Type.BOOL -> emit { iload(local.slot.id) }
             else -> emit { aload(local.slot.id) }
         }
     }
