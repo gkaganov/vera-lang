@@ -138,10 +138,10 @@ class FunctionEmitter(
     }
 
     private fun storeLocalVar(name: String, type: Type) {
-        val slot = locals.declare(Locals.Name(name), (type))
+        val newLocal = locals.declare(Locals.Name(name), (type))
         // store operations pop one from the operand stack
         operandStack.pop()
-        emit { istore(slot.id) }
+        emitStore(newLocal)
     }
 
     private fun processExpression(expression: Expression): Type {
@@ -235,7 +235,7 @@ class FunctionEmitter(
                 val local = locals.getLocal(name)
                 if (local != null) {
                     operandStack.push(local.type)
-                    emit { iload(local.slot.id) }
+                    emitLoad(local)
                     Either.Left(local.type)
                 } else {
                     // not a local, could be builtin/function name
@@ -247,6 +247,20 @@ class FunctionEmitter(
                 val type = processExpression(primaryExpression)
                 Either.Left(type)
             }
+        }
+    }
+
+    private fun emitStore(local: Locals.Local) {
+        when (local.type) {
+            Type.INT -> emit { istore(local.slot.id) }
+            else -> emit { astore(local.slot.id) }
+        }
+    }
+
+    private fun emitLoad(local: Locals.Local) {
+        when (local.type) {
+            Type.INT -> emit { iload(local.slot.id) }
+            else -> emit { aload(local.slot.id) }
         }
     }
 }
