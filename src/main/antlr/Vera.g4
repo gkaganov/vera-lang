@@ -19,18 +19,20 @@ block: LBRACE layout statement* RBRACE;
 statement: (bindStatement | rebindStatement | returnStatement | expression) statementTerminator;
 
 /* Binding */
-bindStatement: (VAR | VAL) name=IDENTIFIER (COLON typeRef)? BIND expression;
+bindStatement: (VAR_KEYWORD | VAL_KEYWORD) name=IDENTIFIER (COLON typeRef)? BIND expression;
 rebindStatement: name=IDENTIFIER REBIND rebindRhs;
 rebindRhs: expression | updateBlock;
 updateBlock: LBRACE layout RBRACE;
 
 /* Return */
-returnStatement: RETURN expression?;
+returnStatement: RETURN_KEYWORD expression?;
 
 /* Expressions */
 expression: chainedExpression (infixOperator chainedExpression)*;
 chainedExpression: primaryExpression (memberAccess | argumentList)*;
-primaryExpression: literal | IDENTIFIER | LPAREN expression RPAREN;
+primaryExpression: literal | IDENTIFIER | ifExpression | LPAREN expression RPAREN;
+ifExpression: IF_KEYWORD condition=expression thenBranch=block
+              (ELSE_KEYWORD elseBranch=block)?;
 memberAccess: DOT name=IDENTIFIER;
 argumentList: LPAREN arguments? RPAREN;
 arguments: expression (COMMA expression)*;
@@ -47,12 +49,15 @@ infixOperator: PLUS | MINUS | MUL | DIV;
 
 /* Lexer */
 FN_KEYWORD: 'fn';
-VAR: 'var';
-VAL: 'val';
+IF_KEYWORD: 'if';
+ELSE_KEYWORD: 'else';
+VAR_KEYWORD: 'var';
+VAL_KEYWORD: 'val';
+RETURN_KEYWORD: 'return';
+
 INT_TYPE: 'Int';
 STRING_TYPE: 'String';
 BOOL_TYPE: 'Bool';
-RETURN: 'return';
 
 BIND: '=';
 REBIND: ':=';
