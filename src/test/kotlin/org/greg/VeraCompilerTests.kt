@@ -178,6 +178,20 @@ class VeraCompilerTests {
         assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
     }
 
+    @Test
+    fun `if expressions with an else block return the correct value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): String {
+                        return if True {
+                            "So true"
+                        } else {
+                            "Never gonna happen"
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "So true$EOL", testInfo)
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,

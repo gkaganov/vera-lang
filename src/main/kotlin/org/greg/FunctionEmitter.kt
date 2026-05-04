@@ -44,12 +44,12 @@ class FunctionEmitter(
     private val locals = Locals()
     private val operandStack = OperandStack()
 
-    private var codeEmitter: CodeBuilder.() -> Unit = {}
+    private var codeBuilder: CodeBuilder
 
     fun emitFunction(
         declaration: FunctionDeclaration,
-        classEmitter: ClassBuilder.() -> Unit,
-    ): ClassBuilder.() -> Unit {
+        classBuilder: ClassBuilder,
+    ): ClassBuilder {
         for (param in declaration.params) {
             locals.declare(
                 Locals.Name(param.name),
@@ -66,17 +66,9 @@ class FunctionEmitter(
         }
 
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
-        val fnDefinition: MethodBuilder.() -> Unit = { withCode(codeEmitter) }
+        val fnDefinition: MethodBuilder.() -> Unit = { withCode { codeBuilder } }
         val fnDesc = getMethodTypeDescFrom(declaration)
-        return {
-            classEmitter()
-            withMethod(declaration.name, fnDesc, fnFlags, fnDefinition)
-        }
-    }
-
-    private fun emit(block: CodeBuilder.() -> Unit) {
-        val previous = codeEmitter
-        codeEmitter = { previous(); block() }
+        return classBuilder.withMethod(declaration.name, fnDesc, fnFlags, fnDefinition)
     }
 
     private fun getMethodTypeDescFrom(functionDeclaration: FunctionDeclaration): MethodTypeDesc {
@@ -261,6 +253,21 @@ class FunctionEmitter(
             is VeraAst.BoolLiteral -> {
                 operandStack.push(Type.BOOL)
                 if (primaryExpression == VeraAst.BoolLiteral.TRUE) emit { iconst_1() } else emit { iconst_0() }
+                Either.Left(Type.BOOL)
+            }
+
+            is VeraAst.IfExpression -> {
+                val expressionType = Type.STRING // TODO primaryExpression.thenBlock...
+
+                val elseLabel = codeBuilder.newLabel()
+                val endLabel = codeBuilder.newLabel()
+
+                val conditonType = processExpression(primaryExpression.condition)
+                if (conditonType != Type.BOOL) error("condition type must be bool")
+                // a Bool is pushed and then immediately consumed by ifne / ifeq
+                // a value of the expression type is pushed by the if-expression
+                operandStack.push(expressionType)
+                emit { if }
                 Either.Left(Type.BOOL)
             }
 

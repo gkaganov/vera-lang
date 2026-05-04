@@ -33,6 +33,7 @@ class VeraAst {
     data class StringLiteral(val value: String) : Literal
     enum class BoolLiteral : Literal { TRUE, FALSE }
     data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
+    data class IfExpression(val condition: Expression, val thenBlock: NonEmptyList<Statement>, val elseBlock: List<Statement>) : PrimaryExpression
 
     data class Parameter(val name: String, val type: Type)
     enum class Type { INT, STRING, BOOL, UNIT }
@@ -135,6 +136,7 @@ class VeraAst {
     private fun mapPrimaryExpression(ctx: VeraParser.PrimaryExpressionContext): PrimaryExpression {
         val literal = ctx.literal()
         val identifier = ctx.IDENTIFIER()
+        val ifExpression = ctx.ifExpression()
         val expression = ctx.expression()
         return if (literal != null) {
             mapLiteral(literal)
@@ -142,6 +144,12 @@ class VeraAst {
             ExpressionIdentifier(identifier.text)
         } else if (expression != null) {
             mapExpression(expression)
+        } else if (ifExpression != null) {
+            IfExpression(
+                mapExpression(ifExpression.condition ?: error("condition in if expression must be present")),
+                NonEmptyList.of(ifExpression.thenBranch?.statement()?.map(::mapStatement) ?: error("thenBlock must exist")),
+                ifExpression.elseBranch?.statement()?.map(::mapStatement).orEmpty(),
+            )
         } else {
             error("unknown chainedExpression")
         }
