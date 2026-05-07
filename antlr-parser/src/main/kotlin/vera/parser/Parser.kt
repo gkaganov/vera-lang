@@ -1,42 +1,32 @@
-package org.greg
+package vera.parser
 
 import arrow.core.NonEmptyList
-import org.greg.antlr.VeraParser
+import vera.antlr.VeraParser
+import vera.ast.Arguments
+import vera.ast.BindStatement
+import vera.ast.BoolLiteral
+import vera.ast.ChainedExpression
+import vera.ast.Declaration
+import vera.ast.Expression
+import vera.ast.ExpressionIdentifier
+import vera.ast.FunctionDeclaration
+import vera.ast.IfExpression
+import vera.ast.InfixOperator
+import vera.ast.IntLiteral
+import vera.ast.Literal
+import vera.ast.MemberAccess
+import vera.ast.Parameter
+import vera.ast.PrimaryExpression
+import vera.ast.Program
+import vera.ast.RebindStatement
+import vera.ast.ReturnStatement
+import vera.ast.Statement
+import vera.ast.StringLiteral
+import vera.ast.Type
+import kotlin.collections.map
+import kotlin.collections.orEmpty
 
-class VeraAst {
-
-    data class Program(val declarations: List<Declaration>)
-
-    sealed interface Declaration
-    data class FunctionDeclaration(val name: String, val params: List<Parameter>, val returnType: Type, val statements: List<Statement>) : Declaration
-
-    sealed interface Statement
-    data class BindStatement(val name: String, val type: Type, val expression: Expression) : Statement
-    data class RebindStatement(val name: String, val expression: Expression) : Statement
-    data class ReturnStatement(val expression: Expression?) : Statement
-    data class Expression(
-        val chainedExpressions: NonEmptyList<ChainedExpression>,
-        val chainOperators: List<InfixOperator>,
-    ) : Statement, PrimaryExpression
-
-    data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
-
-    sealed interface ChainedExpressionData
-    data class MemberAccess(val member: String) : ChainedExpressionData
-    data class Arguments(val expressions: List<Expression>) : ChainedExpressionData
-
-    enum class InfixOperator { PLUS, MINUS, MUL, DIV }
-
-    sealed interface PrimaryExpression
-    sealed interface Literal : PrimaryExpression
-    data class IntLiteral(val value: Int) : Literal
-    data class StringLiteral(val value: String) : Literal
-    enum class BoolLiteral : Literal { TRUE, FALSE }
-    data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
-    data class IfExpression(val condition: Expression, val thenBlock: NonEmptyList<Statement>, val elseBlock: List<Statement>) : PrimaryExpression
-
-    data class Parameter(val name: String, val type: Type)
-    enum class Type { INT, STRING, BOOL, UNIT }
+class Parser {
 
     fun mapProgram(ctx: VeraParser.ProgramContext): Program {
         return Program(ctx.declaration().map { decl -> mapDeclaration(decl) })

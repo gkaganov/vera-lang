@@ -1,11 +1,21 @@
+@file:Suppress("UnstableApiUsage")
+
 rootProject.name = "vera-lang"
 
 pluginManagement {
-    val kotlinVersion: String by settings
-    val antlrKotlinVersion: String by settings
-
-    plugins {
-        kotlin("jvm") version kotlinVersion
-        id("com.strumenta.antlr-kotlin") version antlrKotlinVersion
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
     }
 }
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+include("antlr-parser")
+include("ast")

@@ -40,34 +40,26 @@ private enum class Builtin(val keyword: String) {
 class FunctionEmitter(
     private val className: String,
     private val visibleFunctions: Map<String, FunctionDeclaration>,
+    private val codeBuilder: CodeBuilder
 ) {
     private val locals = Locals()
+
     private val operandStack = OperandStack()
 
-    private var codeBuilder: CodeBuilder
-
-    fun emitFunction(
-        declaration: FunctionDeclaration,
-        classBuilder: ClassBuilder,
-    ): ClassBuilder {
+    fun emitFunction(declaration: FunctionDeclaration): CodeBuilder {
         for (param in declaration.params) {
-            locals.declare(
-                Locals.Name(param.name),
-                param.type,
-            )
+            locals.declare(Locals.Name(param.name), param.type)
         }
 
-        var terminates = false
-        for (statement in declaration.statements) {
-            terminates = processStatement(statement)
-        }
-        if (!terminates) {
-            emit { return_() }
-        }
+        val terminates = declaration.statements
+            .map { processStatement(it) }
+            .any()
+        if (!terminates) codeBuilder.return_()
 
         val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
         val fnDefinition: MethodBuilder.() -> Unit = { withCode { codeBuilder } }
         val fnDesc = getMethodTypeDescFrom(declaration)
+        // TODO create internal representation of method desc and return it here
         return classBuilder.withMethod(declaration.name, fnDesc, fnFlags, fnDefinition)
     }
 

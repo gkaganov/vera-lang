@@ -1,4 +1,4 @@
-import org.greg.VeraCompiler
+import org.vera-lang.VeraCompiler
 import java.nio.file.Path
 
 fun main() {

@@ -1,57 +1,30 @@
 import com.strumenta.antlrkotlin.gradle.AntlrKotlinTask
+import org.gradle.api.plugins.JavaPluginExtension
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
-group = "org.greg"
-version = "1.0-SNAPSHOT"
+allprojects {
+    group = "org.vera-lang"
+    version = "0.0.1-SNAPSHOT"
+}
 
-val junitVersion: String by project
-val jvmVersion: String by project
-val antlrKotlinVersion: String by project
-val arrowVersion: String by project
+subprojects {
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<KotlinJvmProjectExtension> {
+            jvmToolchain(libs.versions.jvm.get().toInt())
+        }
+    }
 
-val antlrPackage = "${project.group}.antlr"
-val generatedAntlrRoot: Provider<Directory> = layout.buildDirectory.dir("generated/sources/antlr/main/kotlin")
-
-repositories.mavenCentral()
-java.toolchain.languageVersion.set(JavaLanguageVersion.of(jvmVersion))
-kotlin.jvmToolchain(jvmVersion.toInt())
+    plugins.withId("java") {
+        extensions.configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(libs.versions.jvm.get().toInt()))
+            }
+        }
+    }
+}
 
 plugins {
-    kotlin("jvm")
-    id("com.strumenta.antlr-kotlin")
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.antlr.kotlin) apply false
 }
 
-dependencies {
-    implementation("com.strumenta:antlr-kotlin-runtime:$antlrKotlinVersion")
-    implementation("io.arrow-kt:arrow-core:$arrowVersion")
-
-    testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
-    testImplementation(kotlin("test"))
-}
-
-val generateKotlinGrammarSource = tasks.register<AntlrKotlinTask>("generateKotlinGrammarSource") {
-    source = fileTree(layout.projectDirectory.dir("src/main/antlr")) {
-        include("**/*.g4")
-    }
-
-    packageName = antlrPackage
-    arguments = listOf("-no-listener")
-
-    outputDirectory = generatedAntlrRoot
-        .map { it.dir(antlrPackage.replace('.', '/')) }
-        .get()
-        .asFile
-}
-
-kotlin {
-    sourceSets.named("main") {
-        kotlin.srcDir(generatedAntlrRoot)
-    }
-}
-
-tasks.named("compileKotlin") {
-    dependsOn(generateKotlinGrammarSource)
-}
-
-tasks.test.configure {
-    useJUnitPlatform()
-}
