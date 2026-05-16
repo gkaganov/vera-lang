@@ -2,6 +2,18 @@
 
 rootProject.name = "vera-lang"
 
+include("cli")
+include("compiler")
+
+include("model")
+include("antlr-parser")
+include("ast")
+include("jvm-lowering")
+include("jvm-ir")
+include("jvm-bytecode-emitter")
+
+include("compiler-tests")
+
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -16,6 +28,3 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-
-include("antlr-parser")
-include("ast")

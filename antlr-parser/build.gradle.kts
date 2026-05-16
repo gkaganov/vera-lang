@@ -4,17 +4,14 @@ val generatedAntlrRoot: Provider<Directory> = layout.buildDirectory.dir("generat
 val antlrPackage = "vera.antlr"
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.antlr.kotlin)
 }
 
 dependencies {
-    implementation(libs.arrow.core)
     implementation(libs.antlr.kotlin.runtime)
+    implementation(libs.arrow.core)
 
-    implementation(project(":ast"))
-
-    testImplementation(kotlin("test"))
+    api(project(":ast"))
 }
 
 kotlin {
