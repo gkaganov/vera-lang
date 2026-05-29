@@ -1,5 +1,5 @@
 dependencies {
-    implementation(libs.arrow.core)
+    api(libs.arrow.core)
 
-    implementation(project(":model"))
+    api(project(":shared-model"))
 }

@@ -5,7 +5,7 @@ rootProject.name = "vera-lang"
 include("cli")
 include("compiler")
 
-include("model")
+include("shared-model")
 include("antlr-parser")
 include("ast")
 include("jvm-lowering")

@@ -1,11 +1,24 @@
 package vera.jvm.ir
 
-data class JvmProgram(
-    val methods: List<JvmMethod>,
+import vera.jvm.ir.LocalTable.LocalName
+import vera.jvm.ir.LocalTable.LocalWithName
+import vera.jvm.ir.LocalTable.LocalWithSlot
+import vera.shared.model.Identifier
+
+data class JvmProgram(val methods: List<JvmMethod>)
+
+data class JvmValue(val type: JvmType)
+
+data class JvmMethod(
+    val parameters: List<JvmParameter>,
+    val returnType: JvmType,
+    val instructions: List<VerifiedInstruction>,
 )
 
-class JvmMethod(
-    parameterTypes: List<JvmType>,
+data class JvmParameter(val name: Identifier, val type: JvmType)
+
+class JvmMethodBuilder(
+    val parameters: List<JvmParameter>,
     val returnType: JvmType,
 ) {
     private val locals = LocalTable()
@@ -16,12 +29,12 @@ class JvmMethod(
         get() = _instructions
 
     init {
-        parameterTypes.forEachIndexed { index, type ->
-            locals.define(LocalSlot(index), type)
+        parameters.forEach { param ->
+            locals.define(LocalWithName(LocalName(param.name), JvmValue(param.type)))
         }
     }
 
-    fun emit(instruction: JvmInstruction) {
+    fun addInstruction(instruction: JvmInstruction) {
         val before = FrameSnapshot(
             stack = stack.snapshot(),
             locals = locals.snapshot(),
@@ -41,6 +54,8 @@ class JvmMethod(
             after = after,
         )
     }
+
+    fun build(): JvmMethod = JvmMethod(parameters, returnType, instructions)
 
     private fun verifyInstruction(instruction: JvmInstruction) {
         val pops = instruction.effect.pops
@@ -65,9 +80,9 @@ class JvmMethod(
             }
         }
 
-        instruction.effect.localReads.forEach { slot ->
-            if (!locals.exists(slot)) {
-                error("Read from undefined local: $slot")
+        instruction.effect.localReads.forEach { localByName ->
+            if (!locals.exists(localByName.name)) {
+                error("Read from undefined local: $localByName")
             }
         }
     }
@@ -78,7 +93,7 @@ class JvmMethod(
         }
 
         instruction.effect.localWrites.forEach {
-            locals.define(it.slot, it.type)
+            locals.define(LocalWithName(it.name, it.jvmValue))
         }
 
         instruction.effect.pushes.forEach {
@@ -93,23 +108,20 @@ data class VerifiedInstruction(
     val after: FrameSnapshot,
 )
 
-data class FrameSnapshot(
-    val stack: List<JvmType>,
-    val locals: Map<LocalSlot, JvmType>,
-)
+data class FrameSnapshot(val stack: List<JvmValue>, val locals: Map<LocalName, LocalWithSlot>)
 
 class OperandStack {
-    private val values = mutableListOf<JvmType>()
+    private val values = mutableListOf<JvmValue>()
 
-    fun push(type: JvmType) {
-        values += type
+    fun push(value: JvmValue) {
+        values += value
     }
 
-    fun pop(): JvmType {
+    fun pop(): JvmValue {
         return values.removeLast()
     }
 
-    fun peek(amount: Int): List<JvmType> {
+    fun peek(amount: Int): List<JvmValue> {
         return values.takeLast(amount)
     }
 
@@ -117,116 +129,81 @@ class OperandStack {
         return values.size
     }
 
-    fun snapshot(): List<JvmType> {
+    fun snapshot(): List<JvmValue> {
         return values.toList()
     }
 }
 
-@JvmInline value class LocalSlot(val index: Int)
-
 class LocalTable {
-    private val locals = mutableMapOf<LocalSlot, JvmType>()
+    @JvmInline value class LocalSlot(val index: Int)
+    @JvmInline value class LocalName(val value: Identifier)
 
-    fun define(slot: LocalSlot, type: JvmType) {
-        locals[slot] = type
+    /** Local with slot for jvm bytecode emitter. */
+    data class LocalWithSlot(val slot: LocalSlot, val jvmValue: JvmValue)
+
+    /** Local with name for vera compiler. */
+    data class LocalWithName(val name: LocalName, val jvmValue: JvmValue)
+
+    private val locals = mutableMapOf<LocalName, LocalWithSlot>()
+    private var nextFreeSlot = LocalSlot(0)
+
+    fun define(localWithName: LocalWithName): LocalSlot {
+        // TODO check if redeclaration
+        val localWithSlot = LocalWithSlot(nextFreeSlot, localWithName.jvmValue)
+        locals[localWithName.name] = localWithSlot
+        nextFreeSlot = LocalSlot(nextFreeSlot.index + 1)
+        return localWithSlot.slot
     }
 
-    fun read(slot: LocalSlot): JvmType {
-        return locals[slot]
-            ?: error("Undefined local: $slot")
-    }
-
-    fun exists(slot: LocalSlot): Boolean {
-        return slot in locals
-    }
-
-    fun snapshot(): Map<LocalSlot, JvmType> {
-        return locals.toMap()
-    }
+    fun read(name: LocalName): JvmValue = locals[name]?.jvmValue ?: error("Undefined local: $name")
+    fun snapshot(): Map<LocalName, LocalWithSlot> = locals.toMap()
+    fun exists(name: LocalName): Boolean = locals[name] != null
 }
 
 data class InstructionEffect(
-    val pops: List<JvmType> = emptyList(),
-    val pushes: List<JvmType> = emptyList(),
-    val localReads: List<LocalSlot> = emptyList(),
-    val localWrites: List<LocalWrite> = emptyList(),
-)
-
-data class LocalWrite(
-    val slot: LocalSlot,
-    val type: JvmType,
+    val pops: List<JvmValue> = emptyList(),
+    val pushes: List<JvmValue> = emptyList(),
+    val localReads: List<LocalWithName> = emptyList(),
+    val localWrites: List<LocalWithName> = emptyList(),
 )
 
 sealed interface JvmInstruction {
     val effect: InstructionEffect
 }
 
-enum class JvmType { INT, REFERENCE }
+enum class JvmType { INT, REFERENCE, VOID }
 
-data class IConst(val value: Int) : JvmInstruction {
+data class Load(val localWithName: LocalWithName) : JvmInstruction {
     override val effect = InstructionEffect(
-        pushes = listOf(JvmType.INT),
+        localReads = listOf(localWithName),
+        pushes = listOf(localWithName.jvmValue),
     )
 }
 
-data class ILoad(val slot: LocalSlot) : JvmInstruction {
+data class Store(val localWithName: LocalWithName) : JvmInstruction {
     override val effect = InstructionEffect(
-        localReads = listOf(slot),
-        pushes = listOf(JvmType.INT),
+        pops = listOf(localWithName.jvmValue),
+        localWrites = listOf(localWithName),
     )
 }
 
-data class ALoad(val slot: LocalSlot) : JvmInstruction {
+data class ConstInt(val value: Int) : JvmInstruction {
     override val effect = InstructionEffect(
-        localReads = listOf(slot),
-        pushes = listOf(JvmType.REFERENCE),
+        pushes = listOf(JvmValue(JvmType.INT)),
     )
 }
 
-data class IStore(val slot: LocalSlot) : JvmInstruction {
+enum class IntBinaryOperator { ADD, SUB, MUL, DIV, }
+
+data class IntBinaryOperation(val operator: IntBinaryOperator) : JvmInstruction {
     override val effect = InstructionEffect(
-        pops = listOf(JvmType.INT),
-        localWrites = listOf(LocalWrite(slot, JvmType.INT)),
+        pops = listOf(JvmValue(JvmType.INT), JvmValue(JvmType.INT)),
+        pushes = listOf(JvmValue(JvmType.INT)),
     )
 }
 
-data class AStore(val slot: LocalSlot) : JvmInstruction {
+data class Return(val value: JvmValue? = null) : JvmInstruction {
     override val effect = InstructionEffect(
-        pops = listOf(JvmType.REFERENCE),
-        localWrites = listOf(LocalWrite(slot, JvmType.REFERENCE)),
-    )
-}
-
-object IAdd : JvmInstruction {
-    override val effect = InstructionEffect(
-        pops = listOf(JvmType.INT, JvmType.INT),
-        pushes = listOf(JvmType.INT),
-    )
-}
-
-object ISub : JvmInstruction {
-    override val effect = InstructionEffect(
-        pops = listOf(JvmType.INT, JvmType.INT),
-        pushes = listOf(JvmType.INT),
-    )
-}
-
-object IMul : JvmInstruction {
-    override val effect = InstructionEffect(
-        pops = listOf(JvmType.INT, JvmType.INT),
-        pushes = listOf(JvmType.INT),
-    )
-}
-
-object IDiv : JvmInstruction {
-    override val effect = InstructionEffect(
-        pops = listOf(JvmType.INT, JvmType.INT),
-        pushes = listOf(JvmType.INT),
-    )
-}
-
-data class Return(val type: JvmType?) : JvmInstruction {
-    override val effect = InstructionEffect(
-        pops = if (type != null) listOf(type) else emptyList()
+        pops = if (value != null) listOf(value) else emptyList()
     )
 }

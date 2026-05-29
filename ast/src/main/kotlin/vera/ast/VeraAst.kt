@@ -1,25 +1,26 @@
 package vera.ast
 
 import arrow.core.NonEmptyList
+import vera.shared.model.Identifier
 
 data class Program(val declarations: List<Declaration>)
 
 sealed interface Declaration
-data class FunctionDeclaration(val name: String, val params: List<Parameter>, val returnType: Type, val statements: List<Statement>) : Declaration
+data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val statements: List<VeraStatement>) : Declaration
 
-sealed interface Statement
-data class BindStatement(val name: String, val type: Type, val expression: Expression) : Statement
-data class RebindStatement(val name: String, val expression: Expression) : Statement
-data class ReturnStatement(val expression: Expression?) : Statement
+sealed interface VeraStatement
+data class BindStatement(val name: Identifier, val type: VeraType, val expression: Expression) : VeraStatement
+data class RebindStatement(val name: Identifier, val expression: Expression) : VeraStatement
+data class ReturnStatement(val expression: Expression?) : VeraStatement
 data class Expression(
     val chainedExpressions: NonEmptyList<ChainedExpression>,
     val chainOperators: List<InfixOperator>,
-) : Statement, PrimaryExpression
+) : VeraStatement, PrimaryExpression
 
 data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
 
 sealed interface ChainedExpressionData
-data class MemberAccess(val member: String) : ChainedExpressionData
+data class MemberAccess(val member: Identifier) : ChainedExpressionData
 data class Arguments(val expressions: List<Expression>) : ChainedExpressionData
 
 enum class InfixOperator { PLUS, MINUS, MUL, DIV }
@@ -30,7 +31,7 @@ data class IntLiteral(val value: Int) : Literal
 data class StringLiteral(val value: String) : Literal
 enum class BoolLiteral : Literal { TRUE, FALSE }
 data class ExpressionIdentifier(val identifier: String) : PrimaryExpression
-data class IfExpression(val condition: Expression, val thenBlock: NonEmptyList<Statement>, val elseBlock: List<Statement>) : PrimaryExpression
+data class IfExpression(val condition: Expression, val thenBlock: NonEmptyList<VeraStatement>, val elseBlock: List<VeraStatement>) : PrimaryExpression
 
-data class Parameter(val name: String, val type: Type)
-enum class Type { INT, STRING, BOOL, UNIT }
+data class VeraParameter(val name: Identifier, val type: VeraType)
+enum class VeraType { INT, STRING, BOOL, UNIT }

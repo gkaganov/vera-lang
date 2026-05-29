@@ -1,80 +1,78 @@
 package vera.jvm.lowering
 
-import org.greg.Locals
+import arrow.core.Either
 import vera.ast.Arguments
 import vera.ast.BindStatement
 import vera.ast.ChainedExpression
 import vera.ast.Expression
 import vera.ast.ExpressionIdentifier
-import vera.ast.FunctionDeclaration
+import vera.ast.VeraFunctionDeclaration
+import vera.ast.InfixOperator
 import vera.ast.IntLiteral
 import vera.ast.MemberAccess
 import vera.ast.PrimaryExpression
 import vera.ast.RebindStatement
 import vera.ast.ReturnStatement
+import vera.ast.VeraStatement
 import vera.ast.StringLiteral
+import vera.ast.VeraType
+import vera.jvm.ir.IntBinaryOperation
+import vera.jvm.ir.IntBinaryOperator
 import vera.jvm.ir.JvmMethod
+import vera.jvm.ir.JvmMethodBuilder
+import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmValue
+import vera.jvm.ir.Return
+import vera.jvm.ir.Store
 
-@JvmInline private value class PendingSymbol(val text: String)
+import vera.jvm.ir.LocalTable.LocalName
+import vera.jvm.ir.LocalTable.LocalWithName
+import vera.jvm.ir.JvmParameter
+import vera.shared.model.Identifier
 
-private enum class Builtin(val keyword: String) {
+@JvmInline private value class PendingSymbol(val text: Identifier)
 
-    PRINT("print");
+private enum class Builtin(val keyword: Identifier) {
+
+    PRINT(Identifier("print"));
 
     companion object {
         private val byKeyword = entries.associateBy { it.keyword }
-        fun from(keyword: String): Builtin? = byKeyword[keyword]
+        fun from(keyword: Identifier): Builtin? = byKeyword[keyword]
     }
 }
 
 class JvmLowering(
-    private val className: String,
-    private val visibleFunctions: Map<String, FunctionDeclaration>,
+    private val className: Identifier,
+    private val visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
 ) {
-    fun lowerFunction(function: FunctionDeclaration): JvmMethod {
-        val jvmMethod = JvmMethod(function.params.map { p -> p.type }, function.returnType)
+    private lateinit var jvmMethodBuilder: JvmMethodBuilder
 
-        val terminates = function.statements
+    fun lowerFunction(veraFunction: VeraFunctionDeclaration): JvmMethod {
+        val jvmParameters = veraFunction.parameters
+            .map { veraParam -> JvmParameter(veraParam.name, mapType(veraParam.type)) }
+        jvmMethodBuilder = JvmMethodBuilder(jvmParameters, mapType(veraFunction.returnType))
+
+        val explicitReturnOnAllBranches = veraFunction.statements
             .map { processStatement(it) }
             .any()
-        if (!terminates) jvmMethod
-
-        val fnFlags = AccessFlag.PUBLIC.mask() or AccessFlag.STATIC.mask()
-        val fnDefinition: MethodBuilder.() -> Unit = { withCode { codeBuilder } }
-        val fnDesc = getMethodTypeDescFrom(function)
-        // TODO create internal representation of method desc and return it here
-        return classBuilder.withMethod(function.name, fnDesc, fnFlags, fnDefinition)
-    }
-
-    private fun getMethodTypeDescFrom(functionDeclaration: FunctionDeclaration): MethodTypeDesc {
-        val paramClassDescs = functionDeclaration.params.map { param -> getClassDescFrom(param.type) }
-        return MethodTypeDesc.of(getClassDescFrom(functionDeclaration.returnType), paramClassDescs)
-    }
-
-    private fun getClassDescFrom(type: Type): ClassDesc {
-        return when (type) {
-            Type.INT -> CD_int
-            Type.STRING -> CD_String
-            Type.BOOL -> CD_boolean
-            Type.UNIT -> CD_void
+        if (!explicitReturnOnAllBranches) {
+            jvmMethodBuilder.addInstruction(Return())
         }
+        return jvmMethodBuilder.build()
     }
 
-    // TODO this should not exist, always pass around Types, not ClassDesc
-    private fun getTypeFrom(classDesc: ClassDesc): Type {
-        return when (classDesc) {
-            CD_int -> Type.INT
-            CD_String -> Type.STRING
-            CD_boolean -> Type.STRING
-            CD_void -> Type.UNIT
-            else -> {
-                error("No known Type for ClassDesc $classDesc")
-            }
+    private fun mapType(type: VeraType): JvmType {
+        return when (type) {
+            VeraType.INT -> JvmType.INT
+            VeraType.STRING -> JvmType.REFERENCE
+            VeraType.BOOL -> JvmType.INT
+            VeraType.UNIT -> JvmType.VOID
         }
     }
 
     /** @return `true` if this statement explicitly returns from the current function. */
-    private fun processStatement(statement: VeraAst.Statement): Boolean {
+    private fun processStatement(statement: VeraStatement): Boolean {
         return when (statement) {
             is BindStatement -> {
                 processBindStatement(statement)
@@ -87,11 +85,12 @@ class JvmLowering(
             }
 
             is ReturnStatement -> {
-                if (statement.expression != null) {
-                    processExpression(statement.expression)
-                    emit { ireturn() }
+                val expression = statement.expression
+                if (expression != null) {
+                    val resultType = processExpression(expression)
+                    jvmMethodBuilder.addInstruction(Return(JvmValue(mapType(resultType))))
                 } else {
-                    emit { return_() }
+                    jvmMethodBuilder.addInstruction(Return())
                 }
                 true
             }
@@ -104,17 +103,14 @@ class JvmLowering(
         // process expression tree, put result on the stack
         val type = processExpression(bindStatement.expression)
         // get result from stack and store it in local variable table
-        return storeLocalVar(bindStatement.name, type)
+        jvmMethodBuilder.addInstruction(
+            Store(
+                LocalWithName(LocalName(bindStatement.name), JvmValue(mapType(type)))
+            )
+        )
     }
 
-    private fun storeLocalVar(name: String, type: Type) {
-        val newLocal = locals.declare(Locals.Name(name), (type))
-        // store operations pop one from the operand stack
-        operandStack.pop()
-        emitStore(newLocal)
-    }
-
-    private fun processExpression(expression: Expression): Type {
+    private fun processExpression(expression: Expression): VeraType {
         val mainExpression = expression.chainedExpressions.first()
         val chainType = processChainedExpression(mainExpression)
         val chainedExpressions = expression.chainedExpressions.tail
@@ -124,29 +120,28 @@ class JvmLowering(
         }
 
         for (operatorExpr in expression.chainOperators.zip(chainedExpressions)) {
-            val chainedtype = processChainedExpression(operatorExpr.second)
+            val infixOperator = operatorExpr.first
+            val chainedExpression = operatorExpr.second
+
+            if (mapType(chainType) != JvmType.INT) error("infix operators are only defined for numeric types")
+            val chainedtype = processChainedExpression(chainedExpression)
             if (chainedtype != chainType) error("all result types in a chained expression need to be the same")
 
-            // infix operations always pop 2 and push 1
-            val operandtypes = operandStack.pop(2)
-            if (operandtypes.any { type -> type != chainType }) error("the consumed values on the operand stack must be of the same type as the chain type")
-            operandStack.push(chainType)
-
-            emitOperator(operatorExpr.first)
+            jvmMethodBuilder.addInstruction(
+                IntBinaryOperation(mapOperator(infixOperator))
+            )
         }
         return chainType
     }
 
-    private fun emitOperator(operator: VeraAst.InfixOperator) {
-        when (operator) {
-            VeraAst.InfixOperator.PLUS -> emit { iadd() }
-            VeraAst.InfixOperator.MINUS -> emit { isub() }
-            VeraAst.InfixOperator.MUL -> emit { imul() }
-            VeraAst.InfixOperator.DIV -> emit { idiv() }
-        }
+    private fun mapOperator(operator: InfixOperator): IntBinaryOperator = when (operator) {
+        InfixOperator.PLUS -> IntBinaryOperator.ADD
+        InfixOperator.MINUS -> IntBinaryOperator.SUB
+        InfixOperator.MUL -> IntBinaryOperator.MUL
+        InfixOperator.DIV -> IntBinaryOperator.DIV
     }
 
-    private fun processChainedExpression(chainedExpression: ChainedExpression): Type {
+    private fun processChainedExpression(chainedExpression: ChainedExpression): VeraType {
         // no pending symbol -> done processing
         val expressionResult = processPrimaryExpression(chainedExpression.primaryExpression)
 
@@ -175,8 +170,8 @@ class JvmLowering(
 
     }
 
-    private fun processArguments(arguments: Arguments): List<Type> {
-        val types = mutableListOf<Type>()
+    private fun processArguments(arguments: Arguments): List<VeraType> {
+        val types = mutableListOf<VeraType>()
         for (expression in arguments.expressions) {
             types.add(processExpression(expression))
         }
@@ -184,7 +179,7 @@ class JvmLowering(
     }
 
     // TODO remove this and add builtins as normal predefined functions
-    private fun processBuiltinCall(builtin: Builtin): Type {
+    private fun processBuiltinCall(builtin: Builtin): VeraType {
         return when (builtin) {
             Builtin.PRINT -> {
                 val system = ClassDesc.of("java.lang", "System")
@@ -200,7 +195,7 @@ class JvmLowering(
                         MethodTypeDesc.of(CD_void, stackValueTypeDesc)
                     )
                 }
-                Type.UNIT
+                VeraType.UNIT
             }
         }
     }
@@ -211,39 +206,39 @@ class JvmLowering(
         return emit { invokestatic(ClassDesc.of(className), fnName, fnType) }
     }
 
-    private fun processPrimaryExpression(primaryExpression: PrimaryExpression): Either<Type, PendingSymbol> {
+    private fun processPrimaryExpression(primaryExpression: PrimaryExpression): Either<VeraType, PendingSymbol> {
         return when (primaryExpression) {
             is IntLiteral -> {
-                operandStack.push(Type.INT)
+                operandStack.push(VeraType.INT)
                 emit { loadConstant(primaryExpression.value) }
-                Either.Left(Type.INT)
+                Either.Left(VeraType.INT)
             }
 
             is StringLiteral -> {
-                operandStack.push(Type.STRING)
+                operandStack.push(VeraType.STRING)
                 emit { ldc(constantPool().stringEntry(primaryExpression.value)) }
-                Either.Left(Type.STRING)
+                Either.Left(VeraType.STRING)
             }
 
             is VeraAst.BoolLiteral -> {
-                operandStack.push(Type.BOOL)
+                operandStack.push(VeraType.BOOL)
                 if (primaryExpression == VeraAst.BoolLiteral.TRUE) emit { iconst_1() } else emit { iconst_0() }
-                Either.Left(Type.BOOL)
+                Either.Left(VeraType.BOOL)
             }
 
             is VeraAst.IfExpression -> {
-                val expressionType = Type.STRING // TODO primaryExpression.thenBlock...
+                val expressionType = VeraType.STRING // TODO primaryExpression.thenBlock...
 
                 val elseLabel = codeBuilder.newLabel()
                 val endLabel = codeBuilder.newLabel()
 
                 val conditonType = processExpression(primaryExpression.condition)
-                if (conditonType != Type.BOOL) error("condition type must be bool")
+                if (conditonType != VeraType.BOOL) error("condition type must be bool")
                 // a Bool is pushed and then immediately consumed by ifne / ifeq
                 // a value of the expression type is pushed by the if-expression
                 operandStack.push(expressionType)
                 emit { if }
-                Either.Left(Type.BOOL)
+                Either.Left(VeraType.BOOL)
             }
 
             is ExpressionIdentifier -> {
@@ -269,14 +264,14 @@ class JvmLowering(
 
     private fun emitStore(local: Locals.Local) {
         when (local.type) {
-            Type.INT, Type.BOOL -> emit { istore(local.slot.id) }
+            VeraType.INT, VeraType.BOOL -> emit { istore(local.slot.id) }
             else -> emit { astore(local.slot.id) }
         }
     }
 
     private fun emitLoad(local: Locals.Local) {
         when (local.type) {
-            Type.INT, Type.BOOL -> emit { iload(local.slot.id) }
+            VeraType.INT, VeraType.BOOL -> emit { iload(local.slot.id) }
             else -> emit { aload(local.slot.id) }
         }
     }

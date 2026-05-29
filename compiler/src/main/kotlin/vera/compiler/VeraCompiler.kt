@@ -1,6 +1,6 @@
 package vera.compiler
 
-import vera.ast.FunctionDeclaration
+import vera.ast.VeraFunctionDeclaration
 import vera.ast.Program
 import vera.jvm.bytecode.emitter.JvmBytecodeEmitter
 import vera.jvm.ir.JvmMethod
@@ -20,9 +20,9 @@ class VeraCompiler(private val mainClassName: String) {
 
     private fun processProgram(program: Program) : JvmProgram {
         // first pass - collect function declarations by name
-        val fnDeclarations = mutableMapOf<String, FunctionDeclaration>()
+        val fnDeclarations = mutableMapOf<String, VeraFunctionDeclaration>()
         for (declaration in program.declarations) {
-            if (declaration is FunctionDeclaration) {
+            if (declaration is VeraFunctionDeclaration) {
                 fnDeclarations[declaration.name] = declaration
             }
         }
@@ -30,7 +30,7 @@ class VeraCompiler(private val mainClassName: String) {
         // second pass - compile program
         val jvmMethods = mutableListOf<JvmMethod>()
         for (declaration in program.declarations) {
-            if (declaration is FunctionDeclaration) {
+            if (declaration is VeraFunctionDeclaration) {
                 jvmMethods.add(
                     JvmLowering(mainClassName, fnDeclarations).lowerFunction(declaration)
                 )

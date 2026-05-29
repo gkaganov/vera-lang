@@ -12,20 +12,21 @@ import vera.ast.ChainedExpression
 import vera.ast.Declaration
 import vera.ast.Expression
 import vera.ast.ExpressionIdentifier
-import vera.ast.FunctionDeclaration
+import vera.ast.VeraFunctionDeclaration
 import vera.ast.IfExpression
 import vera.ast.InfixOperator
 import vera.ast.IntLiteral
 import vera.ast.Literal
 import vera.ast.MemberAccess
-import vera.ast.Parameter
+import vera.ast.VeraParameter
 import vera.ast.PrimaryExpression
 import vera.ast.Program
 import vera.ast.RebindStatement
 import vera.ast.ReturnStatement
-import vera.ast.Statement
+import vera.ast.VeraStatement
 import vera.ast.StringLiteral
-import vera.ast.Type
+import vera.ast.VeraType
+import vera.shared.model.Identifier
 import kotlin.collections.map
 import kotlin.collections.orEmpty
 
@@ -51,31 +52,31 @@ class VeraParser {
                 ?: emptyList()
             val returnType = mapType(decl.returnType()?.typeRef())
             val statements = decl.block().statement().map { stmt -> mapStatement(stmt) }
-            FunctionDeclaration(name, params, returnType, statements)
+            VeraFunctionDeclaration(Identifier(name), params, returnType, statements)
         } else {
             error("unhandled declaration type")
         }
     }
 
-    private fun mapParam(ctx: VeraParser.ParameterContext) : Parameter {
+    private fun mapParam(ctx: VeraParser.ParameterContext) : VeraParameter {
         val name = ctx.name?.text ?: error("no paramName")
         val type = mapType(ctx.typeRef())
-        return Parameter(name, type)
+        return VeraParameter(Identifier(name), type)
     }
 
-    private fun mapType(ctx: VeraParser.TypeRefContext?) : Type {
+    private fun mapType(ctx: VeraParser.TypeRefContext?) : VeraType {
         return if (ctx == null) {
-            Type.UNIT
+            VeraType.UNIT
         } else if (ctx.STRING_TYPE() != null) {
-            Type.STRING
+            VeraType.STRING
         } else if (ctx.INT_TYPE() != null) {
-            Type.INT
+            VeraType.INT
         } else {
             error("unknown typeRef ${ctx.text}")
         }
     }
 
-    private fun mapStatement(ctx: VeraParser.StatementContext) : Statement {
+    private fun mapStatement(ctx: VeraParser.StatementContext) : VeraStatement {
         val bindStatement = ctx.bindStatement()
         val rebindStatement = ctx.rebindStatement()
         val returnStatement = ctx.returnStatement()
@@ -84,11 +85,11 @@ class VeraParser {
             val name = bindStatement.name?.text ?: error("no bindStatement name")
             val type = mapType(bindStatement.typeRef())
             val expression = mapExpression(bindStatement.expression())
-            BindStatement(name, type, expression)
+            BindStatement(Identifier(name), type, expression)
         } else if (rebindStatement != null) {
             val name = rebindStatement.name?.text ?: error("no rebindStatement name")
             val expression = rebindStatement.rebindRhs().expression() ?: error("no expressinon in rebindStatement")
-            RebindStatement(name, mapExpression(expression))
+            RebindStatement(Identifier(name), mapExpression(expression))
         } else if (returnStatement != null) {
             // expression can legally be null if the rturn value is Unit
             val expression = returnStatement.expression()?.let { mapExpression(it) }
@@ -124,7 +125,7 @@ class VeraParser {
         val primaryExpression = mapPrimaryExpression(ctx.primaryExpression())
         val data = ctx.children?.mapNotNull { child ->
             when (child) {
-                is VeraParser.MemberAccessContext -> MemberAccess(child.name?.text ?: error("member access name null"))
+                is VeraParser.MemberAccessContext -> MemberAccess(Identifier(child.name?.text ?: error("member access name null")))
                 is VeraParser.ArgumentListContext -> Arguments(child.arguments()?.expression()?.map { expr -> mapExpression(expr) }.orEmpty())
                 else -> null
             }
