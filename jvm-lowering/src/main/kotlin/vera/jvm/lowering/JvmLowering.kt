@@ -18,6 +18,8 @@ import vera.ast.StringLiteral
 import vera.ast.VeraType
 import vera.jvm.ir.IntBinaryOperation
 import vera.jvm.ir.IntBinaryOperator
+import vera.jvm.ir.Invokestatic
+import vera.jvm.ir.JvmClass
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodBuilder
 import vera.jvm.ir.JvmType
@@ -42,10 +44,9 @@ private enum class Builtin(val keyword: Identifier) {
     }
 }
 
-class JvmLowering(
-    private val className: Identifier,
-    private val visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
-) {
+class JvmLowering(private val visibleFunctions: Map<Identifier, VeraFunctionDeclaration>) {
+
+    private val jvmClassName = Identifier("Main")
     private lateinit var jvmMethodBuilder: JvmMethodBuilder
 
     fun lowerFunction(veraFunction: VeraFunctionDeclaration): JvmMethod {
@@ -164,6 +165,12 @@ class JvmLowering(
                 val fnDesc = getMethodTypeDescFrom(fnDeclaration)
                 processFunctionCall(fnName, fnDesc)
                 getTypeFrom(fnDesc.returnType())
+
+                jvmMethodBuilder.addInstruction(
+                    Invokestatic(
+                        JvmClass(jvmClassName)
+                    )
+                )
             }
 
         })
@@ -200,10 +207,10 @@ class JvmLowering(
         }
     }
 
-    private fun processFunctionCall(fnName: String, fnType: MethodTypeDesc) {
+    private fun processFunctionCall(fnName: Identifier, fnType: MethodTypeDesc) {
         repeat(fnType.parameterCount()) { operandStack.pop() }
         operandStack.push(getTypeFrom(fnType.returnType()))
-        return emit { invokestatic(ClassDesc.of(className), fnName, fnType) }
+        return emit { invokestatic(ClassDesc.of(jvmClassName), fnName, fnType) }
     }
 
     private fun processPrimaryExpression(primaryExpression: PrimaryExpression): Either<VeraType, PendingSymbol> {

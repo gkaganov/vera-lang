@@ -5,22 +5,19 @@ import vera.jvm.ir.LocalTable.LocalWithName
 import vera.jvm.ir.LocalTable.LocalWithSlot
 import vera.shared.model.Identifier
 
-data class JvmProgram(val methods: List<JvmMethod>)
+data class JvmProgram(val classes: List<JvmClass>)
+
+data class JvmClass(val name: Identifier, val methods: List<JvmMethod>)
 
 data class JvmValue(val type: JvmType)
 
-data class JvmMethod(
-    val parameters: List<JvmParameter>,
-    val returnType: JvmType,
-    val instructions: List<VerifiedInstruction>,
-)
+data class JvmMethod(val instructions: List<VerifiedInstruction>, val signature: JvmMethodSignature)
+
+data class JvmMethodSignature(val parameters: List<JvmParameter>, val returnType: JvmType)
 
 data class JvmParameter(val name: Identifier, val type: JvmType)
 
-class JvmMethodBuilder(
-    val parameters: List<JvmParameter>,
-    val returnType: JvmType,
-) {
+class JvmMethodBuilder(val parameters: List<JvmParameter>, val returnType: JvmType) {
     private val locals = LocalTable()
     private val stack = OperandStack()
 
@@ -55,7 +52,7 @@ class JvmMethodBuilder(
         )
     }
 
-    fun build(): JvmMethod = JvmMethod(parameters, returnType, instructions)
+    fun build(): JvmMethod = JvmMethod(instructions, JvmMethodSignature(parameters, returnType))
 
     private fun verifyInstruction(instruction: JvmInstruction) {
         val pops = instruction.effect.pops
@@ -198,6 +195,12 @@ enum class IntBinaryOperator { ADD, SUB, MUL, DIV, }
 data class IntBinaryOperation(val operator: IntBinaryOperator) : JvmInstruction {
     override val effect = InstructionEffect(
         pops = listOf(JvmValue(JvmType.INT), JvmValue(JvmType.INT)),
+        pushes = listOf(JvmValue(JvmType.INT)),
+    )
+}
+
+data class Invokestatic(val ownerClass: JvmClass, val methodName: Identifier, val methodSignature: JvmMethodSignature) : JvmInstruction {
+    override val effect = InstructionEffect(
         pushes = listOf(JvmValue(JvmType.INT)),
     )
 }
