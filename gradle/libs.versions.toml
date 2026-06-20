@@ -1,0 +1,15 @@
+[versions]
+kotlin = "2.3.20"
+antlrKotlin = "1.0.10"
+junitJupiter = "6.0.3"
+jvm = "25"
+arrow = "2.2.1.1"
+
+[libraries]
+antlr-kotlin-runtime = { module = "com.strumenta:antlr-kotlin-runtime", version.ref = "antlrKotlin" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junitJupiter" }
+arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+antlr-kotlin = { id = "com.strumenta.antlr-kotlin", version.ref = "antlrKotlin" }
