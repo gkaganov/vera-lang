@@ -1,9 +1,10 @@
 [versions]
-kotlin = "2.3.20"
+kotlin = "2.4.0"
 antlrKotlin = "1.0.10"
+gradleVersionsCheck = "0.54.0"
 junitJupiter = "6.0.3"
 jvm = "25"
-arrow = "2.2.1.1"
+arrow = "2.2.3"
 
 [libraries]
 antlr-kotlin-runtime = { module = "com.strumenta:antlr-kotlin-runtime", version.ref = "antlrKotlin" }
@@ -12,4 +13,5 @@ arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+gradle-versions-check = { id = "com.github.ben-manes.versions", version.ref = "gradleVersionsCheck" }
 antlr-kotlin = { id = "com.strumenta.antlr-kotlin", version.ref = "antlrKotlin" }
