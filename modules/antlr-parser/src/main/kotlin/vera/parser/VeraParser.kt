@@ -5,44 +5,42 @@ import org.antlr.v4.kotlinruntime.BufferedTokenStream
 import org.antlr.v4.kotlinruntime.CharStreams
 import vera.antlr.VeraLexer
 import vera.antlr.VeraParser
-import vera.ast.VeraArguments
 import vera.ast.BindStatement
 import vera.ast.BoolLiteral
 import vera.ast.ChainedExpression
 import vera.ast.Declaration
 import vera.ast.Expression
 import vera.ast.IdentifierAsExpression
-import vera.ast.VeraFunctionDeclaration
 import vera.ast.IfExpression
 import vera.ast.InfixOperator
 import vera.ast.IntLiteral
 import vera.ast.Literal
-import vera.ast.VeraMemberAccess
-import vera.ast.VeraParameter
 import vera.ast.PrimaryExpression
 import vera.ast.Program
 import vera.ast.RebindStatement
 import vera.ast.ReturnStatement
-import vera.ast.VeraStatement
 import vera.ast.StringLiteral
+import vera.ast.VeraArguments
+import vera.ast.VeraFunctionDeclaration
+import vera.ast.VeraMemberAccess
+import vera.ast.VeraParameter
+import vera.ast.VeraStatement
 import vera.ast.VeraType
 import vera.shared.model.Identifier
-import kotlin.collections.map
-import kotlin.collections.orEmpty
 
 class VeraParser {
 
-    fun parseProgram(code: String) : Program {
+    fun parseProgram(code: String): Program {
         val lexer = VeraLexer(CharStreams.fromString(code))
         val parser = VeraParser(BufferedTokenStream(lexer))
         return mapProgram(parser.program())
     }
 
-    private fun mapProgram(ctx: VeraParser.ProgramContext) : Program {
+    private fun mapProgram(ctx: VeraParser.ProgramContext): Program {
         return Program(ctx.declaration().map { decl -> mapDeclaration(decl) })
     }
 
-    private fun mapDeclaration(ctx: VeraParser.DeclarationContext) : Declaration {
+    private fun mapDeclaration(ctx: VeraParser.DeclarationContext): Declaration {
         @Suppress("SENSELESS_COMPARISON")
         return if (ctx.functionDeclaration() != null) {
             val decl = ctx.functionDeclaration()
@@ -58,13 +56,13 @@ class VeraParser {
         }
     }
 
-    private fun mapParam(ctx: VeraParser.ParameterContext) : VeraParameter {
+    private fun mapParam(ctx: VeraParser.ParameterContext): VeraParameter {
         val name = ctx.name?.text ?: error("no paramName")
         val type = mapType(ctx.typeRef())
         return VeraParameter(Identifier(name), type)
     }
 
-    private fun mapType(ctx: VeraParser.TypeRefContext?) : VeraType {
+    private fun mapType(ctx: VeraParser.TypeRefContext?): VeraType {
         return if (ctx == null) {
             VeraType.UNKNOWN
         } else if (ctx.UNIT_TYPE() != null) {
@@ -78,7 +76,7 @@ class VeraParser {
         }
     }
 
-    private fun mapStatement(ctx: VeraParser.StatementContext) : VeraStatement {
+    private fun mapStatement(ctx: VeraParser.StatementContext): VeraStatement {
         val bindStatement = ctx.bindStatement()
         val rebindStatement = ctx.rebindStatement()
         val returnStatement = ctx.returnStatement()
@@ -105,7 +103,7 @@ class VeraParser {
         }
     }
 
-    private fun mapInfixOperator(ctx: VeraParser.InfixOperatorContext) : InfixOperator {
+    private fun mapInfixOperator(ctx: VeraParser.InfixOperatorContext): InfixOperator {
         return when (ctx.text) {
             ctx.PLUS()?.text -> InfixOperator.ADD
             ctx.MINUS()?.text -> InfixOperator.SUBTRACT
@@ -115,7 +113,7 @@ class VeraParser {
         }
     }
 
-    private fun mapExpression(ctx: VeraParser.ExpressionContext) : Expression {
+    private fun mapExpression(ctx: VeraParser.ExpressionContext): Expression {
         val headChainedExpression = mapChainedExpression(ctx.chainedExpression(0) ?: error("firstChainedExpression is always present"))
         val tailChainedExpressions = ctx.chainedExpression().drop(1).map(::mapChainedExpression)
         val chainedExpressions = NonEmptyList.of(headChainedExpression, *tailChainedExpressions.toTypedArray())
@@ -123,7 +121,7 @@ class VeraParser {
         return Expression(chainedExpressions, operators)
     }
 
-    private fun mapChainedExpression(ctx: VeraParser.ChainedExpressionContext) : ChainedExpression {
+    private fun mapChainedExpression(ctx: VeraParser.ChainedExpressionContext): ChainedExpression {
         val primaryExpression = mapPrimaryExpression(ctx.primaryExpression())
         val data = ctx.children?.mapNotNull { child ->
             when (child) {
@@ -135,7 +133,7 @@ class VeraParser {
         return ChainedExpression(primaryExpression, data)
     }
 
-    private fun mapPrimaryExpression(ctx: VeraParser.PrimaryExpressionContext) : PrimaryExpression {
+    private fun mapPrimaryExpression(ctx: VeraParser.PrimaryExpressionContext): PrimaryExpression {
         val literal = ctx.literal()
         val identifier = ctx.IDENTIFIER()
         val ifExpression = ctx.ifExpression()
@@ -157,7 +155,7 @@ class VeraParser {
         }
     }
 
-    private fun mapLiteral(ctx: VeraParser.LiteralContext) : Literal {
+    private fun mapLiteral(ctx: VeraParser.LiteralContext): Literal {
         val intLiteral = ctx.INT_LITERAL()
         val stringLiteral = ctx.STRING_LITERAL()
         val boolLiteral = ctx.BOOL_LITERAL()

@@ -81,12 +81,15 @@ class JvmLabel
 data class CreateLabel(val label: JvmLabel) : JvmInstruction {
     override val effect = InstructionEffect()
 }
+
 data class BindLabel(val label: JvmLabel) : JvmInstruction {
     override val effect = InstructionEffect()
 }
+
 data class JumpTo(val label: JvmLabel) : JvmInstruction {
     override val effect = InstructionEffect()
 }
+
 data class IfFalseJumpTo(val label: JvmLabel) : JvmInstruction {
     override val effect = InstructionEffect(
         stackPops = listOf(JvmType.BOOL)
