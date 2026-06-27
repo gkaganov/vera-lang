@@ -23,7 +23,7 @@ sealed interface ChainedExpressionData
 data class VeraMemberAccess(val member: Identifier) : ChainedExpressionData
 data class VeraArguments(val expressions: List<Expression>) : ChainedExpressionData
 
-enum class InfixOperator { PLUS, MINUS, MUL, DIV }
+enum class InfixOperator { ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUALS, NOT_EQUALS }
 
 sealed interface PrimaryExpression
 sealed interface Literal : PrimaryExpression

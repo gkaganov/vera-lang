@@ -48,13 +48,21 @@ data class LoadConstant(val type: JvmType, val value: Any) : JvmInstruction {
     )
 }
 
-enum class IntBinaryOperator { ADD, SUB, MUL, DIV }
-data class IntBinaryOperation(
-    val operator: IntBinaryOperator
-) : JvmInstruction {
+sealed interface BinaryOperator
+enum class IntBinaryOperator : BinaryOperator { ADD, SUB, MUL, DIV }
+enum class ComparisonOperator : BinaryOperator { EQ, NEQ }
+
+data class IntBinaryOperation(val operator: IntBinaryOperator) : JvmInstruction {
     override val effect = InstructionEffect(
         stackPops = listOf(JvmType.INT, JvmType.INT),
         stackPushes = listOf(JvmType.INT),
+    )
+}
+
+data class ComparisonOperation(val operator: ComparisonOperator, val comparedType: JvmType) : JvmInstruction {
+    override val effect = InstructionEffect(
+        stackPops = listOf(comparedType, comparedType),
+        stackPushes = listOf(JvmType.BOOL),
     )
 }
 
@@ -66,6 +74,22 @@ data class Invokestatic(
     override val effect = InstructionEffect(
         stackPops = methodSignature.parameters.map { it.type },
         stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
+    )
+}
+
+class JvmLabel
+data class CreateLabel(val label: JvmLabel) : JvmInstruction {
+    override val effect = InstructionEffect()
+}
+data class BindLabel(val label: JvmLabel) : JvmInstruction {
+    override val effect = InstructionEffect()
+}
+data class JumpTo(val label: JvmLabel) : JvmInstruction {
+    override val effect = InstructionEffect()
+}
+data class IfFalseJumpTo(val label: JvmLabel) : JvmInstruction {
+    override val effect = InstructionEffect(
+        stackPops = listOf(JvmType.BOOL)
     )
 }
 

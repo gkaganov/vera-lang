@@ -1,9 +1,15 @@
 package vera.jvm.bytecode.emitter
 
+import vera.jvm.ir.BindLabel
+import vera.jvm.ir.ComparisonOperation
+import vera.jvm.ir.CreateLabel
+import vera.jvm.ir.IfFalseJumpTo
 import vera.jvm.ir.InstructionWithDebugInfo
 import vera.jvm.ir.IntBinaryOperation
 import vera.jvm.ir.IntBinaryOperator
 import vera.jvm.ir.Invokestatic
+import vera.jvm.ir.JumpTo
+import vera.jvm.ir.JvmLabel
 import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmType
@@ -17,6 +23,7 @@ import java.lang.classfile.ClassFile
 import java.lang.classfile.ClassFile.ACC_PUBLIC
 import java.lang.classfile.ClassFile.ACC_STATIC
 import java.lang.classfile.CodeBuilder
+import java.lang.classfile.Label
 import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs.CD_Object
@@ -26,6 +33,8 @@ import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 
 class JvmBytecodeEmitter {
+
+    private val labels = mutableMapOf<JvmLabel, Label>()
 
     /** @return a map of classnames to their bytecode */
     fun emit(jvmProgram: JvmProgram): Map<Identifier, ByteArray> {
@@ -37,7 +46,7 @@ class JvmBytecodeEmitter {
                 clazz.methods.forEach { method ->
                     classBuilder.withMethod(
                         method.name.value,
-                        toMethodTypeDesc(method.signature),
+                        method.signature.toMethodTypeDesc(),
                         ACC_PUBLIC or ACC_STATIC
                     ) { methodBuilder ->
                         methodBuilder.withCode { codeBuilder ->
@@ -88,9 +97,16 @@ class JvmBytecodeEmitter {
                 codeBuilder.invokestatic(
                     ClassDesc.of(instruction.ownerClass.value),
                     instruction.methodName.value,
-                    toMethodTypeDesc(instruction.methodSignature),
+                    instruction.methodSignature.toMethodTypeDesc(),
                 )
             }
+
+            is CreateLabel -> labels[instruction.label] = codeBuilder.newLabel()
+            is BindLabel -> codeBuilder.labelBinding(labels[instruction.label])
+            is JumpTo -> codeBuilder.goto_(labels[instruction.label])
+            is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label])
+
+            is ComparisonOperation -> TODO()
 
             is Print -> {
                 codeBuilder.getstatic(
@@ -115,9 +131,9 @@ class JvmBytecodeEmitter {
         }
     }
 
-    private fun toMethodTypeDesc(signature: JvmMethodSignature): MethodTypeDesc {
-        val params = signature.parameters.map { it.type.toClassDesc() }.toTypedArray()
-        return MethodTypeDesc.of(signature.returnType.toClassDesc(), *params)
+    private fun JvmMethodSignature.toMethodTypeDesc(): MethodTypeDesc {
+        val params = this.parameters.map { it.type.toClassDesc() }.toTypedArray()
+        return MethodTypeDesc.of(this.returnType.toClassDesc(), *params)
     }
 
     private fun JvmType.toClassDesc(): ClassDesc = when (this) {

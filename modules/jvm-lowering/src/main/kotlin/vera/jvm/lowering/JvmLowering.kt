@@ -20,9 +20,14 @@ import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraStatement
 import vera.ast.VeraType
+import vera.jvm.ir.BindLabel
+import vera.jvm.ir.CreateLabel
+import vera.jvm.ir.IfFalseJumpTo
 import vera.jvm.ir.IntBinaryOperation
 import vera.jvm.ir.IntBinaryOperator
 import vera.jvm.ir.Invokestatic
+import vera.jvm.ir.JumpTo
+import vera.jvm.ir.JvmLabel
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodBuilder
 import vera.jvm.ir.JvmMethodSignature
@@ -146,10 +151,12 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
     }
 
     private fun mapOperator(operator: InfixOperator): IntBinaryOperator = when (operator) {
-        InfixOperator.PLUS -> IntBinaryOperator.ADD
-        InfixOperator.MINUS -> IntBinaryOperator.SUB
-        InfixOperator.MUL -> IntBinaryOperator.MUL
-        InfixOperator.DIV -> IntBinaryOperator.DIV
+        InfixOperator.ADD -> IntBinaryOperator.ADD
+        InfixOperator.SUBTRACT -> IntBinaryOperator.SUB
+        InfixOperator.MULTIPLY -> IntBinaryOperator.MUL
+        InfixOperator.DIVIDE -> IntBinaryOperator.DIV
+        InfixOperator.EQUALS -> TODO()
+        InfixOperator.NOT_EQUALS -> TODO()
     }
 
     private fun processChainedExpression(chainedExpression: ChainedExpression): VeraType {
@@ -233,6 +240,27 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
             }
 
             is IfExpression -> {
+                val conditionType = processExpression(primaryExpression.condition)
+                if (conditionType != VeraType.BOOL) error("conditions must result in a bool")
+
+                val elseLabel = JvmLabel()
+                jvmMethodBuilder.addInstruction(CreateLabel(elseLabel))
+                jvmMethodBuilder.addInstruction(IfFalseJumpTo(elseLabel))
+                primaryExpression.thenBlock.forEach { processStatement(it) }
+
+                if (primaryExpression.elseBlock.isEmpty()) {
+                    jvmMethodBuilder.addInstruction(BindLabel(elseLabel))
+                } else {
+                    // do not fall through
+                    val endLabel = JvmLabel()
+                    jvmMethodBuilder.addInstruction(CreateLabel(endLabel))
+                    jvmMethodBuilder.addInstruction(JumpTo(endLabel))
+
+                    jvmMethodBuilder.addInstruction(BindLabel(elseLabel))
+                    primaryExpression.elseBlock.forEach { processStatement(it) }
+
+                    jvmMethodBuilder.addInstruction(BindLabel(endLabel))
+                }
                 Left(VeraType.UNIT)
             }
 

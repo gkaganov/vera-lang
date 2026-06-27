@@ -107,10 +107,10 @@ class VeraParser {
 
     private fun mapInfixOperator(ctx: VeraParser.InfixOperatorContext) : InfixOperator {
         return when (ctx.text) {
-            ctx.PLUS()?.text -> InfixOperator.PLUS
-            ctx.MINUS()?.text -> InfixOperator.MINUS
-            ctx.MUL()?.text -> InfixOperator.MUL
-            ctx.DIV()?.text -> InfixOperator.DIV
+            ctx.PLUS()?.text -> InfixOperator.ADD
+            ctx.MINUS()?.text -> InfixOperator.SUBTRACT
+            ctx.MUL()?.text -> InfixOperator.MULTIPLY
+            ctx.DIV()?.text -> InfixOperator.DIVIDE
             else -> error("unknown infix operator ${ctx.text}")
         }
     }

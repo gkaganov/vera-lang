@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.Path
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.writeBytes
-import kotlin.test.Ignore
 
 class VeraCompilerTests {
 
@@ -181,18 +180,32 @@ class VeraCompilerTests {
         assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
     }
 
-    @Ignore @Test
-    fun `if expressions with an else block return the correct value`(testInfo: TestInfo) {
+    @Test
+    fun `if statements execute only then-block if True`(testInfo: TestInfo) {
         val source = """
-                    fn $TEST_MAIN(): String {
-                        return if True {
-                            "So true"
+                    fn $TEST_MAIN() {
+                        if True {
+                            print("So true")
                         } else {
-                            "Never gonna happen"
+                            print("Never gonna happen")
                         }
                     }
                 """.trimIndent()
         assertProgramPrints(source, "So true$EOL", testInfo)
+    }
+
+    @Test
+    fun `if statements execute only else-block if False`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("So true")
+                        } else {
+                            print("Absolutely false!")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Absolutely false!$EOL", testInfo)
     }
 
     private fun assertProgramReturns(
