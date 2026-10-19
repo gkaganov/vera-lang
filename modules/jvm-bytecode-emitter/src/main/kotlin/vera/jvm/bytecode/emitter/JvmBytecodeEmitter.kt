@@ -2,6 +2,7 @@ package vera.jvm.bytecode.emitter
 
 import vera.jvm.ir.BindLabel
 import vera.jvm.ir.ComparisonOperation
+import vera.jvm.ir.ComparisonOperator
 import vera.jvm.ir.CreateLabel
 import vera.jvm.ir.IfFalseJumpTo
 import vera.jvm.ir.InstructionWithDebugInfo
@@ -106,7 +107,30 @@ class JvmBytecodeEmitter {
             is JumpTo -> codeBuilder.goto_(labels[instruction.label])
             is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label])
 
-            is ComparisonOperation -> TODO()
+            is ComparisonOperation -> {
+                val labelIfNotEqual = codeBuilder.newLabel()
+                val labelEnd = codeBuilder.newLabel()
+                when (instruction.operator) {
+                    ComparisonOperator.EQ -> {
+                        codeBuilder.isub()
+                        codeBuilder.ifne(labelIfNotEqual)
+                        codeBuilder.loadConstant(1)
+                        codeBuilder.goto_(labelEnd)
+                        codeBuilder.labelBinding(labelIfNotEqual)
+                        codeBuilder.loadConstant(0)
+                        codeBuilder.labelBinding(labelEnd)
+                    }
+                    ComparisonOperator.NEQ -> {
+                        codeBuilder.isub()
+                        codeBuilder.ifeq(labelIfNotEqual)
+                        codeBuilder.loadConstant(1)
+                        codeBuilder.goto_(labelEnd)
+                        codeBuilder.labelBinding(labelIfNotEqual)
+                        codeBuilder.loadConstant(0)
+                        codeBuilder.labelBinding(labelEnd)
+                    }
+                }
+            }
 
             is Print -> {
                 codeBuilder.getstatic(

@@ -3,24 +3,26 @@ package vera.jvm.lowering
 import arrow.core.Either
 import arrow.core.Either.Left
 import arrow.core.Either.Right
-import vera.ast.BindStatement
-import vera.ast.BoolLiteral
-import vera.ast.ChainedExpression
-import vera.ast.Expression
-import vera.ast.IdentifierAsExpression
-import vera.ast.IfExpression
 import vera.ast.InfixOperator
-import vera.ast.IntLiteral
-import vera.ast.PrimaryExpression
-import vera.ast.RebindStatement
-import vera.ast.ReturnStatement
-import vera.ast.StringLiteral
 import vera.ast.VeraArguments
+import vera.ast.VeraBindStatement
+import vera.ast.VeraBoolLiteral
+import vera.ast.VeraChainedExpression
+import vera.ast.VeraExpression
 import vera.ast.VeraFunctionDeclaration
+import vera.ast.VeraIdentifierAsExpression
+import vera.ast.VeraIfExpression
+import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
+import vera.ast.VeraPrimaryExpression
+import vera.ast.VeraRebindStatement
+import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
+import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
 import vera.jvm.ir.BindLabel
+import vera.jvm.ir.ComparisonOperator
+import vera.jvm.ir.ComparisonOperation
 import vera.jvm.ir.CreateLabel
 import vera.jvm.ir.IfFalseJumpTo
 import vera.jvm.ir.IntBinaryOperation
@@ -83,17 +85,17 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
     /** @return `true` if this statement explicitly returns from the current function. */
     private fun processStatement(statement: VeraStatement): Boolean {
         return when (statement) {
-            is BindStatement -> {
+            is VeraBindStatement -> {
                 processBindStatement(statement)
                 false
             }
 
-            is Expression -> {
+            is VeraExpression -> {
                 processExpression(statement)
                 false
             }
 
-            is ReturnStatement -> {
+            is VeraReturnStatement -> {
                 val expression = statement.expression
                 if (expression != null) {
                     val resultType = processExpression(expression)
@@ -104,11 +106,11 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
                 true
             }
 
-            is RebindStatement -> TODO()
+            is VeraRebindStatement -> TODO()
         }
     }
 
-    private fun processBindStatement(bindStatement: BindStatement) {
+    private fun processBindStatement(bindStatement: VeraBindStatement) {
         val type = processExpression(bindStatement.expression)
         if (bindStatement.type != VeraType.UNKNOWN && bindStatement.type != type) {
             error("the type of the bind statement must either UNKNOWN (to be inferred) or the same as the containing expression")
@@ -126,7 +128,7 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
         )
     }
 
-    private fun processExpression(expression: Expression): VeraType {
+    private fun processExpression(expression: VeraExpression): VeraType {
         val mainExpression = expression.chainedExpressions.first()
         val chainType = processChainedExpression(mainExpression)
         val chainedExpressions = expression.chainedExpressions.tail
@@ -139,27 +141,42 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
             val infixOperator = operatorExpr.first
             val chainedExpression = operatorExpr.second
 
-            if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
             val chainedtype = processChainedExpression(chainedExpression)
             if (chainedtype != chainType) error("all result types in a chained expression need to be the same")
 
-            jvmMethodBuilder.addInstruction(
-                IntBinaryOperation(mapOperator(infixOperator))
-            )
+            when (infixOperator) {
+                InfixOperator.EQUALS -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("equality operators only work on Int types")
+                    jvmMethodBuilder.addInstruction(ComparisonOperation(ComparisonOperator.EQ, JvmType.INT))
+                    return VeraType.BOOL
+                }
+                InfixOperator.NOT_EQUALS -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("equality operators only work on Int types")
+                    jvmMethodBuilder.addInstruction(ComparisonOperation(ComparisonOperator.NEQ, JvmType.INT))
+                    return VeraType.BOOL
+                }
+                InfixOperator.ADD -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
+                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.ADD))
+                }
+                InfixOperator.SUBTRACT -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
+                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.SUB))
+                }
+                InfixOperator.MULTIPLY -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
+                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.MUL))
+                }
+                InfixOperator.DIVIDE -> {
+                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
+                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.DIV))
+                }
+            }
         }
         return chainType
     }
 
-    private fun mapOperator(operator: InfixOperator): IntBinaryOperator = when (operator) {
-        InfixOperator.ADD -> IntBinaryOperator.ADD
-        InfixOperator.SUBTRACT -> IntBinaryOperator.SUB
-        InfixOperator.MULTIPLY -> IntBinaryOperator.MUL
-        InfixOperator.DIVIDE -> IntBinaryOperator.DIV
-        InfixOperator.EQUALS -> TODO()
-        InfixOperator.NOT_EQUALS -> TODO()
-    }
-
-    private fun processChainedExpression(chainedExpression: ChainedExpression): VeraType {
+    private fun processChainedExpression(chainedExpression: VeraChainedExpression): VeraType {
         val expressionResult = processPrimaryExpression(chainedExpression.primaryExpression)
         val expressionResultType = expressionResult.leftOrNull()
         val pendingSymbol = expressionResult.getOrNull()
@@ -216,30 +233,30 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
         }
     }
 
-    private fun processPrimaryExpression(primaryExpression: PrimaryExpression): Either<VeraType, PendingSymbol> {
+    private fun processPrimaryExpression(primaryExpression: VeraPrimaryExpression): Either<VeraType, PendingSymbol> {
         return when (primaryExpression) {
-            is IntLiteral -> {
+            is VeraIntLiteral -> {
                 jvmMethodBuilder.addInstruction(
                     LoadConstant(JvmType.INT, primaryExpression.value)
                 )
                 Left(VeraType.INT)
             }
 
-            is StringLiteral -> {
+            is VeraStringLiteral -> {
                 jvmMethodBuilder.addInstruction(
                     LoadConstant(JvmType.STRING, primaryExpression.value)
                 )
                 Left(VeraType.STRING)
             }
 
-            is BoolLiteral -> {
+            is VeraBoolLiteral -> {
                 jvmMethodBuilder.addInstruction(
-                    LoadConstant(JvmType.BOOL, primaryExpression == BoolLiteral.TRUE)
+                    LoadConstant(JvmType.BOOL, primaryExpression == VeraBoolLiteral.TRUE)
                 )
                 Left(VeraType.BOOL)
             }
 
-            is IfExpression -> {
+            is VeraIfExpression -> {
                 val conditionType = processExpression(primaryExpression.condition)
                 if (conditionType != VeraType.BOOL) error("conditions must result in a bool")
 
@@ -264,7 +281,7 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
                 Left(VeraType.UNIT)
             }
 
-            is IdentifierAsExpression -> {
+            is VeraIdentifierAsExpression -> {
                 val name = primaryExpression.identifier
                 val veraLocal = veraLocals[name]
                 if (veraLocal != null) {
@@ -280,7 +297,7 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
                 }
             }
 
-            is Expression -> {
+            is VeraExpression -> {
                 val type = processExpression(primaryExpression)
                 Left(type)
             }

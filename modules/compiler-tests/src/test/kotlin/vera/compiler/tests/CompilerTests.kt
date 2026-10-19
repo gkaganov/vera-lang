@@ -208,6 +208,28 @@ class VeraCompilerTests {
         assertProgramPrints(source, "Absolutely false!$EOL", testInfo)
     }
 
+    @Test
+    fun `equals compares Ints correctly`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(3 == 3)
+                        print(4 == 5)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `not-equals compares Ints correctly`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(3 != 52)
+                        print(4 != 4)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,

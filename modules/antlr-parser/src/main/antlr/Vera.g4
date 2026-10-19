@@ -45,7 +45,7 @@ statementTerminator: EOL* EOF | EOL+;
 layout: EOL*;
 
 /* Operators */
-infixOperator: PLUS | MINUS | MUL | DIV;
+infixOperator: PLUS | MINUS | MUL | DIV | EQ | NEQ;
 
 /* Lexer */
 FN_KEYWORD: 'fn';
@@ -74,6 +74,8 @@ PLUS: '+';
 MINUS: '-';
 MUL: '*';
 DIV: '/';
+EQ: '==';
+NEQ: '!=';
 
 INT_LITERAL: [0-9]+;
 STRING_LITERAL: '"'[ a-zA-Z0-9!]*'"';

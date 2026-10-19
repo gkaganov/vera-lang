@@ -3,35 +3,35 @@ package vera.ast
 import arrow.core.NonEmptyList
 import vera.shared.model.Identifier
 
-data class Program(val declarations: List<Declaration>)
+data class VeraProgram(val declarations: List<VeraDeclaration>)
 
-sealed interface Declaration
-data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val statements: List<VeraStatement>) : Declaration
+sealed interface VeraDeclaration
+data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val statements: List<VeraStatement>) : VeraDeclaration
 
 sealed interface VeraStatement
-data class BindStatement(val name: Identifier, val type: VeraType, val expression: Expression) : VeraStatement
-data class RebindStatement(val name: Identifier, val expression: Expression) : VeraStatement
-data class ReturnStatement(val expression: Expression?) : VeraStatement
-data class Expression(
-    val chainedExpressions: NonEmptyList<ChainedExpression>,
+data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
+data class VeraRebindStatement(val name: Identifier, val expression: VeraExpression) : VeraStatement
+data class VeraReturnStatement(val expression: VeraExpression?) : VeraStatement
+data class VeraExpression(
+    val chainedExpressions: NonEmptyList<VeraChainedExpression>,
     val chainOperators: List<InfixOperator>,
-) : VeraStatement, PrimaryExpression
+) : VeraStatement, VeraPrimaryExpression
 
-data class ChainedExpression(val primaryExpression: PrimaryExpression, val data: List<ChainedExpressionData> = emptyList())
+data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, val data: List<VeraChainedExpressionData> = emptyList())
 
-sealed interface ChainedExpressionData
-data class VeraMemberAccess(val member: Identifier) : ChainedExpressionData
-data class VeraArguments(val expressions: List<Expression>) : ChainedExpressionData
+sealed interface VeraChainedExpressionData
+data class VeraMemberAccess(val member: Identifier) : VeraChainedExpressionData
+data class VeraArguments(val expressions: List<VeraExpression>) : VeraChainedExpressionData
 
 enum class InfixOperator { ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUALS, NOT_EQUALS }
 
-sealed interface PrimaryExpression
-sealed interface Literal : PrimaryExpression
-data class IntLiteral(val value: Int) : Literal
-data class StringLiteral(val value: String) : Literal
-enum class BoolLiteral : Literal { TRUE, FALSE }
-data class IdentifierAsExpression(val identifier: Identifier) : PrimaryExpression
-data class IfExpression(val condition: Expression, val thenBlock: NonEmptyList<VeraStatement>, val elseBlock: List<VeraStatement>) : PrimaryExpression
+sealed interface VeraPrimaryExpression
+sealed interface VeraLiteral : VeraPrimaryExpression
+data class VeraIntLiteral(val value: Int) : VeraLiteral
+data class VeraStringLiteral(val value: String) : VeraLiteral
+enum class VeraBoolLiteral : VeraLiteral { TRUE, FALSE }
+data class VeraIdentifierAsExpression(val identifier: Identifier) : VeraPrimaryExpression
+data class VeraIfExpression(val condition: VeraExpression, val thenBlock: NonEmptyList<VeraStatement>, val elseBlock: List<VeraStatement>) : VeraPrimaryExpression
 
 data class VeraParameter(val name: Identifier, val type: VeraType)
 enum class VeraType { INT, STRING, BOOL, UNIT, UNKNOWN }

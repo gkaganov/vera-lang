@@ -1,7 +1,7 @@
 package vera.compiler
 
-import vera.ast.Program
 import vera.ast.VeraFunctionDeclaration
+import vera.ast.VeraProgram
 import vera.jvm.bytecode.emitter.JvmBytecodeEmitter
 import vera.jvm.ir.JvmClass
 import vera.jvm.ir.JvmMethod
@@ -20,7 +20,7 @@ class VeraCompiler(private val mainClassName: Identifier) {
         return bytecode
     }
 
-    private fun processProgram(program: Program): JvmProgram {
+    private fun processProgram(program: VeraProgram): JvmProgram {
         // first pass - collect function declarations by name
         val fnDeclarations = mutableMapOf<Identifier, VeraFunctionDeclaration>()
         for (declaration in program.declarations) {
