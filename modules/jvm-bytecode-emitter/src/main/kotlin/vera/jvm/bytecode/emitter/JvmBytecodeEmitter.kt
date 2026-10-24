@@ -108,25 +108,24 @@ class JvmBytecodeEmitter {
             is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label])
 
             is ComparisonOperation -> {
-                val labelIfNotEqual = codeBuilder.newLabel()
+                val labelTruePath = codeBuilder.newLabel()
                 val labelEnd = codeBuilder.newLabel()
                 when (instruction.operator) {
                     ComparisonOperator.EQ -> {
-                        codeBuilder.isub()
-                        codeBuilder.ifne(labelIfNotEqual)
-                        codeBuilder.loadConstant(1)
-                        codeBuilder.goto_(labelEnd)
-                        codeBuilder.labelBinding(labelIfNotEqual)
+                        codeBuilder.if_icmpeq(labelTruePath)
                         codeBuilder.loadConstant(0)
+                        codeBuilder.goto_(labelEnd)
+                        codeBuilder.labelBinding(labelTruePath)
+                        codeBuilder.loadConstant(1)
                         codeBuilder.labelBinding(labelEnd)
                     }
+
                     ComparisonOperator.NEQ -> {
-                        codeBuilder.isub()
-                        codeBuilder.ifeq(labelIfNotEqual)
-                        codeBuilder.loadConstant(1)
-                        codeBuilder.goto_(labelEnd)
-                        codeBuilder.labelBinding(labelIfNotEqual)
+                        codeBuilder.if_icmpne(labelTruePath)
                         codeBuilder.loadConstant(0)
+                        codeBuilder.goto_(labelEnd)
+                        codeBuilder.labelBinding(labelTruePath)
+                        codeBuilder.loadConstant(1)
                         codeBuilder.labelBinding(labelEnd)
                     }
                 }
