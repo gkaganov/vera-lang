@@ -63,7 +63,7 @@ class VeraCompilerTests {
     fun `Int can be returned`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var numberResult: Int = getInt()
+                        var numberResult: Int = getInt() + 0
                         return numberResult
                     }
                     fn getInt(): Int {
@@ -91,7 +91,7 @@ class VeraCompilerTests {
     fun `multiple Int parameters can be passed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        return add3Ints(99, 98, 97)
+                        return add3Ints(99, 98, 2 * 48 + 1)
                     }
                     fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
                         return int1 + int2 + int3
@@ -184,7 +184,7 @@ class VeraCompilerTests {
     fun `if statements execute only then-block if True`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        if True {
+                        if 1 + 1 < 3 {
                             print("So true")
                         } else {
                             print("Never gonna happen")
@@ -237,9 +237,11 @@ class VeraCompilerTests {
                         print(3 < 5)
                         print(5 < 3)
                         print(3 < 3)
+                        print(1 + 1 < 3)
+                        print(3 < 1 + 1)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}true${EOL}false${EOL}", testInfo)
     }
 
     @Test
@@ -298,13 +300,13 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `mixed multiplication and division are left-associative`(testInfo: TestInfo) {
+    fun `mixed multiplication, division, and modulo are left-associative`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        return 8 / 2 * 3
+                        return 8 / 2 * 3 % 5
                     }
                 """.trimIndent()
-        assertProgramReturns(source, 12, testInfo)
+        assertProgramReturns(source, 2, testInfo)
     }
 
     @Test
@@ -330,7 +332,7 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `logical and forward-application operators are rejected`() {
+    fun `unsupported expressions are rejected`() {
         for (operator in listOf("and", "or", "|")) {
             assertCompilationFails(
                 """
@@ -341,18 +343,34 @@ class VeraCompilerTests {
                 expectedMessagePart = "not supported yet",
             )
         }
+        assertCompilationFails(
+            """
+                fn $TEST_MAIN() {
+                    val x = 1
+                    print(x.foo)
+                }
+            """.trimIndent(),
+            expectedMessagePart = "not supported yet",
+        )
     }
 
     @Test
     fun `mismatched operand types are rejected`() {
-        assertCompilationFails(
-            """
-                fn $TEST_MAIN(): Int {
-                    return 1 + "x"
-                }
-            """.trimIndent(),
-            expectedMessagePart = "same type",
-        )
+        listOf(
+            "1 + \"x\"" to "same type",
+            "\"x\" + 1" to "same type",
+            "\"x\" + \"y\"" to "only defined for Int operands",
+            "1 < 2 < 3" to "same type",
+        ).forEach { (expression, expectedMessagePart) ->
+            assertCompilationFails(
+                """
+                    fn $TEST_MAIN(): Int {
+                        return $expression
+                    }
+                """.trimIndent(),
+                expectedMessagePart = expectedMessagePart,
+            )
+        }
     }
 
     private fun assertProgramReturns(
