@@ -10,7 +10,6 @@ allprojects {
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.gradle.versions.check) apply false
-    alias(libs.plugins.antlr.kotlin) apply false
 }
 
 val jvmVersion = libs.versions.jvm.get().toInt()

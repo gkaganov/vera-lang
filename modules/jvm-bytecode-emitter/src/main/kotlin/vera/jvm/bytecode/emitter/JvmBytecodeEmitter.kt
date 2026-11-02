@@ -33,12 +33,17 @@ import java.lang.constant.ConstantDescs.CD_int
 import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 
-class JvmBytecodeEmitter {
+object JvmBytecodeEmitter {
+    fun emit(jvmProgram: JvmProgram): Map<Identifier, ByteArray> = EmitterState(jvmProgram).emit()
+}
+
+/** Mutable state for a single emit run. */
+private class EmitterState(private val jvmProgram: JvmProgram) {
 
     private val labels = mutableMapOf<JvmLabel, Label>()
 
     /** @return a map of classnames to their bytecode */
-    fun emit(jvmProgram: JvmProgram): Map<Identifier, ByteArray> {
+    fun emit(): Map<Identifier, ByteArray> {
         val classFile = ClassFile.of()
 
         return jvmProgram.classes.associate { clazz ->

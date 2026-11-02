@@ -6,7 +6,7 @@ include("cli")
 include("compiler")
 
 include("shared-model")
-include("antlr-parser")
+include("parser")
 include("ast")
 include("jvm-lowering")
 include("jvm-ir")

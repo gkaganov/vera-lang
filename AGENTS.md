@@ -1,6 +1,6 @@
 # Vera Lang
 
-Vera is a small, experimental programming language with a JVM target. It uses ANTLR for parsing, a 2-phase IR lowering pipeline, and generates JVM bytecode via the Java ClassFile API.
+Vera is a small, experimental programming language with a JVM target. It uses a recursive-descent parser, a 2-phase IR lowering pipeline, and generates JVM bytecode via the Java ClassFile API.
 
 ## Quick Start
 
@@ -15,39 +15,43 @@ Build output goes to `out/` (compiler) and `build/` (Gradle).
 ## Architecture
 
 ```
-Vera source → ANTLR parser → AST → JvmIr (IR) → JvmLowering (2-phase) → Bytecode Emitter → .class files
+Vera source → lexer/parser → AST → JvmIr (IR) → JvmProgramLowering (2-phase) → Bytecode Emitter → .class files
 ```
 
 ### Pipeline Overview (`VeraCompiler`)
 
-1. **Parse**: `Vera.g4` grammar → ANTLR parse tree → AST (via `VeraParserAntlrVisitor`)
-2. **Lower**: `JvmLowering` transforms AST → JVM IR (`JvmIr`)
+1. **Parse**: source → `VeraLexer` token stream → recursive-descent `VeraParser` → AST
+2. **Lower**: `JvmProgramLowering` transforms AST → JVM IR (`JvmIr`) using `JvmFunctionLowering` per function
 3. **Emit**: `JvmBytecodeEmitter` generates `.class` files using Java ClassFile API
 
 ### Modules
 
-| Module | Purpose |
-|--------|---------|
-| `shared-model` | Shared domain model (types, expressions, etc.) |
-| `antlr-parser` | ANTLR grammar (`Vera.g4`) + parse tree visitor → AST |
-| `ast` | AST node definitions |
-| `jvm-ir` | JVM intermediate representation — classes, methods, fields, expressions, statements, operators |
-| `jvm-lowering` | AST → IR lowering (`JvmLowering`) |
-| `jvm-bytecode-emitter` | IR → JVM `.class` file generation |
-| `compiler` | Orchestration: `VeraCompiler` ties parse → lower → emit |
-| `cli` | Command-line entry point |
-| `compiler-tests` | Integration tests — compiles Vera code, runs via custom classloader, asserts stdout |
+| Module                 | Purpose                                                                                        |
+|------------------------|------------------------------------------------------------------------------------------------|
+| `shared-model`         | Shared domain model (types, expressions, etc.)                                                 |
+| `parser`               | Lexer + recursive-descent parser → AST                                                         |
+| `ast`                  | AST node definitions                                                                           |
+| `jvm-ir`               | JVM intermediate representation — classes, methods, fields, expressions, statements, operators |
+| `jvm-lowering`         | AST → IR lowering (`JvmProgramLowering`, `JvmFunctionLowering`)                                 |
+| `jvm-bytecode-emitter` | IR → JVM `.class` file generation                                                              |
+| `compiler`             | Orchestration: `VeraCompiler` ties parse → lower → emit                                        |
+| `cli`                  | Command-line entry point                                                                       |
+| `compiler-tests`       | Integration tests — compiles Vera code, runs via custom classloader, asserts stdout            |
 
 ### Lowering Details
 
-`JvmLowering` uses a **2-phase approach**:
-1. **Collect**: First pass collects all `VeraFunctionDeclaration` AST nodes into a map by name (for function calls)
-2. **Lower**: Second pass lowers each function individually
+`JvmProgramLowering` is the module's public entry point. `JvmFunctionLowering` is an
+internal stateless object; the per-function mutable state (locals and the method builder)
+lives in a private helper created for each call.
 
-Key methods in `JvmLowering`:
-- `processExpression` — converts AST expressions to IR
-- `processBlock` — converts AST block statements to IR
-- `processStatement` — converts AST statements to IR
+`JvmProgramLowering.lower(mainClassName, program)` uses a **2-phase approach**:
+1. **Collect**: First pass collects all `VeraFunctionDeclaration` AST nodes into a map by name (for function calls)
+2. **Lower**: Second pass lowers each function individually with `JvmFunctionLowering`
+
+Key methods in `JvmFunctionLowering`:
+- `lower` — lowers a whole function to a `JvmMethod`
+- `lowerExpression` — lowers AST expressions and returns their type
+- `lowerStatement` — lowers AST statements to IR instructions
 
 ### IR Design (`JvmIr`)
 
@@ -65,6 +69,14 @@ Key methods in `JvmLowering`:
 - 4-space indentation
 - Sealed interfaces for IR hierarchies
 - `JvmIr.` namespace prefix on all IR types
+
+### API Style
+
+Public pipeline services (`VeraLexer`, `VeraParser`, `JvmProgramLowering`,
+`JvmBytecodeEmitter`, `VeraCompiler`) are stateless objects. Inputs are passed as method
+arguments, and mutable state is scoped to a single call. Stateful helpers are private classes
+named `*State` and are created per operation, so instances cannot accidentally retain state
+between compilations.
 
 ### Testing
 
@@ -88,9 +100,13 @@ Key methods in `JvmLowering`:
 - When making changes that affect conventions (naming, structure, design decisions), update this file immediately
 - New conventions and decisions should be recorded here automatically as they are made
 
-## Grammar (`Vera.g4`)
+## Parsing
 
-Layout-sensitive, EOL-based statement termination. Key constructs:
+The parser is recursive-descent. `VeraCompiler` invokes `VeraLexer` to produce tokens,
+including significant `EOL` tokens, then passes them to `VeraParser`, which implements one
+method per precedence level. Newlines terminate statements.
+
+Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`
 - Assignment: `name = expr`
@@ -101,9 +117,9 @@ Layout-sensitive, EOL-based statement termination. Key constructs:
 
 ## Known TODOs
 
-- **VeraRebindStatement** (`x := newValue`): `JvmLowering.processStatement` — `TODO()` stub
-- **VeraMemberAccess**: `JvmLowering.processChainedExpression` — `TODO()` stub for member access / field access
-- **Logical and forward-application operators** (`and`, `or`, `|`): parser/AST support exists, but `JvmLowering.processBinaryOperation` rejects them
+- **VeraRebindStatement** (`x := newValue`): `JvmFunctionLowering.lowerStatement` — `TODO()` stub
+- **VeraMemberAccess**: `JvmFunctionLowering.lowerChainedExpression` — `TODO()` stub for member access / field access
+- **Logical and forward-application operators** (`and`, `or`, `|`): parser/AST support exists, but `JvmFunctionLowering.lowerBinaryOperation` rejects them
 
 ## Run / Debug
 

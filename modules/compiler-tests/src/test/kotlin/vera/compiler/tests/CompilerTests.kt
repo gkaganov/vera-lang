@@ -380,7 +380,7 @@ class VeraCompilerTests {
         compileToOut: Boolean = false,
     ) {
         val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-        val bytecode = VeraCompiler(className).compile(source)[className]!!
+        val bytecode = VeraCompiler.compile(className, source)[className]!!
         if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(bytecode)
         val classLoader = ByteArrayClassLoader(mapOf(className.value to bytecode))
         val testMethod = classLoader.loadClass(className.value).getMethod(TEST_MAIN)
@@ -395,7 +395,7 @@ class VeraCompilerTests {
         compileToOut: Boolean = false,
     ) {
         val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-        val bytecode = VeraCompiler(className).compile(source)[className]!!
+        val bytecode = VeraCompiler.compile(className, source)[className]!!
         if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(bytecode)
         val oldOut = System.out
         val baos = ByteArrayOutputStream()
@@ -413,7 +413,7 @@ class VeraCompilerTests {
     private fun assertCompilationFails(source: String, expectedMessagePart: String) {
         val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
         val exception = Assertions.assertThrows(IllegalStateException::class.java) {
-            VeraCompiler(className).compile(source)
+            VeraCompiler.compile(className, source)
         }
         Assertions.assertTrue(
             exception.message?.contains(expectedMessagePart) == true,

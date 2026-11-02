@@ -11,7 +11,7 @@ fun main() {
     val outputPath = Path.of("out", "$className.class")
 
     val sourcecode = inputPath.readText()
-    val bytecode = VeraCompiler(className).compile(sourcecode)
+    val bytecode = VeraCompiler.compile(className, sourcecode)
 
     outputPath.createParentDirectories()
     outputPath.writeBytes(bytecode[className]!!)
