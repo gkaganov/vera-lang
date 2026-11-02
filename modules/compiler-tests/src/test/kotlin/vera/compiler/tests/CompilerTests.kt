@@ -332,17 +332,65 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `unsupported expressions are rejected`() {
-        for (operator in listOf("and", "or", "|")) {
-            assertCompilationFails(
-                """
+    fun `logical and evaluates booleans`(testInfo: TestInfo) {
+        val source = """
                     fn $TEST_MAIN() {
-                        print(True $operator False)
+                        print(True and True)
+                        print(True and False)
+                        print(False and True)
+                        print(False and False)
                     }
-                """.trimIndent(),
-                expectedMessagePart = "not supported yet",
-            )
-        }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `logical or evaluates booleans`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(True or True)
+                        print(True or False)
+                        print(False or True)
+                        print(False or False)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}true${EOL}true${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `logical operators short-circuit`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(False and fail())
+                        print(True or fail())
+                    }
+                    fn fail(): Bool {
+                        print("should not run")
+                        return True
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "false${EOL}true${EOL}", testInfo)
+    }
+
+    @Test
+    fun `forward application passes the left value as the first argument`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(2 | double)
+                        print(1 | add(2))
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                    fn add(left: Int, right: Int): Int {
+                        return left + right
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "4${EOL}3${EOL}", testInfo)
+    }
+
+    @Test
+    fun `unsupported expressions are rejected`() {
         assertCompilationFails(
             """
                 fn $TEST_MAIN() {
@@ -361,6 +409,8 @@ class VeraCompilerTests {
             "\"x\" + 1" to "same type",
             "\"x\" + \"y\"" to "only defined for Int operands",
             "1 < 2 < 3" to "same type",
+            "1 and True" to "Bool",
+            "True or 1" to "Bool",
         ).forEach { (expression, expectedMessagePart) ->
             assertCompilationFails(
                 """

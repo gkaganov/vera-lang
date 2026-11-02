@@ -112,14 +112,14 @@ Key language constructs:
 - Assignment: `name = expr`
 - Control flow: `if`, `while`, `for`
 - Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
-- `and` and `or` are reserved keywords and cannot be used as identifiers
+- `and` and `or` are short-circuiting Bool operators and are reserved keywords
+- `|` is forward application: `value | f` lowers to `f(value)`
 - Built-in: `print`
 
 ## Known TODOs
 
 - **VeraRebindStatement** (`x := newValue`): `JvmFunctionLowering.lowerStatement` — `TODO()` stub
 - **VeraMemberAccess**: `JvmFunctionLowering.lowerChainedExpression` — `TODO()` stub for member access / field access
-- **Logical and forward-application operators** (`and`, `or`, `|`): parser/AST support exists, but `JvmFunctionLowering.lowerBinaryOperation` rejects them
 
 ## Run / Debug
 

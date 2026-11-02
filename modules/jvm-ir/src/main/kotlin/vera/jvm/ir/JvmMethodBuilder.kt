@@ -50,12 +50,16 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
     private val locals = LocalTable()
     private val stack = OperandStack()
 
-    private val _instructions = mutableListOf<InstructionWithDebugInfo>()
     val instructions: List<InstructionWithDebugInfo>
-        get() = _instructions
+        field = mutableListOf<InstructionWithDebugInfo>()
 
     val nextFreeLocalSlot: LocalTable.Slot
         get() = locals.nextFreeSlot
+
+    fun allocateLocal(jvmType: JvmType): LocalTable.Local {
+        val slot = locals.define(jvmType)
+        return LocalTable.Local(slot, jvmType)
+    }
 
     init {
         parameters.forEach { param ->
@@ -77,7 +81,7 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
             locals = locals.snapshot(),
         )
 
-        _instructions += InstructionWithDebugInfo(
+        instructions += InstructionWithDebugInfo(
             instruction = instruction,
             before = before,
             after = after,
@@ -85,8 +89,6 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
     }
 
     fun build(): JvmMethod = JvmMethod(name, instructions, JvmMethodSignature(parameters, returnType))
-
-    fun getLocal(slot: LocalTable.Slot): LocalTable.Local? = locals.read(slot)
 
     private fun verifyInstruction(instruction: JvmInstruction) {
         val pops = instruction.effect.stackPops

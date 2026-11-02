@@ -155,10 +155,9 @@ private class FunctionLoweringState(
 
     private fun lowerBinaryOperation(operation: VeraBinaryOperation): VeraType {
         when (operation.operator) {
-            // unsupported operators must be rejected *before* evaluating operands,
-            // otherwise their instructions would already be on the stack
-            VeraOperator.AND, VeraOperator.OR -> error("logical operators 'and'/'or' are not supported yet")
-            VeraOperator.PIPE -> error("forward application operator '|' is not supported yet")
+            VeraOperator.AND -> return lowerLogicalAnd(operation)
+            VeraOperator.OR -> return lowerLogicalOr(operation)
+            VeraOperator.PIPE -> return lowerForwardApplication(operation)
             else -> {}
         }
 
@@ -178,8 +177,95 @@ private class FunctionLoweringState(
             VeraOperator.MULTIPLY -> emitIntBinary(IntBinaryOperator.MUL)
             VeraOperator.DIVIDE -> emitIntBinary(IntBinaryOperator.DIV)
             VeraOperator.PERCENT -> emitIntBinary(IntBinaryOperator.REM)
-            // unreachable: rejected before operands are evaluated
             VeraOperator.AND, VeraOperator.OR, VeraOperator.PIPE -> error("unreachable")
+        }
+    }
+
+    private fun lowerLogicalAnd(operation: VeraBinaryOperation): VeraType {
+        val result = jvmMethodBuilder.allocateLocal(JvmType.BOOL)
+        val falseLabel = JvmLabel()
+        val endLabel = JvmLabel()
+
+        val leftType = lowerPrimaryExpression(operation.left)
+        requireBoolOperand(leftType, operation.operator)
+
+        jvmMethodBuilder.addInstruction(CreateLabel(falseLabel))
+        jvmMethodBuilder.addInstruction(IfFalseJumpTo(falseLabel))
+
+        val rightType = lowerPrimaryExpression(operation.right)
+        requireBoolOperand(rightType, operation.operator)
+        jvmMethodBuilder.addInstruction(StoreLocal(result))
+        jvmMethodBuilder.addInstruction(CreateLabel(endLabel))
+        jvmMethodBuilder.addInstruction(JumpTo(endLabel))
+
+        jvmMethodBuilder.addInstruction(BindLabel(falseLabel))
+        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, false))
+        jvmMethodBuilder.addInstruction(StoreLocal(result))
+
+        jvmMethodBuilder.addInstruction(BindLabel(endLabel))
+        jvmMethodBuilder.addInstruction(LoadLocal(result))
+        return VeraType.BOOL
+    }
+
+    private fun lowerLogicalOr(operation: VeraBinaryOperation): VeraType {
+        val result = jvmMethodBuilder.allocateLocal(JvmType.BOOL)
+        val rightLabel = JvmLabel()
+        val endLabel = JvmLabel()
+
+        val leftType = lowerPrimaryExpression(operation.left)
+        requireBoolOperand(leftType, operation.operator)
+
+        jvmMethodBuilder.addInstruction(CreateLabel(rightLabel))
+        jvmMethodBuilder.addInstruction(IfFalseJumpTo(rightLabel))
+        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, true))
+        jvmMethodBuilder.addInstruction(StoreLocal(result))
+        jvmMethodBuilder.addInstruction(CreateLabel(endLabel))
+        jvmMethodBuilder.addInstruction(JumpTo(endLabel))
+
+        jvmMethodBuilder.addInstruction(BindLabel(rightLabel))
+        val rightType = lowerPrimaryExpression(operation.right)
+        requireBoolOperand(rightType, operation.operator)
+        jvmMethodBuilder.addInstruction(StoreLocal(result))
+
+        jvmMethodBuilder.addInstruction(BindLabel(endLabel))
+        jvmMethodBuilder.addInstruction(LoadLocal(result))
+        return VeraType.BOOL
+    }
+
+    private fun lowerForwardApplication(operation: VeraBinaryOperation): VeraType {
+        val (functionName, arguments) = when (val right = operation.right) {
+            is VeraIdentifierAsExpression -> right.identifier to emptyList()
+            is VeraChainedExpression -> {
+                val base = right.primaryExpression
+                if (base !is VeraIdentifierAsExpression) {
+                    error("right-hand side of '|' must be a function name")
+                }
+                val argumentLists = right.data.map { data ->
+                    when (data) {
+                        is VeraArguments -> data
+                        is VeraMemberAccess -> error("right-hand side of '|' must not contain member access")
+                    }
+                }
+                if (argumentLists.size > 1) {
+                    error("right-hand side of '|' must contain at most one argument list")
+                }
+                base.identifier to (argumentLists.firstOrNull()?.expressions ?: emptyList())
+            }
+            else -> error("right-hand side of '|' must be a function name")
+        }
+
+        val argumentTypes = mutableListOf<VeraType>()
+        argumentTypes += lowerPrimaryExpression(operation.left)
+        for (argument in arguments) {
+            argumentTypes += lowerPrimaryExpression(argument)
+        }
+
+        return lowerFunctionInvocation(functionName, argumentTypes)
+    }
+
+    private fun requireBoolOperand(type: VeraType, operator: VeraOperator) {
+        if (type != VeraType.BOOL) {
+            error("operator '${operator.symbol}' is only defined for Bool operands, got $type")
         }
     }
 
@@ -221,26 +307,29 @@ private class FunctionLoweringState(
                         is VeraMemberAccess -> TODO()
                     }
                 }
-
-                val builtin = Builtin.from(fnName)
-                if (builtin != null) {
-                    lowerBuiltinCall(builtin, arguments)
-                } else {
-                    val fnDeclaration = visibleFunctions[fnName] ?: error("function ${fnName.value} not found.")
-                    jvmMethodBuilder.addInstruction(
-                        Invokestatic(
-                            className,
-                            fnDeclaration.name,
-                            JvmMethodSignature(
-                                fnDeclaration.parameters.map { veraParameter -> JvmParameter(veraParameter.name, veraParameter.type.toJvmType()) },
-                                fnDeclaration.returnType.toJvmType()
-                            )
-                        )
-                    )
-                    fnDeclaration.returnType
-                }
+                lowerFunctionInvocation(fnName, arguments)
             }
         }
+    }
+
+    private fun lowerFunctionInvocation(fnName: Identifier, arguments: List<VeraType>): VeraType {
+        val builtin = Builtin.from(fnName)
+        if (builtin != null) {
+            return lowerBuiltinCall(builtin, arguments)
+        }
+
+        val fnDeclaration = visibleFunctions[fnName] ?: error("function ${fnName.value} not found.")
+        jvmMethodBuilder.addInstruction(
+            Invokestatic(
+                className,
+                fnDeclaration.name,
+                JvmMethodSignature(
+                    fnDeclaration.parameters.map { veraParameter -> JvmParameter(veraParameter.name, veraParameter.type.toJvmType()) },
+                    fnDeclaration.returnType.toJvmType()
+                )
+            )
+        )
+        return fnDeclaration.returnType
     }
 
     private fun lowerArguments(arguments: VeraArguments): List<VeraType> {
