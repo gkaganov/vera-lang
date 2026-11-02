@@ -10,3 +10,6 @@ build/
 # intellij config
 .idea/
 *.iml
+
+# pi agent local config
+.pi/

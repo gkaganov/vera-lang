@@ -48,8 +48,8 @@ data class LoadConstant(val type: JvmType, val value: Any) : JvmInstruction {
     )
 }
 
-enum class IntBinaryOperator { ADD, SUB, MUL, DIV }
-enum class ComparisonOperator { EQ, NEQ }
+enum class IntBinaryOperator { ADD, SUB, MUL, DIV, REM }
+enum class ComparisonOperator { EQ, NEQ, LT, GT, LTE, GTE }
 
 data class IntBinaryOperation(val operator: IntBinaryOperator) : JvmInstruction {
     override val effect = InstructionEffect(

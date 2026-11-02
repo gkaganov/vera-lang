@@ -230,6 +230,131 @@ class VeraCompilerTests {
         assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
     }
 
+    @Test
+    fun `Ints can be compared with less-than`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(3 < 5)
+                        print(5 < 3)
+                        print(3 < 3)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `Ints can be compared with greater-than`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(5 > 3)
+                        print(3 > 5)
+                        print(3 > 3)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `Ints can be compared with less-or-equal and greater-or-equal`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(3 <= 3)
+                        print(4 <= 3)
+                        print(3 >= 3)
+                        print(3 >= 4)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `Ints support modulo`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return 17 % 5
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 2, testInfo)
+    }
+
+    @Test
+    fun `multiplication has precedence over addition`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return 2 + 3 * 4
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 14, testInfo)
+    }
+
+    @Test
+    fun `mixed addition and subtraction are left-associative`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return 8 - 2 + 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 7, testInfo)
+    }
+
+    @Test
+    fun `mixed multiplication and division are left-associative`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return 8 / 2 * 3
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 12, testInfo)
+    }
+
+    @Test
+    fun `additive expressions have precedence over equality`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1 + 1 == 2)
+                        print(2 == 1 + 1)
+                        print(1 + 1 == 3 - 1)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}true${EOL}true$EOL", testInfo)
+    }
+
+    @Test
+    fun `parentheses override arithmetic precedence`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return (1 + 2) * 3
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 9, testInfo)
+    }
+
+    @Test
+    fun `logical and forward-application operators are rejected`() {
+        for (operator in listOf("and", "or", "|")) {
+            assertCompilationFails(
+                """
+                    fn $TEST_MAIN() {
+                        print(True $operator False)
+                    }
+                """.trimIndent(),
+                expectedMessagePart = "not supported yet",
+            )
+        }
+    }
+
+    @Test
+    fun `mismatched operand types are rejected`() {
+        assertCompilationFails(
+            """
+                fn $TEST_MAIN(): Int {
+                    return 1 + "x"
+                }
+            """.trimIndent(),
+            expectedMessagePart = "same type",
+        )
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,
@@ -265,5 +390,16 @@ class VeraCompilerTests {
             System.setOut(oldOut)
         }
         Assertions.assertEquals(expected, baos.toString())
+    }
+
+    private fun assertCompilationFails(source: String, expectedMessagePart: String) {
+        val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
+        val exception = Assertions.assertThrows(IllegalStateException::class.java) {
+            VeraCompiler(className).compile(source)
+        }
+        Assertions.assertTrue(
+            exception.message?.contains(expectedMessagePart) == true,
+            "Expected error message to contain '$expectedMessagePart', but was '${exception.message}'",
+        )
     }
 }

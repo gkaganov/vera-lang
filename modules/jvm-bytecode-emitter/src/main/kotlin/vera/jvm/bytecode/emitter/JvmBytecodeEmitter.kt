@@ -91,6 +91,7 @@ class JvmBytecodeEmitter {
                     IntBinaryOperator.SUB -> codeBuilder.isub()
                     IntBinaryOperator.MUL -> codeBuilder.imul()
                     IntBinaryOperator.DIV -> codeBuilder.idiv()
+                    IntBinaryOperator.REM -> codeBuilder.irem()
                 }
             }
 
@@ -111,24 +112,18 @@ class JvmBytecodeEmitter {
                 val labelTruePath = codeBuilder.newLabel()
                 val labelEnd = codeBuilder.newLabel()
                 when (instruction.operator) {
-                    ComparisonOperator.EQ -> {
-                        codeBuilder.if_icmpeq(labelTruePath)
-                        codeBuilder.loadConstant(0)
-                        codeBuilder.goto_(labelEnd)
-                        codeBuilder.labelBinding(labelTruePath)
-                        codeBuilder.loadConstant(1)
-                        codeBuilder.labelBinding(labelEnd)
-                    }
-
-                    ComparisonOperator.NEQ -> {
-                        codeBuilder.if_icmpne(labelTruePath)
-                        codeBuilder.loadConstant(0)
-                        codeBuilder.goto_(labelEnd)
-                        codeBuilder.labelBinding(labelTruePath)
-                        codeBuilder.loadConstant(1)
-                        codeBuilder.labelBinding(labelEnd)
-                    }
+                    ComparisonOperator.EQ -> codeBuilder.if_icmpeq(labelTruePath)
+                    ComparisonOperator.NEQ -> codeBuilder.if_icmpne(labelTruePath)
+                    ComparisonOperator.LT -> codeBuilder.if_icmplt(labelTruePath)
+                    ComparisonOperator.GT -> codeBuilder.if_icmpgt(labelTruePath)
+                    ComparisonOperator.LTE -> codeBuilder.if_icmple(labelTruePath)
+                    ComparisonOperator.GTE -> codeBuilder.if_icmpge(labelTruePath)
                 }
+                codeBuilder.loadConstant(0)
+                codeBuilder.goto_(labelEnd)
+                codeBuilder.labelBinding(labelTruePath)
+                codeBuilder.loadConstant(1)
+                codeBuilder.labelBinding(labelEnd)
             }
 
             is Print -> {

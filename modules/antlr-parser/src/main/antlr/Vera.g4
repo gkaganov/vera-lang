@@ -27,10 +27,27 @@ updateBlock: LBRACE layout RBRACE;
 /* Return */
 returnStatement: RETURN_KEYWORD expression?;
 
-/* Expressions */
-expression: chainedExpression (infixOperator chainedExpression)*;
-chainedExpression: primaryExpression (memberAccess | argumentList)*;
-primaryExpression: literal | IDENTIFIER | ifExpression | LPAREN expression RPAREN;
+/* Expressions — layered by precedence (lowest to highest) */
+expression: forwardApplication;
+
+forwardApplication: logicalOr (PIPE logicalOr)*;
+
+logicalOr: logicalAnd (OR logicalAnd)*;
+logicalAnd: equality (AND equality)*;
+
+equality: comparison (EQ comparison | NEQ comparison)*;
+comparison: additive (LT additive | GT additive | LTE additive | GTE additive)*;
+
+additive: multiplicative (PLUS multiplicative | MINUS multiplicative)*;
+multiplicative: chainedPrimary (STAR chainedPrimary | SLASH chainedPrimary | PERCENT chainedPrimary)*;
+
+chainedPrimary: primary (memberAccess | argumentList)*;
+
+primary: literal
+       | IDENTIFIER
+       | LPAREN expression RPAREN
+       | ifExpression;
+
 ifExpression: IF_KEYWORD condition=expression thenBranch=block
               (ELSE_KEYWORD elseBranch=block)?;
 memberAccess: DOT name=IDENTIFIER;
@@ -43,9 +60,6 @@ literal: INT_LITERAL | STRING_LITERAL | BOOL_LITERAL;
 /* Layout */
 statementTerminator: EOL* EOF | EOL+;
 layout: EOL*;
-
-/* Operators */
-infixOperator: PLUS | MINUS | MUL | DIV | EQ | NEQ;
 
 /* Lexer */
 FN_KEYWORD: 'fn';
@@ -72,10 +86,18 @@ LBRACE: '{';
 RBRACE: '}';
 PLUS: '+';
 MINUS: '-';
-MUL: '*';
-DIV: '/';
+STAR: '*';
+SLASH: '/';
+PERCENT: '%';
 EQ: '==';
 NEQ: '!=';
+LT: '<';
+GT: '>';
+LTE: '<=';
+GTE: '>=';
+PIPE: '|';
+OR: 'or';
+AND: 'and';
 
 INT_LITERAL: [0-9]+;
 STRING_LITERAL: '"'[ a-zA-Z0-9!]*'"';

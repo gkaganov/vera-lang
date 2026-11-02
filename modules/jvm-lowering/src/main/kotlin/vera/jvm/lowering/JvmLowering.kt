@@ -3,8 +3,8 @@ package vera.jvm.lowering
 import arrow.core.Either
 import arrow.core.Either.Left
 import arrow.core.Either.Right
-import vera.ast.InfixOperator
 import vera.ast.VeraArguments
+import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraChainedExpression
@@ -14,6 +14,7 @@ import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
+import vera.ast.VeraOperator
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraRebindStatement
 import vera.ast.VeraReturnStatement
@@ -129,96 +130,111 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
     }
 
     private fun processExpression(expression: VeraExpression): VeraType {
-        val mainExpression = expression.chainedExpressions.first()
-        val chainType = processChainedExpression(mainExpression)
-        val chainedExpressions = expression.chainedExpressions.tail
+        return processPrimaryExpression(expression.expression)
+    }
 
-        if (expression.chainOperators.size != chainedExpressions.size) {
-            error("the number of infix operators and chained expressions must be equal")
+    private fun processPrimaryExpression(primary: VeraPrimaryExpression): VeraType {
+        return when (primary) {
+            is VeraBinaryOperation -> processBinaryOperation(primary)
+            is VeraChainedExpression -> processChainedExpression(primary)
+            else -> tryResolvePrimaryExpression(primary).fold({ type -> type }, { error("unexpected pending symbol in primary expression") })
+        }
+    }
+
+    private fun processBinaryOperation(operation: VeraBinaryOperation): VeraType {
+        when (operation.operator) {
+            // unsupported operators must be rejected *before* evaluating operands,
+            // otherwise their instructions would already be on the stack
+            VeraOperator.AND, VeraOperator.OR -> error("logical operators 'and'/'or' are not supported yet")
+            VeraOperator.PIPE -> error("forward application operator '|' is not supported yet")
+            else -> {}
         }
 
-        for (operatorExpr in expression.chainOperators.zip(chainedExpressions)) {
-            val infixOperator = operatorExpr.first
-            val chainedExpression = operatorExpr.second
+        val leftType = processPrimaryExpression(operation.left)
+        val rightType = processPrimaryExpression(operation.right)
+        validateIntOperands(operation.operator, leftType, rightType)
 
-            val chainedtype = processChainedExpression(chainedExpression)
-            if (chainedtype != chainType) error("all result types in a chained expression need to be the same")
-
-            when (infixOperator) {
-                InfixOperator.EQUALS -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("equality operators only work on Int types")
-                    jvmMethodBuilder.addInstruction(ComparisonOperation(ComparisonOperator.EQ, JvmType.INT))
-                    return VeraType.BOOL
-                }
-                InfixOperator.NOT_EQUALS -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("equality operators only work on Int types")
-                    jvmMethodBuilder.addInstruction(ComparisonOperation(ComparisonOperator.NEQ, JvmType.INT))
-                    return VeraType.BOOL
-                }
-                InfixOperator.ADD -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
-                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.ADD))
-                }
-                InfixOperator.SUBTRACT -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
-                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.SUB))
-                }
-                InfixOperator.MULTIPLY -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
-                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.MUL))
-                }
-                InfixOperator.DIVIDE -> {
-                    if (chainType.toJvmType() != JvmType.INT) error("infix operators are only defined for numeric types")
-                    jvmMethodBuilder.addInstruction(IntBinaryOperation(IntBinaryOperator.DIV))
-                }
-            }
+        return when (operation.operator) {
+            VeraOperator.EQUALS -> emitComparison(ComparisonOperator.EQ)
+            VeraOperator.NOT_EQUALS -> emitComparison(ComparisonOperator.NEQ)
+            VeraOperator.LESS -> emitComparison(ComparisonOperator.LT)
+            VeraOperator.GREATER -> emitComparison(ComparisonOperator.GT)
+            VeraOperator.LESS_EQ -> emitComparison(ComparisonOperator.LTE)
+            VeraOperator.GREATER_EQ -> emitComparison(ComparisonOperator.GTE)
+            VeraOperator.ADD -> emitIntBinary(IntBinaryOperator.ADD)
+            VeraOperator.SUBTRACT -> emitIntBinary(IntBinaryOperator.SUB)
+            VeraOperator.MULTIPLY -> emitIntBinary(IntBinaryOperator.MUL)
+            VeraOperator.DIVIDE -> emitIntBinary(IntBinaryOperator.DIV)
+            VeraOperator.PERCENT -> emitIntBinary(IntBinaryOperator.REM)
+            // unreachable: rejected before operands are evaluated
+            VeraOperator.AND, VeraOperator.OR, VeraOperator.PIPE -> error("unreachable")
         }
-        return chainType
+    }
+
+    private fun validateIntOperands(operator: VeraOperator, leftType: VeraType, rightType: VeraType) {
+        if (leftType != rightType) {
+            error("operator '${operator.symbol}' requires both operands to have the same type, got $leftType and $rightType")
+        }
+        if (leftType != VeraType.INT) {
+            error("operator '${operator.symbol}' is only defined for Int operands, got $leftType")
+        }
+    }
+
+    private fun emitComparison(operator: ComparisonOperator): VeraType {
+        jvmMethodBuilder.addInstruction(ComparisonOperation(operator, JvmType.INT))
+        return VeraType.BOOL
+    }
+
+    private fun emitIntBinary(operator: IntBinaryOperator): VeraType {
+        jvmMethodBuilder.addInstruction(IntBinaryOperation(operator))
+        return VeraType.INT
     }
 
     private fun processChainedExpression(chainedExpression: VeraChainedExpression): VeraType {
-        val expressionResult = processPrimaryExpression(chainedExpression.primaryExpression)
-        val expressionResultType = expressionResult.leftOrNull()
-        val pendingSymbol = expressionResult.getOrNull()
-
-        // no pending symbol -> expression fully resolved
-        if (expressionResultType != null) {
-            return expressionResultType
-        }
-
-        // pending symbol -> function/builtin call
-        val fnName = pendingSymbol!!.text
-        val arguments = mutableListOf<VeraType>()
-        for (exprData in chainedExpression.data) {
-            when (exprData) {
-                is VeraArguments -> arguments.addAll(processArguments(exprData))
-                is VeraMemberAccess -> TODO()
+        return when (val expressionResult = tryResolvePrimaryExpression(chainedExpression.primaryExpression)) {
+            is Left -> {
+                // expression fully resolved (literal, local, etc.)
+                if (chainedExpression.data.isNotEmpty()) {
+                    error("member access and call chains on resolved expressions are not supported yet")
+                }
+                expressionResult.value
             }
-        }
+            is Right -> {
+                // pending symbol -> function/builtin call
+                val fnName = expressionResult.value.text
+                val arguments = mutableListOf<VeraType>()
+                for (exprData in chainedExpression.data) {
+                    when (exprData) {
+                        is VeraArguments -> arguments.addAll(processArguments(exprData))
+                        is VeraMemberAccess -> TODO()
+                    }
+                }
 
-        val builtin = Builtin.from(fnName)
-        return if (builtin != null) {
-            processBuiltinCall(builtin, arguments)
-        } else {
-            val fnDeclaration = visibleFunctions[fnName] ?: error("function ${fnName.value} not found.")
-            jvmMethodBuilder.addInstruction(
-                Invokestatic(
-                    className,
-                    fnDeclaration.name,
-                    JvmMethodSignature(
-                        fnDeclaration.parameters.map { veraParameter -> JvmParameter(veraParameter.name, veraParameter.type.toJvmType()) },
-                        fnDeclaration.returnType.toJvmType()
+                val builtin = Builtin.from(fnName)
+                if (builtin != null) {
+                    processBuiltinCall(builtin, arguments)
+                } else {
+                    val fnDeclaration = visibleFunctions[fnName] ?: error("function ${fnName.value} not found.")
+                    jvmMethodBuilder.addInstruction(
+                        Invokestatic(
+                            className,
+                            fnDeclaration.name,
+                            JvmMethodSignature(
+                                fnDeclaration.parameters.map { veraParameter -> JvmParameter(veraParameter.name, veraParameter.type.toJvmType()) },
+                                fnDeclaration.returnType.toJvmType()
+                            )
+                        )
                     )
-                )
-            )
-            fnDeclaration.returnType
+                    fnDeclaration.returnType
+                }
+            }
         }
     }
 
     private fun processArguments(arguments: VeraArguments): List<VeraType> {
         val types = mutableListOf<VeraType>()
-        for (expression in arguments.expressions) {
-            types.add(processExpression(expression))
+        for (primary in arguments.expressions) {
+            types.add(processPrimaryExpression(primary))
         }
         return types
     }
@@ -233,7 +249,7 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
         }
     }
 
-    private fun processPrimaryExpression(primaryExpression: VeraPrimaryExpression): Either<VeraType, PendingSymbol> {
+    private fun tryResolvePrimaryExpression(primaryExpression: VeraPrimaryExpression): Either<VeraType, PendingSymbol> {
         return when (primaryExpression) {
             is VeraIntLiteral -> {
                 jvmMethodBuilder.addInstruction(
@@ -257,7 +273,7 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
             }
 
             is VeraIfExpression -> {
-                val conditionType = processExpression(primaryExpression.condition)
+                val conditionType = processPrimaryExpression(primaryExpression.condition)
                 if (conditionType != VeraType.BOOL) error("conditions must result in a bool")
 
                 val elseLabel = JvmLabel()
@@ -297,8 +313,13 @@ class JvmLowering(private val className: Identifier, private val visibleFunction
                 }
             }
 
-            is VeraExpression -> {
-                val type = processExpression(primaryExpression)
+            is VeraBinaryOperation -> {
+                Left(processBinaryOperation(primaryExpression))
+            }
+
+            is VeraChainedExpression -> {
+                // chained expressions are handled by processChainedExpression
+                val type = processChainedExpression(primaryExpression)
                 Left(type)
             }
         }

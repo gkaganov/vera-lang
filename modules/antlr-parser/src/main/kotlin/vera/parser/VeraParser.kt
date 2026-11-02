@@ -3,14 +3,15 @@ package vera.parser
 import arrow.core.NonEmptyList
 import org.antlr.v4.kotlinruntime.BufferedTokenStream
 import org.antlr.v4.kotlinruntime.CharStreams
+import org.antlr.v4.kotlinruntime.ParserRuleContext
+import org.antlr.v4.kotlinruntime.tree.TerminalNode
 import vera.antlr.VeraLexer
 import vera.antlr.VeraParser
-import vera.ast.InfixOperator
 import vera.ast.VeraArguments
+import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraChainedExpression
-import vera.ast.VeraChainedExpressionData
 import vera.ast.VeraDeclaration
 import vera.ast.VeraExpression
 import vera.ast.VeraFunctionDeclaration
@@ -19,6 +20,7 @@ import vera.ast.VeraIfExpression
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraLiteral
 import vera.ast.VeraMemberAccess
+import vera.ast.VeraOperator
 import vera.ast.VeraParameter
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraProgram
@@ -96,66 +98,146 @@ class VeraParser {
             val expression = returnStatement.expression()?.let { mapExpression(it) }
             VeraReturnStatement(expression)
         } else if (expression != null) {
-            val chainedExpression = VeraChainedExpression(mapExpression(expression))
-            val chainOperators = expression.infixOperator().map(::mapInfixOperator)
-            VeraExpression(NonEmptyList.of(chainedExpression), chainOperators)
+            VeraExpression(mapForwardApplication(expression.forwardApplication()))
         } else {
             error("unknown statement")
         }
     }
 
-    private fun mapInfixOperator(ctx: VeraParser.InfixOperatorContext): InfixOperator {
-        return when (ctx.text) {
-            ctx.PLUS()?.text -> InfixOperator.ADD
-            ctx.MINUS()?.text -> InfixOperator.SUBTRACT
-            ctx.MUL()?.text -> InfixOperator.MULTIPLY
-            ctx.DIV()?.text -> InfixOperator.DIVIDE
-            ctx.EQ()?.text -> InfixOperator.EQUALS
-            ctx.NEQ()?.text -> InfixOperator.NOT_EQUALS
-            else -> error("unknown infix operator ${ctx.text}")
+    private fun mapForwardApplication(ctx: VeraParser.ForwardApplicationContext): VeraPrimaryExpression {
+        val head = mapLogicalOr(ctx.logicalOr(0) ?: error("logicalOr required"))
+        val tails = ctx.logicalOr().drop(1)
+        val ops = ctx.PIPE().map { VeraOperator.PIPE }
+        return buildBinaryTree(head, ops, tails) { mapLogicalOr(it) }
+    }
+
+    private fun mapLogicalOr(ctx: VeraParser.LogicalOrContext): VeraPrimaryExpression {
+        val head = mapLogicalAnd(ctx.logicalAnd(0) ?: error("logicalAnd required"))
+        val tails = ctx.logicalAnd().drop(1)
+        val ops = ctx.OR().map { VeraOperator.OR }
+        return buildBinaryTree(head, ops, tails) { mapLogicalAnd(it) }
+    }
+
+    private fun mapLogicalAnd(ctx: VeraParser.LogicalAndContext): VeraPrimaryExpression {
+        val head = mapEquality(ctx.equality(0) ?: error("equality required"))
+        val tails = ctx.equality().drop(1)
+        val ops = ctx.AND().map { VeraOperator.AND }
+        return buildBinaryTree(head, ops, tails) { mapEquality(it) }
+    }
+
+    private fun mapEquality(ctx: VeraParser.EqualityContext): VeraPrimaryExpression {
+        val head = mapComparison(ctx.comparison(0) ?: error("comparison required"))
+        val tails = ctx.comparison().drop(1)
+        val ops = operatorsInSourceOrder(ctx)
+        return buildBinaryTree(head, ops, tails) { mapComparison(it) }
+    }
+
+    private fun mapComparison(ctx: VeraParser.ComparisonContext): VeraPrimaryExpression {
+        val head = mapAdditive(ctx.additive(0) ?: error("additive required"))
+        val tails = ctx.additive().drop(1)
+        val ops = operatorsInSourceOrder(ctx)
+        return buildBinaryTree(head, ops, tails) { mapAdditive(it) }
+    }
+
+    private fun mapAdditive(ctx: VeraParser.AdditiveContext): VeraPrimaryExpression {
+        val head = mapMultiplicative(ctx.multiplicative(0) ?: error("multiplicative required"))
+        val tails = ctx.multiplicative().drop(1)
+        val ops = operatorsInSourceOrder(ctx)
+        return buildBinaryTree(head, ops, tails) { mapMultiplicative(it) }
+    }
+
+    private fun mapMultiplicative(ctx: VeraParser.MultiplicativeContext): VeraPrimaryExpression {
+        val head = mapChainedPrimary(ctx.chainedPrimary(0) ?: error("chainedPrimary required"))
+        val tails = ctx.chainedPrimary().drop(1)
+        val ops = operatorsInSourceOrder(ctx)
+        return buildBinaryTree(head, ops, tails) { mapChainedPrimary(it) }
+    }
+
+    /**
+     * Operators of a binary-expression context in source order. Each precedence level's
+     * context contains only that level's operator tokens interleaved with operands, so
+     * filtering direct terminal children preserves the original left-to-right order
+     * (collecting per-token-kind lists would lose it).
+     */
+    private fun operatorsInSourceOrder(ctx: ParserRuleContext): List<VeraOperator> {
+        return ctx.children.orEmpty()
+            .filterIsInstance<TerminalNode>()
+            .mapNotNull { tokenOperators[it.symbol.type] }
+    }
+
+    private val tokenOperators: Map<Int, VeraOperator> = mapOf(
+        VeraParser.Tokens.EQ to VeraOperator.EQUALS,
+        VeraParser.Tokens.NEQ to VeraOperator.NOT_EQUALS,
+        VeraParser.Tokens.LT to VeraOperator.LESS,
+        VeraParser.Tokens.GT to VeraOperator.GREATER,
+        VeraParser.Tokens.LTE to VeraOperator.LESS_EQ,
+        VeraParser.Tokens.GTE to VeraOperator.GREATER_EQ,
+        VeraParser.Tokens.PLUS to VeraOperator.ADD,
+        VeraParser.Tokens.MINUS to VeraOperator.SUBTRACT,
+        VeraParser.Tokens.STAR to VeraOperator.MULTIPLY,
+        VeraParser.Tokens.SLASH to VeraOperator.DIVIDE,
+        VeraParser.Tokens.PERCENT to VeraOperator.PERCENT,
+    )
+
+    private fun <T> buildBinaryTree(
+        head: VeraPrimaryExpression,
+        operators: List<VeraOperator>,
+        tails: List<T>,
+        mapTail: (T) -> VeraPrimaryExpression,
+    ): VeraPrimaryExpression {
+        if (operators.size != tails.size) {
+            error("the number of operators (${operators.size}) and operands (${tails.size + 1}) must match")
+        }
+        return tails.foldIndexed(head) { index, acc, tail ->
+            VeraBinaryOperation(
+                left = acc,
+                operator = operators[index],
+                right = mapTail(tail)
+            )
         }
     }
 
-    private fun mapExpression(ctx: VeraParser.ExpressionContext): VeraExpression {
-        val headChainedExpression = mapChainedExpression(ctx.chainedExpression(0) ?: error("firstChainedExpression is always present"))
-        val tailChainedExpressions = ctx.chainedExpression().drop(1).map(::mapChainedExpression)
-        val chainedExpressions = NonEmptyList.of(headChainedExpression, *tailChainedExpressions.toTypedArray())
-        val operators = ctx.infixOperator().map(::mapInfixOperator)
-        return VeraExpression(chainedExpressions, operators)
-    }
-
-    private fun mapChainedExpression(ctx: VeraParser.ChainedExpressionContext): VeraChainedExpression {
-        val primaryExpression = mapPrimaryExpression(ctx.primaryExpression())
-        val data = ctx.children?.mapNotNull { child ->
-            when (child) {
-                is VeraParser.MemberAccessContext -> VeraMemberAccess(Identifier(child.name?.text ?: error("member access name null")))
-                is VeraParser.ArgumentListContext -> VeraArguments(child.arguments()?.expression()?.map { expr -> mapExpression(expr) }.orEmpty())
-                else -> null
-            }
-        }.orEmpty()
-        return VeraChainedExpression(primaryExpression, data)
-    }
-
-    private fun mapPrimaryExpression(ctx: VeraParser.PrimaryExpressionContext): VeraPrimaryExpression {
+    private fun mapPrimary(ctx: VeraParser.PrimaryContext): VeraPrimaryExpression {
         val literal = ctx.literal()
         val identifier = ctx.IDENTIFIER()
         val ifExpression = ctx.ifExpression()
-        val expression = ctx.expression()
-        return if (literal != null) {
-            mapLiteral(literal)
-        } else if (identifier != null) {
-            VeraIdentifierAsExpression(Identifier(identifier.text))
-        } else if (expression != null) {
-            mapExpression(expression)
-        } else if (ifExpression != null) {
-            VeraIfExpression(
-                mapExpression(ifExpression.condition ?: error("condition in if expression must be present")),
-                NonEmptyList.of(ifExpression.thenBranch?.statement()?.map(::mapStatement) ?: error("thenBlock must exist")),
-                ifExpression.elseBranch?.statement()?.map(::mapStatement).orEmpty(),
+        val parenExpr = ctx.expression()
+        return when {
+            literal != null -> mapLiteral(literal)
+            identifier != null -> VeraIdentifierAsExpression(Identifier(identifier.text))
+            parenExpr != null -> mapForwardApplication(parenExpr.forwardApplication())
+            ifExpression != null -> VeraIfExpression(
+                condition = mapForwardApplication(
+                    ifExpression.condition?.forwardApplication() ?: error("condition in if expression must be present")
+                ),
+                thenBlock = NonEmptyList.of(ifExpression.thenBranch?.statement()?.map(::mapStatement) ?: error("thenBlock must exist")),
+                elseBlock = ifExpression.elseBranch?.statement()?.map(::mapStatement).orEmpty(),
             )
-        } else {
-            error("unknown chainedExpression")
+            else -> error("unknown primary expression")
         }
+    }
+
+    private fun mapChainedPrimary(ctx: VeraParser.ChainedPrimaryContext): VeraPrimaryExpression {
+        val base = mapPrimary(ctx.primary())
+        val data = ctx.children?.mapNotNull { child ->
+            when (child) {
+                is VeraParser.MemberAccessContext -> VeraMemberAccess(Identifier(child.name?.text ?: error("member access name null")))
+                is VeraParser.ArgumentListContext -> VeraArguments(
+                    child.arguments()?.expression()?.map { expr -> mapForwardApplication(expr.forwardApplication()) }.orEmpty()
+                )
+                else -> null
+            }
+        } ?: emptyList()
+        return if (data.isEmpty()) {
+            base
+        } else {
+            VeraChainedExpression(base, data)
+        }
+    }
+
+    /** Wraps an expression parse-tree node in the statement-level [VeraExpression] AST node. */
+    private fun mapExpression(ctx: VeraParser.ExpressionContext): VeraExpression {
+        return VeraExpression(mapForwardApplication(ctx.forwardApplication()))
     }
 
     private fun mapLiteral(ctx: VeraParser.LiteralContext): VeraLiteral {

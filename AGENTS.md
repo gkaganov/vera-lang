@@ -74,7 +74,7 @@ Key methods in `JvmLowering`:
 
 ### Naming
 
-- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
+- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
 - **All IR types** use the `JvmIr.` namespace prefix (e.g., `JvmIr.ReturnStatement`, `JvmIr.Program`, `JvmIr.Expression`)
 - JVM types: standard JVM naming (e.g., `VeraMain`, `VeraApp`)
 
@@ -91,13 +91,15 @@ Layout-sensitive, EOL-based statement termination. Key constructs:
 - Variables: `var name = expr`
 - Assignment: `name = expr`
 - Control flow: `if`, `while`, `for`
-- Operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`
+- Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
+- `and` and `or` are reserved keywords and cannot be used as identifiers
 - Built-in: `print`
 
 ## Known TODOs
 
-- **VeraRebindStatement** (`x := newValue`): `JvmLowering.kt:109` — `TODO()` stub
-- **VeraMemberAccess**: `JvmLowering.kt:195` — `TODO()` stub for member access / field access
+- **VeraRebindStatement** (`x := newValue`): `JvmLowering.processStatement` — `TODO()` stub
+- **VeraMemberAccess**: `JvmLowering.processChainedExpression` — `TODO()` stub for member access / field access
+- **Logical and forward-application operators** (`and`, `or`, `|`): parser/AST support exists, but `JvmLowering.processBinaryOperation` rejects them
 
 ## Run / Debug
 
