@@ -72,6 +72,10 @@ Key methods in `JvmLowering`:
 - Tests in `compiler-tests` module are **integration tests** — they compile Vera code, load it via a custom classloader, execute, and compare stdout
 - Test naming: `test_<scenario>_<detail>`
 
+### Git
+
+- Commit messages describe **what was done** in past tense (e.g. `added operator precedence`), not imperative instructions (e.g. `add operator precedence`)
+
 ### Naming
 
 - **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
