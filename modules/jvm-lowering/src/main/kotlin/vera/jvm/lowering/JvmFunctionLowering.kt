@@ -21,6 +21,7 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraWhileStatement
 import vera.jvm.ir.ComparisonOperator
 import vera.jvm.ir.IntBinaryOperator
 import vera.jvm.ir.JvmBuiltin
@@ -45,6 +46,7 @@ import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmVarDeclaration
+import vera.jvm.ir.JvmWhile
 import vera.shared.model.Identifier
 
 @JvmInline private value class PendingSymbol(val identifier: Identifier)
@@ -118,8 +120,21 @@ private class JvmFunctionLoweringState(
                 LoweredStatement(JvmReturn(jvmReturnExpression), true)
             }
 
+            is VeraWhileStatement -> {
+                LoweredStatement(lowerWhileStatement(veraStatement), false)
+            }
+
             is VeraRebindStatement -> TODO()
         }
+    }
+
+    private fun lowerWhileStatement(veraWhileStatement: VeraWhileStatement): JvmStatement {
+        val jvmCondition = lowerPrimaryExpression(veraWhileStatement.condition)
+        if (jvmCondition.type != JvmType.BOOL) error("conditions must result in a bool")
+        val jvmBody = veraWhileStatement.body.map { veraStatement ->
+            lowerStatement(veraStatement).jvmStatement
+        }
+        return JvmWhile(jvmCondition, jvmBody)
     }
 
     private fun lowerBindStatement(veraBindStatement: VeraBindStatement): JvmStatement {

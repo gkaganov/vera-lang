@@ -341,6 +341,49 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `while with a false condition skips its body`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        while False {
+                            print("body")
+                        }
+                        print("after")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "after$EOL", testInfo)
+    }
+
+    @Test
+    fun `while executes its body when the condition is true`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        while 1 + 1 < 3 {
+                            print("once")
+                            return
+                        }
+                        print("after")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "once$EOL", testInfo)
+    }
+
+    @Test
+    fun `while blocks allow blank lines`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        while True {
+
+                            print("once")
+
+                            return
+
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "once$EOL", testInfo)
+    }
+
+    @Test
     fun `equals compares Ints correctly`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

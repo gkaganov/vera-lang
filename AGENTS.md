@@ -110,12 +110,13 @@ between compilations.
 
 ### Naming
 
-- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
+- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraWhileStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
 - **All structured IR types** use the `Jvm` prefix and live in `vera.jvm.ir` (e.g., `JvmProgram`, `JvmReturn`, `JvmExpression`)
 - **Flat instruction IR types** live in `vera.jvm.instruction` and are unprefixed (e.g., `GetStatic`, `InvokeVirtual`, `JvmInstructionProgram`)
-- **Local variable names mirror their layer**: AST-derived values use `vera*` (e.g., `veraFunction`, `veraPrimaryExpression`, `veraType`), while IR/JVM-derived and lowering-time values use `jvm*` (e.g., `jvmMethodBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`). Short scalar names (`index`, `builtin`) may omit the prefix when the layer is unambiguous. Prefer precise nouns over prefix-only names: `JvmLocalBinding`, not `JvmLocal`, because `JvmLocal` would be confused with `LocalTable.Local`.
+- **Local variable names mirror their layer**: AST-derived values use `vera*` (e.g., `veraFunction`, `veraPrimaryExpression`, `veraType`), while IR/JVM-derived and lowering-time values use `jvm*` (e.g., `jvmBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`). Short scalar names (`index`, `builtin`) may omit the prefix when the layer is unambiguous. Prefer precise nouns over prefix-only names: `JvmLocalBinding`, not `JvmLocal`, because `JvmLocal` would be confused with `LocalTable.Local`.
 - **Lowering state classes** keep the full pipeline prefix: `JvmFunctionLoweringState`, not `FunctionLoweringState`.
-- **Lowering methods use consistent verb families**: `lower*` for all AST-to-IR lowering (including helpers that append IR instructions), `validate*`/`require*` for operand checks, and `tryLower*` when returning `Either`. Reserve `emit*` for actual JVM bytecode generation in `JvmBytecodeEmitter`.
+- **Lowering methods use consistent verb families**: `lower*` for all AST-to-IR and structured-to-instruction lowering, `validate*`/`require*` for operand checks, and `tryLower*` when returning `Either`. Use the `append(...)` helper (or the method builder) to add one flat IR instruction.
+- **`emit*` means produce JVM bytecode**, not append IR. Reserve `emit*` for `JvmBytecodeEmitter` and other actual bytecode-generation code.
 - JVM types: standard JVM naming (e.g., `VeraMain`, `VeraApp`)
 
 ### AGENTS.md
@@ -138,7 +139,7 @@ Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`
 - Assignment: `name = expr`
-- Control flow: `if`, `while`, `for`
+- Control flow: `if`, `while` (`for` is not implemented yet)
 - Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
 - `and` and `or` are short-circuiting Bool operators and are reserved keywords
 - `|` is forward application: `value | f` lowers to `f(value)`

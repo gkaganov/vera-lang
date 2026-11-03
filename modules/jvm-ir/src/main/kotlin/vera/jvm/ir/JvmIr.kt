@@ -113,3 +113,5 @@ data class JvmAssign(val local: JvmLocal, val expression: JvmExpression) : JvmSt
 data class JvmRebind(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
 
 data class JvmExpressionStatement(val expression: JvmExpression) : JvmStatement
+
+data class JvmWhile(val condition: JvmExpression, val body: List<JvmStatement>) : JvmStatement

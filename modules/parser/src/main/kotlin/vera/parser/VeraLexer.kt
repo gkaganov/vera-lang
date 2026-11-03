@@ -149,6 +149,7 @@ private class LexerState(private val source: String) {
             "fn" to TokenType.FN,
             "if" to TokenType.IF,
             "else" to TokenType.ELSE,
+            "while" to TokenType.WHILE,
             "var" to TokenType.VAR,
             "val" to TokenType.VAL,
             "return" to TokenType.RETURN,

@@ -25,8 +25,9 @@ import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmVarDeclaration
-import vera.jvm.ir.JvmBoolLiteral
+import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmAssign
+import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.instruction.BindLabel
 import vera.jvm.instruction.CreateLabel
 import vera.jvm.instruction.GetStatic
@@ -35,6 +36,7 @@ import vera.jvm.instruction.IntBinaryOperation
 import vera.jvm.instruction.IntComparisonJumpTo
 import vera.jvm.instruction.InvokeVirtual
 import vera.jvm.instruction.Invokestatic
+import vera.jvm.instruction.JvmInstruction
 import vera.jvm.instruction.JvmInstructionClass
 import vera.jvm.instruction.JvmInstructionMethod
 import vera.jvm.instruction.JvmInstructionMethodBuilder
@@ -57,7 +59,7 @@ object JvmInstructionLowering {
 private class JvmInstructionLoweringState {
 
     private val jvmLocalSlots = mutableMapOf<JvmLocal, LocalTable.Local>()
-    private lateinit var jvmMethodBuilder: JvmInstructionMethodBuilder
+    private lateinit var jvmBuilder: JvmInstructionMethodBuilder
 
     fun lower(jvmProgram: JvmProgram): JvmInstructionProgram {
         val instructionClasses = jvmProgram.classes.map { jvmClass -> lowerClass(jvmClass) }
@@ -71,7 +73,7 @@ private class JvmInstructionLoweringState {
 
     private fun lowerMethod(jvmMethod: JvmMethod): JvmInstructionMethod {
         jvmLocalSlots.clear()
-        jvmMethodBuilder = JvmInstructionMethodBuilder(
+        jvmBuilder = JvmInstructionMethodBuilder(
             jvmMethod.name,
             jvmMethod.parameters,
             jvmMethod.returnType,
@@ -79,11 +81,11 @@ private class JvmInstructionLoweringState {
 
         jvmMethod.parameters.forEachIndexed { index, jvmParameter ->
             jvmLocalSlots[JvmLocal(jvmParameter.name, jvmParameter.type)] =
-                jvmMethodBuilder.parameterLocal(index)
+                jvmBuilder.parameterLocal(index)
         }
 
         jvmMethod.body.forEach { jvmStatement -> lowerStatement(jvmStatement) }
-        return jvmMethodBuilder.build()
+        return jvmBuilder.build()
     }
 
     private fun lowerStatement(jvmStatement: JvmStatement) {
@@ -92,14 +94,14 @@ private class JvmInstructionLoweringState {
                 val jvmReturnType = jvmStatement.expression
                     ?.let { jvmExpression -> lowerExpression(jvmExpression) }
                     ?: JvmType.VOID
-                jvmMethodBuilder.addInstruction(Return(jvmReturnType))
+                append(Return(jvmReturnType))
             }
 
             is JvmVarDeclaration -> {
                 lowerExpression(jvmStatement.expression)
-                val jvmLocal = jvmMethodBuilder.allocateLocal(jvmStatement.local.type)
+                val jvmLocal = jvmBuilder.allocateLocal(jvmStatement.local.type)
                 jvmLocalSlots[jvmStatement.local] = jvmLocal
-                jvmMethodBuilder.addInstruction(StoreLocal(jvmLocal))
+                append(StoreLocal(jvmLocal))
             }
 
             is JvmAssign -> TODO()
@@ -108,37 +110,55 @@ private class JvmInstructionLoweringState {
             is JvmExpressionStatement -> {
                 lowerExpression(jvmStatement.expression)
             }
+
+            is JvmWhile -> {
+                lowerWhile(jvmStatement)
+            }
         }
+    }
+
+    private fun lowerWhile(jvmWhile: JvmWhile) {
+        val jvmConditionLabel = JvmLabel()
+        val jvmEndLabel = JvmLabel()
+
+        createLabel(jvmConditionLabel)
+        createLabel(jvmEndLabel)
+        bindLabel(jvmConditionLabel)
+        lowerExpression(jvmWhile.condition)
+        jumpIfFalse(jvmEndLabel)
+        jvmWhile.body.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jump(jvmConditionLabel)
+        bindLabel(jvmEndLabel)
     }
 
     private fun lowerExpression(jvmExpression: JvmExpression): JvmType {
         return when (jvmExpression) {
             is JvmIntLiteral -> {
-                jvmMethodBuilder.addInstruction(LoadConstant(JvmType.INT, jvmExpression.value))
+                append(LoadConstant(JvmType.INT, jvmExpression.value))
                 JvmType.INT
             }
 
             is JvmStringLiteral -> {
-                jvmMethodBuilder.addInstruction(LoadConstant(JvmType.STRING, jvmExpression.value))
+                append(LoadConstant(JvmType.STRING, jvmExpression.value))
                 JvmType.STRING
             }
 
             is JvmBoolLiteral -> {
-                jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, jvmExpression.value))
+                append(LoadConstant(JvmType.BOOL, jvmExpression.value))
                 JvmType.BOOL
             }
 
             is JvmLocalRead -> {
                 val jvmLocal = jvmLocalSlots[jvmExpression.local]
                     ?: error("local ${jvmExpression.local.name.value} is not defined")
-                jvmMethodBuilder.addInstruction(LoadLocal(jvmLocal))
+                append(LoadLocal(jvmLocal))
                 jvmLocal.jvmType
             }
 
             is JvmIntBinary -> {
                 lowerExpression(jvmExpression.left)
                 lowerExpression(jvmExpression.right)
-                jvmMethodBuilder.addInstruction(IntBinaryOperation(jvmExpression.operator))
+                append(IntBinaryOperation(jvmExpression.operator))
                 JvmType.INT
             }
 
@@ -161,7 +181,7 @@ private class JvmInstructionLoweringState {
 
             is JvmStaticCall -> {
                 jvmExpression.arguments.forEach { jvmArgument -> lowerExpression(jvmArgument) }
-                jvmMethodBuilder.addInstruction(
+                append(
                     Invokestatic(
                         jvmExpression.ownerClass,
                         jvmExpression.methodName,
@@ -183,73 +203,73 @@ private class JvmInstructionLoweringState {
     }
 
     private fun lowerComparison(jvmOperator: ComparisonOperator) {
-        val jvmResultLocal = jvmMethodBuilder.allocateLocal(JvmType.BOOL)
+        val jvmResultLocal = jvmBuilder.allocateLocal(JvmType.BOOL)
         val jvmTrueLabel = JvmLabel()
         val jvmEndLabel = JvmLabel()
 
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmTrueLabel))
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(IntComparisonJumpTo(jvmOperator, jvmTrueLabel))
-        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, false))
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
-        jvmMethodBuilder.addInstruction(JumpTo(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(BindLabel(jvmTrueLabel))
-        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, true))
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
-        jvmMethodBuilder.addInstruction(BindLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(LoadLocal(jvmResultLocal))
+        createLabel(jvmTrueLabel)
+        createLabel(jvmEndLabel)
+        jumpIfIntComparison(jvmOperator, jvmTrueLabel)
+        append(LoadConstant(JvmType.BOOL, false))
+        append(StoreLocal(jvmResultLocal))
+        jump(jvmEndLabel)
+        bindLabel(jvmTrueLabel)
+        append(LoadConstant(JvmType.BOOL, true))
+        append(StoreLocal(jvmResultLocal))
+        bindLabel(jvmEndLabel)
+        append(LoadLocal(jvmResultLocal))
     }
 
     private fun lowerLogicalAnd(jvmExpression: JvmLogicalAnd) {
-        val jvmResultLocal = jvmMethodBuilder.allocateLocal(JvmType.BOOL)
+        val jvmResultLocal = jvmBuilder.allocateLocal(JvmType.BOOL)
         val jvmFalseLabel = JvmLabel()
         val jvmEndLabel = JvmLabel()
 
         lowerExpression(jvmExpression.left)
 
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmFalseLabel))
-        jvmMethodBuilder.addInstruction(IfFalseJumpTo(jvmFalseLabel))
+        createLabel(jvmFalseLabel)
+        jumpIfFalse(jvmFalseLabel)
 
         lowerExpression(jvmExpression.right)
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(JumpTo(jvmEndLabel))
+        append(StoreLocal(jvmResultLocal))
+        createLabel(jvmEndLabel)
+        jump(jvmEndLabel)
 
-        jvmMethodBuilder.addInstruction(BindLabel(jvmFalseLabel))
-        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, false))
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
+        bindLabel(jvmFalseLabel)
+        append(LoadConstant(JvmType.BOOL, false))
+        append(StoreLocal(jvmResultLocal))
 
-        jvmMethodBuilder.addInstruction(BindLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(LoadLocal(jvmResultLocal))
+        bindLabel(jvmEndLabel)
+        append(LoadLocal(jvmResultLocal))
     }
 
     private fun lowerLogicalOr(jvmExpression: JvmLogicalOr) {
-        val jvmResultLocal = jvmMethodBuilder.allocateLocal(JvmType.BOOL)
+        val jvmResultLocal = jvmBuilder.allocateLocal(JvmType.BOOL)
         val jvmRightLabel = JvmLabel()
         val jvmEndLabel = JvmLabel()
 
         lowerExpression(jvmExpression.left)
 
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmRightLabel))
-        jvmMethodBuilder.addInstruction(IfFalseJumpTo(jvmRightLabel))
-        jvmMethodBuilder.addInstruction(LoadConstant(JvmType.BOOL, true))
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(JumpTo(jvmEndLabel))
+        createLabel(jvmRightLabel)
+        jumpIfFalse(jvmRightLabel)
+        append(LoadConstant(JvmType.BOOL, true))
+        append(StoreLocal(jvmResultLocal))
+        createLabel(jvmEndLabel)
+        jump(jvmEndLabel)
 
-        jvmMethodBuilder.addInstruction(BindLabel(jvmRightLabel))
+        bindLabel(jvmRightLabel)
         lowerExpression(jvmExpression.right)
-        jvmMethodBuilder.addInstruction(StoreLocal(jvmResultLocal))
+        append(StoreLocal(jvmResultLocal))
 
-        jvmMethodBuilder.addInstruction(BindLabel(jvmEndLabel))
-        jvmMethodBuilder.addInstruction(LoadLocal(jvmResultLocal))
+        bindLabel(jvmEndLabel)
+        append(LoadLocal(jvmResultLocal))
     }
 
     private fun lowerBuiltinCall(jvmBuiltinCall: JvmBuiltinCall): JvmType {
         return when (jvmBuiltinCall.builtin) {
             JvmBuiltin.PRINT -> {
                 if (jvmBuiltinCall.arguments.size != 1) error("print requires exactly 1 argument")
-                jvmMethodBuilder.addInstruction(
+                append(
                     GetStatic(
                         Identifier("java.lang.System"),
                         Identifier("out"),
@@ -258,7 +278,7 @@ private class JvmInstructionLoweringState {
                     )
                 )
                 val jvmArgumentType = lowerExpression(jvmBuiltinCall.arguments.first())
-                jvmMethodBuilder.addInstruction(
+                append(
                     InvokeVirtual(
                         Identifier("java.io.PrintStream"),
                         Identifier("println"),
@@ -277,22 +297,36 @@ private class JvmInstructionLoweringState {
         lowerExpression(jvmIfExpression.condition)
 
         val jvmElseLabel = JvmLabel()
-        jvmMethodBuilder.addInstruction(CreateLabel(jvmElseLabel))
-        jvmMethodBuilder.addInstruction(IfFalseJumpTo(jvmElseLabel))
+        createLabel(jvmElseLabel)
+        jumpIfFalse(jvmElseLabel)
         jvmIfExpression.thenBlock.forEach { jvmStatement -> lowerStatement(jvmStatement) }
 
         if (jvmIfExpression.elseBlock.isEmpty()) {
-            jvmMethodBuilder.addInstruction(BindLabel(jvmElseLabel))
+            bindLabel(jvmElseLabel)
         } else {
             val jvmEndLabel = JvmLabel()
-            jvmMethodBuilder.addInstruction(CreateLabel(jvmEndLabel))
-            jvmMethodBuilder.addInstruction(JumpTo(jvmEndLabel))
+            createLabel(jvmEndLabel)
+            jump(jvmEndLabel)
 
-            jvmMethodBuilder.addInstruction(BindLabel(jvmElseLabel))
+            bindLabel(jvmElseLabel)
             jvmIfExpression.elseBlock.forEach { jvmStatement -> lowerStatement(jvmStatement) }
 
-            jvmMethodBuilder.addInstruction(BindLabel(jvmEndLabel))
+            bindLabel(jvmEndLabel)
         }
     }
 
+    private fun append(jvmInstruction: JvmInstruction) {
+        jvmBuilder.addInstruction(jvmInstruction)
+    }
+
+    private fun createLabel(jvmLabel: JvmLabel) = append(CreateLabel(jvmLabel))
+
+    private fun bindLabel(jvmLabel: JvmLabel) = append(BindLabel(jvmLabel))
+
+    private fun jump(jvmLabel: JvmLabel) = append(JumpTo(jvmLabel))
+
+    private fun jumpIfFalse(jvmLabel: JvmLabel) = append(IfFalseJumpTo(jvmLabel))
+
+    private fun jumpIfIntComparison(jvmOperator: ComparisonOperator, jvmLabel: JvmLabel) =
+        append(IntComparisonJumpTo(jvmOperator, jvmLabel))
 }

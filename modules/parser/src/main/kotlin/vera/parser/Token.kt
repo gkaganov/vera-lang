@@ -5,6 +5,7 @@ enum class TokenType {
     FN,
     IF,
     ELSE,
+    WHILE,
     VAR,
     VAL,
     RETURN,

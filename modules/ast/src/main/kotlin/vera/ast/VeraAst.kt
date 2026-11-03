@@ -12,6 +12,7 @@ sealed interface VeraStatement
 data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
 data class VeraRebindStatement(val name: Identifier, val expression: VeraExpression) : VeraStatement
 data class VeraReturnStatement(val expression: VeraExpression?) : VeraStatement
+data class VeraWhileStatement(val condition: VeraPrimaryExpression, val body: List<VeraStatement>) : VeraStatement
 data class VeraExpression(val expression: VeraPrimaryExpression) : VeraStatement
 
 data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, val data: List<VeraChainedExpressionData> = emptyList()) : VeraPrimaryExpression

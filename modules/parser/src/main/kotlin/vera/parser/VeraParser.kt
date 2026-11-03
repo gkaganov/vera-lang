@@ -23,6 +23,7 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraWhileStatement
 import vera.shared.model.Identifier
 
 object VeraParser {
@@ -112,6 +113,7 @@ private class ParserState(private val tokens: List<Token>) {
             at(TokenType.VAR) || at(TokenType.VAL) -> parseBindStatement()
             at(TokenType.IDENTIFIER) && peek(1).type == TokenType.REBIND -> parseRebindStatement()
             at(TokenType.RETURN) -> parseReturnStatement()
+            at(TokenType.WHILE) -> parseWhileStatement()
             else -> VeraExpression(parseExpression())
         }
         parseStatementTerminator()
@@ -145,6 +147,13 @@ private class ParserState(private val tokens: List<Token>) {
             VeraExpression(parseExpression())
         }
         return VeraReturnStatement(expression)
+    }
+
+    private fun parseWhileStatement(): VeraWhileStatement {
+        expect(TokenType.WHILE)
+        val condition = parseExpression()
+        val body = parseBlock()
+        return VeraWhileStatement(condition, body)
     }
 
     private fun parseStatementTerminator() {
