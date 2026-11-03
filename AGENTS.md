@@ -130,6 +130,10 @@ The parser is recursive-descent. `VeraCompiler` invokes `VeraLexer` to produce t
 including significant `EOL` tokens, then passes them to `VeraParser`, which implements one
 method per precedence level. Newlines terminate statements.
 
+Blank lines and extra `EOL` tokens are ignored at block boundaries and between a closing
+`}` and `else`, so empty lines inside blocks and before `else` are valid. CRLF is normalized
+to a single `EOL` token by the lexer.
+
 Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`

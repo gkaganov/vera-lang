@@ -28,6 +28,7 @@ Authoritative details live in repo `AGENTS.md`; update it when changing conventi
 
 ## Parser / language
 - Recursive-descent parser; significant `EOL` tokens terminate statements.
+- Blank lines/extra EOLs are ignored at block boundaries and between `}` and `else`; CRLF is normalized to one EOL.
 - Precedence low->high: `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and`/`or` are short-circuiting Bool keywords; `|` is forward application; `print` is built-in.
 

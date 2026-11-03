@@ -219,6 +219,128 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `blank lines inside if blocks are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if True {
+
+                            print("then")
+
+                        } else {
+
+                            print("else")
+
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "then$EOL", testInfo)
+    }
+
+    @Test
+    fun `blank lines before else are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("then")
+                        }
+
+
+                        else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "else$EOL", testInfo)
+    }
+
+    @Test
+    fun `newline before else is ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if True {
+                            print("then")
+                        }
+                        else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "then$EOL", testInfo)
+    }
+
+    @Test
+    fun `if without else still terminates before following statement`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("then")
+                        }
+
+                        print("after")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "after$EOL", testInfo)
+    }
+
+    @Test
+    fun `blank lines between statements are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1)
+
+
+                        print(2)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1${EOL}2${EOL}", testInfo)
+    }
+
+    @Test
+    fun `blank lines at function block edges are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+
+                        print(1)
+
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1$EOL", testInfo)
+    }
+
+    @Test
+    fun `blank lines between function declarations are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print1()
+
+                        print2()
+                    }
+
+                    fn print1() {
+                        print(1)
+                    }
+
+
+                    fn print2() {
+                        print(2)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1${EOL}2${EOL}", testInfo)
+    }
+
+    @Test
+    fun `blank lines with crlf line endings are ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+
+                        print(1)
+
+                    }
+                """.trimIndent().replace("\n", "\r\n")
+        assertProgramPrints(source, "1$EOL", testInfo)
+    }
+
+    @Test
     fun `equals compares Ints correctly`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
