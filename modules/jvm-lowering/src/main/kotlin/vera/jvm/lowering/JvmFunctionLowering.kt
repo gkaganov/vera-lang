@@ -40,6 +40,7 @@ import vera.jvm.ir.JvmLogicalOr
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmParameter
+import vera.jvm.ir.JvmRebind
 import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStatement
@@ -124,7 +125,9 @@ private class JvmFunctionLoweringState(
                 LoweredStatement(lowerWhileStatement(veraStatement), false)
             }
 
-            is VeraRebindStatement -> TODO()
+            is VeraRebindStatement -> {
+                LoweredStatement(lowerRebindStatement(veraStatement), false)
+            }
         }
     }
 
@@ -135,6 +138,16 @@ private class JvmFunctionLoweringState(
             lowerStatement(veraStatement).jvmStatement
         }
         return JvmWhile(jvmCondition, jvmBody)
+    }
+
+    private fun lowerRebindStatement(veraRebindStatement: VeraRebindStatement): JvmStatement {
+        val jvmLocal = jvmLocals[veraRebindStatement.name]
+            ?: error("variable ${veraRebindStatement.name.value} is not defined")
+        val jvmExpression = lowerExpression(veraRebindStatement.expression)
+        if (jvmExpression.type != jvmLocal.type) {
+            error("cannot rebind variable ${jvmLocal.name.value} of type ${jvmLocal.type} to ${jvmExpression.type}")
+        }
+        return JvmRebind(jvmLocal, jvmExpression)
     }
 
     private fun lowerBindStatement(veraBindStatement: VeraBindStatement): JvmStatement {

@@ -108,8 +108,6 @@ data class JvmReturn(val expression: JvmExpression?) : JvmStatement
 
 data class JvmVarDeclaration(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
 
-data class JvmAssign(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
-
 data class JvmRebind(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
 
 data class JvmExpressionStatement(val expression: JvmExpression) : JvmStatement

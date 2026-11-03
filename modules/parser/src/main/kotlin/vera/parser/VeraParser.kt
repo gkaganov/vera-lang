@@ -111,7 +111,7 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseStatement(): VeraStatement {
         val statement = when {
             at(TokenType.VAR) || at(TokenType.VAL) -> parseBindStatement()
-            at(TokenType.IDENTIFIER) && peek(1).type == TokenType.REBIND -> parseRebindStatement()
+            at(TokenType.IDENTIFIER) && peek(1).type == TokenType.BIND -> parseRebindStatement()
             at(TokenType.RETURN) -> parseReturnStatement()
             at(TokenType.WHILE) -> parseWhileStatement()
             else -> VeraExpression(parseExpression())
@@ -131,7 +131,7 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun parseRebindStatement(): VeraRebindStatement {
         val name = expect(TokenType.IDENTIFIER, "variable name")
-        expect(TokenType.REBIND)
+        expect(TokenType.BIND)
         if (at(TokenType.LBRACE)) {
             // The AST has no representation for update blocks yet.
             error("rebind update blocks are not supported")

@@ -33,10 +33,10 @@ Authoritative details live in repo `AGENTS.md`; update it when changing conventi
 - Precedence low->high: `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and`/`or` are short-circuiting Bool keywords; `|` is forward application; `print` is built-in.
 - `while` is a statement (`VeraWhileStatement`): `while <Bool condition> { body }`; it lowers to `JvmWhile` and then a condition-label/body/jump-back/end-label CFG. `for` is not implemented.
+- Rebinding is `name = expr` (`VeraRebindStatement` -> `JvmRebind` -> `StoreLocal`). The old `:=` operator was removed.
 
 ## Git
 - Commit messages describe what was done in past tense (e.g. `added operator precedence`).
 
 ## Known TODOs
-- `VeraRebindStatement` lowering is `TODO()`.
 - `VeraMemberAccess` lowering is `TODO()`.

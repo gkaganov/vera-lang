@@ -384,6 +384,65 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `variables can be rebound with equals`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var value = 1
+                        value = 42
+                        return value
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 42, testInfo)
+    }
+
+    @Test
+    fun `rebinding can read the previous value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var value = 1
+                        value = value + 2
+                        return value
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
+    fun `while loops can terminate through rebinding`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var counter = 0
+                        while counter <= 2 {
+                            print(counter)
+                            counter = counter + 1
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "0${EOL}1${EOL}2${EOL}", testInfo)
+    }
+
+    @Test
+    fun `rebinding an unknown variable is rejected`() {
+        val source = """
+                    fn $TEST_MAIN() {
+                        missing = 1
+                    }
+                """.trimIndent()
+        assertCompilationFails(source, "variable missing is not defined")
+    }
+
+    @Test
+    fun `rebinding with a mismatched type is rejected`() {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var value = 1
+                        value = "text"
+                    }
+                """.trimIndent()
+        assertCompilationFails(source, "cannot rebind variable value")
+    }
+
+    @Test
     fun `equals compares Ints correctly`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

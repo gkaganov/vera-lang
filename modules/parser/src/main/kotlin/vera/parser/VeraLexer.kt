@@ -96,7 +96,6 @@ private class LexerState(private val source: String) {
         val next = source.getOrNull(index + 1)
 
         val (type, length) = when (char) {
-            ':' if next == '=' -> TokenType.REBIND to 2
             '=' if next == '=' -> TokenType.EQ to 2
             '!' if next == '=' -> TokenType.NEQ to 2
             '<' if next == '=' -> TokenType.LTE to 2

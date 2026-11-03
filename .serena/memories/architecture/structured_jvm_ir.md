@@ -14,6 +14,7 @@ Status: implemented.
 - `and`/`or` short-circuit semantics live in structured `JvmLogicalAnd` / `JvmLogicalOr`; instruction lowering expands to CFG.
 - Comparisons are structured `JvmComparison`; instruction lowering appends `IntComparisonJumpTo` + boolean materialization.
 - `while` is structured `JvmWhile`; instruction lowering appends a condition label, false-jump to end, body, jump back, and end label.
+- Rebinding is structured `JvmRebind`; instruction lowering lowers the expression and appends `StoreLocal` for the existing local.
 - Print is `JvmBuiltinCall(PRINT, ...)`; instruction lowering appends `GetStatic` (receiver) before the argument, then `InvokeVirtual`. No swap.
 - `GetStatic` carries both `fieldType` (verification stack type) and `fieldDescriptor` (real JVM field descriptor). Needed because reference-typed fields such as `System.out: PrintStream` cannot be represented by the limited `JvmType` enum.
 - `JvmType.OBJECT` is the generic reference stack type; `fieldDescriptor` supplies the concrete JVM class descriptor for getstatic.

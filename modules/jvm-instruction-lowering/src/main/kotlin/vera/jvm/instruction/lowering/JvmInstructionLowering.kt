@@ -26,7 +26,6 @@ import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
-import vera.jvm.ir.JvmAssign
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.instruction.BindLabel
 import vera.jvm.instruction.CreateLabel
@@ -104,8 +103,12 @@ private class JvmInstructionLoweringState {
                 append(StoreLocal(jvmLocal))
             }
 
-            is JvmAssign -> TODO()
-            is JvmRebind -> TODO()
+            is JvmRebind -> {
+                lowerExpression(jvmStatement.expression)
+                val jvmLocal = jvmLocalSlots[jvmStatement.local]
+                    ?: error("local ${jvmStatement.local.name.value} is not defined")
+                append(StoreLocal(jvmLocal))
+            }
 
             is JvmExpressionStatement -> {
                 lowerExpression(jvmStatement.expression)

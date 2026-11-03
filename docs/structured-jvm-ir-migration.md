@@ -37,7 +37,7 @@ Required outcomes:
 Do not implement these as part of this migration:
 
 - New language features.
-- `while`, `for`, member access, or `VeraRebindStatement` support.
+- `for` or member access support. (`while` and rebinding were added after this migration.)
 - A non-JVM backend.
 - Optimization passes such as constant folding or CSE.
 - Parser or AST changes, except purely mechanical renaming if unavoidable.
@@ -142,7 +142,6 @@ data class JvmIfExpression(
 sealed interface JvmStatement
 data class JvmReturn(val expression: JvmExpression?) : JvmStatement
 data class JvmVarDeclaration(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
-data class JvmAssign(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
 data class JvmRebind(val local: JvmLocal, val expression: JvmExpression) : JvmStatement
 data class JvmExpressionStatement(val expression: JvmExpression) : JvmStatement
 ```
@@ -151,7 +150,7 @@ Notes:
 
 - `JvmExpression.type` is authoritative. `JvmIfExpression.type` is `JvmType.VOID` for current Vera semantics. `JvmBuiltinCall(PRINT)` is `JvmType.VOID`.
 - `JvmLocal` identity is its `name` + `type`; current Vera has no shadowing that would break this. If shadowing is added later, introduce a unique local id then.
-- `JvmRebind` is a placeholder for the existing `VeraRebindStatement` TODO; keep the `TODO()` behavior in AST lowering for now.
+- `JvmRebind` lowers the new expression and appends `StoreLocal` for the existing local.
 
 ## Target low-level instruction IR (`jvm-instruction-lowering`, package `vera.jvm.instruction`)
 
@@ -226,7 +225,7 @@ Use a private per-lower `JvmInstructionLoweringState` class for mutable state (l
 - `JvmReturn` -> lower optional expression, emit `Return(type)` or `Return()`.
 - `JvmVarDeclaration` -> as described above.
 - `JvmExpressionStatement` -> lower expression.
-- `JvmAssign` / `JvmRebind` -> not required beyond keeping current TODO/unsupported behavior.
+- `JvmRebind` -> lower the expression, resolve the existing local slot, and append `StoreLocal`.
 
 ## Required emitter changes
 

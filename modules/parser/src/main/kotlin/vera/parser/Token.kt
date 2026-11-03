@@ -26,7 +26,6 @@ enum class TokenType {
 
     // Punctuation & operators
     BIND,
-    REBIND,
     COLON,
     COMMA,
     DOT,

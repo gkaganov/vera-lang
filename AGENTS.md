@@ -67,10 +67,10 @@ Key methods in `JvmFunctionLowering`:
 
 **Structured IR (`JvmIr`, module `jvm-ir`)**
 
-- **Expressions**: `JvmIr.Expression` sealed interface with subtypes for literals, variables, binary operations, function calls, etc.
+- **Expressions**: `JvmExpression` sealed interface with subtypes for literals, locals, binary operations, comparisons, logical operations, calls, builtins, and `if`
 - **Operators**: `IntBinaryOperator` and `ComparisonOperator` are independent enums (no shared sealed interface)
-- **Statements**: `JvmIr.Statement` sealed interface (`JvmIr.ReturnStatement`, `JvmIr.VarDeclaration`, `JvmIr.AssignStatement`, `JvmIr.RebindStatement`, `JvmIr.PrintStatement`)
-- **Program**: `JvmIr.Program` — collection of `JvmIr.Class` entries
+- **Statements**: `JvmStatement` sealed interface (`JvmReturn`, `JvmVarDeclaration`, `JvmRebind`, `JvmExpressionStatement`, `JvmWhile`)
+- **Program**: `JvmProgram` — collection of `JvmClass` entries containing `JvmMethod` bodies
 
 **Flat instruction IR (`JvmInstruction`, module `jvm-instruction-lowering`)**
 
@@ -138,7 +138,7 @@ to a single `EOL` token by the lexer.
 Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`
-- Assignment: `name = expr`
+- Rebinding: `name = expr` (the old `:=` operator is removed)
 - Control flow: `if`, `while` (`for` is not implemented yet)
 - Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
 - `and` and `or` are short-circuiting Bool operators and are reserved keywords
@@ -147,7 +147,6 @@ Key language constructs:
 
 ## Known TODOs
 
-- **VeraRebindStatement** (`x := newValue`): `JvmFunctionLowering.lowerStatement` — `TODO()` stub
 - **VeraMemberAccess**: `JvmFunctionLowering.lowerChainedExpression` — `TODO()` stub for member access / field access
 
 ## Run / Debug
