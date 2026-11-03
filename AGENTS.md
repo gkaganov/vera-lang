@@ -24,6 +24,13 @@ Vera source → lexer/parser → AST → JvmIr (IR) → JvmProgramLowering (2-ph
 2. **Lower**: `JvmProgramLowering` transforms AST → JVM IR (`JvmIr`) using `JvmFunctionLowering` per function
 3. **Emit**: `JvmBytecodeEmitter` generates `.class` files using Java ClassFile API
 
+### Planned refactor: structured JVM IR
+
+A planned migration to split semantic lowering from JVM instruction encoding is documented in
+[`docs/structured-jvm-ir-migration.md`](docs/structured-jvm-ir-migration.md). Implement that plan
+without requiring further design input; it defines the target two-layer IR, module boundaries,
+migration phases, and verification checklist.
+
 ### Modules
 
 | Module                 | Purpose                                                                                        |
@@ -92,6 +99,9 @@ between compilations.
 
 - **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
 - **All IR types** use the `JvmIr.` namespace prefix (e.g., `JvmIr.ReturnStatement`, `JvmIr.Program`, `JvmIr.Expression`)
+- **Local variable names mirror their layer**: AST-derived values use `vera*` (e.g., `veraFunction`, `veraPrimaryExpression`, `veraType`), while IR/JVM-derived and lowering-time values use `jvm*` (e.g., `jvmMethodBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`). Short scalar names (`index`, `builtin`) may omit the prefix when the layer is unambiguous. Prefer precise nouns over prefix-only names: `JvmLocalBinding`, not `JvmLocal`, because `JvmLocal` would be confused with `LocalTable.Local`.
+- **Lowering state classes** keep the full pipeline prefix: `JvmFunctionLoweringState`, not `FunctionLoweringState`.
+- **Lowering methods use consistent verb families**: `lower*` for all AST-to-IR lowering (including helpers that append IR instructions), `validate*`/`require*` for operand checks, and `tryLower*` when returning `Either`. Reserve `emit*` for actual JVM bytecode generation in `JvmBytecodeEmitter`.
 - JVM types: standard JVM naming (e.g., `VeraMain`, `VeraApp`)
 
 ### AGENTS.md
