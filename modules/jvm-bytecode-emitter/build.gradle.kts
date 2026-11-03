@@ -1,3 +1,3 @@
 dependencies {
-    implementation(project(":jvm-ir"))
+    api(project(":jvm-instruction-lowering"))
 }

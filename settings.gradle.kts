@@ -10,6 +10,7 @@ include("parser")
 include("ast")
 include("jvm-lowering")
 include("jvm-ir")
+include("jvm-instruction-lowering")
 include("jvm-bytecode-emitter")
 
 include("compiler-tests")

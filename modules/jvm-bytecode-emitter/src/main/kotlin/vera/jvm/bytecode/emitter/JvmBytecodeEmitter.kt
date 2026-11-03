@@ -1,24 +1,25 @@
 package vera.jvm.bytecode.emitter
 
-import vera.jvm.ir.BindLabel
-import vera.jvm.ir.ComparisonOperation
 import vera.jvm.ir.ComparisonOperator
-import vera.jvm.ir.CreateLabel
-import vera.jvm.ir.IfFalseJumpTo
-import vera.jvm.ir.InstructionWithDebugInfo
-import vera.jvm.ir.IntBinaryOperation
 import vera.jvm.ir.IntBinaryOperator
-import vera.jvm.ir.Invokestatic
-import vera.jvm.ir.JumpTo
-import vera.jvm.ir.JvmLabel
 import vera.jvm.ir.JvmMethodSignature
-import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.LoadConstant
-import vera.jvm.ir.LoadLocal
-import vera.jvm.ir.Print
-import vera.jvm.ir.Return
-import vera.jvm.ir.StoreLocal
+import vera.jvm.instruction.BindLabel
+import vera.jvm.instruction.CreateLabel
+import vera.jvm.instruction.GetStatic
+import vera.jvm.instruction.IfFalseJumpTo
+import vera.jvm.instruction.InstructionWithDebugInfo
+import vera.jvm.instruction.IntBinaryOperation
+import vera.jvm.instruction.IntComparisonJumpTo
+import vera.jvm.instruction.InvokeVirtual
+import vera.jvm.instruction.Invokestatic
+import vera.jvm.instruction.JvmInstructionProgram
+import vera.jvm.instruction.JvmLabel
+import vera.jvm.instruction.JumpTo
+import vera.jvm.instruction.LoadConstant
+import vera.jvm.instruction.LoadLocal
+import vera.jvm.instruction.Return
+import vera.jvm.instruction.StoreLocal
 import vera.shared.model.Identifier
 import java.lang.classfile.ClassFile
 import java.lang.classfile.ClassFile.ACC_PUBLIC
@@ -34,11 +35,11 @@ import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 
 object JvmBytecodeEmitter {
-    fun emit(jvmProgram: JvmProgram): Map<Identifier, ByteArray> = EmitterState(jvmProgram).emit()
+    fun emit(jvmProgram: JvmInstructionProgram): Map<Identifier, ByteArray> = EmitterState(jvmProgram).emit()
 }
 
 /** Mutable state for a single emit run. */
-private class EmitterState(private val jvmProgram: JvmProgram) {
+private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
 
     private val labels = mutableMapOf<JvmLabel, Label>()
 
@@ -100,6 +101,18 @@ private class EmitterState(private val jvmProgram: JvmProgram) {
                 }
             }
 
+            is IntComparisonJumpTo -> {
+                val label = labels[instruction.label] ?: error("unbound label in comparison jump")
+                when (instruction.operator) {
+                    ComparisonOperator.EQ -> codeBuilder.if_icmpeq(label)
+                    ComparisonOperator.NEQ -> codeBuilder.if_icmpne(label)
+                    ComparisonOperator.LT -> codeBuilder.if_icmplt(label)
+                    ComparisonOperator.GT -> codeBuilder.if_icmpgt(label)
+                    ComparisonOperator.LTE -> codeBuilder.if_icmple(label)
+                    ComparisonOperator.GTE -> codeBuilder.if_icmpge(label)
+                }
+            }
+
             is Invokestatic -> {
                 codeBuilder.invokestatic(
                     ClassDesc.of(instruction.ownerClass.value),
@@ -108,45 +121,26 @@ private class EmitterState(private val jvmProgram: JvmProgram) {
                 )
             }
 
-            is CreateLabel -> labels[instruction.label] = codeBuilder.newLabel()
-            is BindLabel -> codeBuilder.labelBinding(labels[instruction.label])
-            is JumpTo -> codeBuilder.goto_(labels[instruction.label])
-            is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label])
-
-            is ComparisonOperation -> {
-                val labelTruePath = codeBuilder.newLabel()
-                val labelEnd = codeBuilder.newLabel()
-                when (instruction.operator) {
-                    ComparisonOperator.EQ -> codeBuilder.if_icmpeq(labelTruePath)
-                    ComparisonOperator.NEQ -> codeBuilder.if_icmpne(labelTruePath)
-                    ComparisonOperator.LT -> codeBuilder.if_icmplt(labelTruePath)
-                    ComparisonOperator.GT -> codeBuilder.if_icmpgt(labelTruePath)
-                    ComparisonOperator.LTE -> codeBuilder.if_icmple(labelTruePath)
-                    ComparisonOperator.GTE -> codeBuilder.if_icmpge(labelTruePath)
-                }
-                codeBuilder.loadConstant(0)
-                codeBuilder.goto_(labelEnd)
-                codeBuilder.labelBinding(labelTruePath)
-                codeBuilder.loadConstant(1)
-                codeBuilder.labelBinding(labelEnd)
-            }
-
-            is Print -> {
+            is GetStatic -> {
                 codeBuilder.getstatic(
-                    ClassDesc.of("java.lang.System"),
-                    "out",
-                    ClassDesc.of("java.io.PrintStream"),
-                )
-                codeBuilder.swap() // invokevirtual expects: receiver, argument — but it is pushed first
-                codeBuilder.invokevirtual(
-                    ClassDesc.of("java.io.PrintStream"),
-                    "println",
-                    MethodTypeDesc.of(
-                        CD_void,
-                        instruction.type.toClassDesc()
-                    ),
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.fieldName.value,
+                    ClassDesc.of(instruction.fieldDescriptor.value),
                 )
             }
+
+            is InvokeVirtual -> {
+                codeBuilder.invokevirtual(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.methodName.value,
+                    instruction.methodSignature.toMethodTypeDesc(),
+                )
+            }
+
+            is CreateLabel -> labels[instruction.label] = codeBuilder.newLabel()
+            is BindLabel -> codeBuilder.labelBinding(labels[instruction.label] ?: error("unbound label"))
+            is JumpTo -> codeBuilder.goto_(labels[instruction.label] ?: error("unbound label"))
+            is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label] ?: error("unbound label"))
 
             is Return -> {
                 codeBuilder.return_(TypeKind.from(instruction.type.toClassDesc()))
@@ -163,6 +157,7 @@ private class EmitterState(private val jvmProgram: JvmProgram) {
         JvmType.INT -> CD_int
         JvmType.STRING -> CD_Object
         JvmType.BOOL -> CD_boolean
+        JvmType.OBJECT -> CD_Object
         JvmType.VOID -> CD_void
     }
 }

@@ -15,21 +15,19 @@ Build output goes to `out/` (compiler) and `build/` (Gradle).
 ## Architecture
 
 ```
-Vera source → lexer/parser → AST → JvmIr (IR) → JvmProgramLowering (2-phase) → Bytecode Emitter → .class files
+Vera source → lexer/parser → AST → JvmIr (structured IR) → JvmInstructionLowering →
+JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class files
 ```
 
 ### Pipeline Overview (`VeraCompiler`)
 
 1. **Parse**: source → `VeraLexer` token stream → recursive-descent `VeraParser` → AST
-2. **Lower**: `JvmProgramLowering` transforms AST → JVM IR (`JvmIr`) using `JvmFunctionLowering` per function
-3. **Emit**: `JvmBytecodeEmitter` generates `.class` files using Java ClassFile API
-
-### Planned refactor: structured JVM IR
-
-A planned migration to split semantic lowering from JVM instruction encoding is documented in
-[`docs/structured-jvm-ir-migration.md`](docs/structured-jvm-ir-migration.md). Implement that plan
-without requiring further design input; it defines the target two-layer IR, module boundaries,
-migration phases, and verification checklist.
+2. **Lower to structured IR**: `JvmProgramLowering` transforms AST → structured JVM IR (`JvmIr`)
+   using `JvmFunctionLowering` per function. Expressions/statements remain nested constructs here.
+3. **Lower to instruction IR**: `JvmInstructionLowering` flattens the structured `JvmIr` into a
+   linear `JvmInstructionProgram` with explicit stack effects and control-flow labels.
+4. **Emit**: `JvmBytecodeEmitter` generates `.class` files from the flat instruction IR using the
+   Java ClassFile API.
 
 ### Modules
 
@@ -38,9 +36,10 @@ migration phases, and verification checklist.
 | `shared-model`         | Shared domain model (types, expressions, etc.)                                                 |
 | `parser`               | Lexer + recursive-descent parser → AST                                                         |
 | `ast`                  | AST node definitions                                                                           |
-| `jvm-ir`               | JVM intermediate representation — classes, methods, fields, expressions, statements, operators |
-| `jvm-lowering`         | AST → IR lowering (`JvmProgramLowering`, `JvmFunctionLowering`)                                 |
-| `jvm-bytecode-emitter` | IR → JVM `.class` file generation                                                              |
+| `jvm-ir`               | Structured JVM intermediate representation — classes, methods, expressions, statements, operators |
+| `jvm-lowering`         | AST → structured IR lowering (`JvmProgramLowering`, `JvmFunctionLowering`)                     |
+| `jvm-instruction-lowering` | Structured IR → flat instruction IR lowering (`JvmInstructionLowering`)                    |
+| `jvm-bytecode-emitter` | Flat instruction IR → JVM `.class` file generation                                             |
 | `compiler`             | Orchestration: `VeraCompiler` ties parse → lower → emit                                        |
 | `cli`                  | Command-line entry point                                                                       |
 | `compiler-tests`       | Integration tests — compiles Vera code, runs via custom classloader, asserts stdout            |
@@ -48,24 +47,38 @@ migration phases, and verification checklist.
 ### Lowering Details
 
 `JvmProgramLowering` is the module's public entry point. `JvmFunctionLowering` is an
-internal stateless object; the per-function mutable state (locals and the method builder)
-lives in a private helper created for each call.
+internal stateless object; the per-function mutable state (local bindings) lives in a private
+helper created for each call and produces structured IR, not flat instructions.
 
 `JvmProgramLowering.lower(mainClassName, program)` uses a **2-phase approach**:
 1. **Collect**: First pass collects all `VeraFunctionDeclaration` AST nodes into a map by name (for function calls)
 2. **Lower**: Second pass lowers each function individually with `JvmFunctionLowering`
 
-Key methods in `JvmFunctionLowering`:
-- `lower` — lowers a whole function to a `JvmMethod`
-- `lowerExpression` — lowers AST expressions and returns their type
-- `lowerStatement` — lowers AST statements to IR instructions
+`JvmInstructionLowering.lower(jvmProgram)` then flattens the structured IR into
+`JvmInstructionProgram`. The flat layer owns stack-effect verification and label/jump resolution;
+the emitter must not interpret structured expressions or control flow.
 
-### IR Design (`JvmIr`)
+Key methods in `JvmFunctionLowering`:
+- `lower` — lowers a whole function to a structured `JvmMethod`
+- `lowerExpression` — lowers an AST expression to a structured `JvmExpression`
+- `lowerStatement` — lowers an AST statement to a structured `JvmStatement`
+
+### IR Design
+
+**Structured IR (`JvmIr`, module `jvm-ir`)**
 
 - **Expressions**: `JvmIr.Expression` sealed interface with subtypes for literals, variables, binary operations, function calls, etc.
 - **Operators**: `IntBinaryOperator` and `ComparisonOperator` are independent enums (no shared sealed interface)
 - **Statements**: `JvmIr.Statement` sealed interface (`JvmIr.ReturnStatement`, `JvmIr.VarDeclaration`, `JvmIr.AssignStatement`, `JvmIr.RebindStatement`, `JvmIr.PrintStatement`)
 - **Program**: `JvmIr.Program` — collection of `JvmIr.Class` entries
+
+**Flat instruction IR (`JvmInstruction`, module `jvm-instruction-lowering`)**
+
+- `JvmInstructionProgram` contains classes/methods whose bodies are flat lists of `InstructionWithDebugInfo`
+- Instructions expose `InstructionEffect` (stack pushes/pops) so the builder verifies stack discipline
+- Labels are `JvmLabel`; control flow is explicit via `CreateLabel`, `BindLabel`, `JumpTo`, `IfFalseJumpTo`, `IntComparisonJumpTo`
+- `GetStatic` carries both the stack type (`fieldType`) and the real JVM field descriptor (`fieldDescriptor`) so reference-typed fields verify correctly
+- No structured expressions/statements remain at this layer; emitter consumes instructions only
 
 ## Conventions
 
@@ -75,12 +88,12 @@ Key methods in `JvmFunctionLowering`:
 - Target: Java 25 (source + bytecode compatibility)
 - 4-space indentation
 - Sealed interfaces for IR hierarchies
-- `JvmIr.` namespace prefix on all IR types
+- `Jvm` prefix for structured IR types in `vera.jvm.ir`; flat instruction IR types are unprefixed in `vera.jvm.instruction`
 
 ### API Style
 
 Public pipeline services (`VeraLexer`, `VeraParser`, `JvmProgramLowering`,
-`JvmBytecodeEmitter`, `VeraCompiler`) are stateless objects. Inputs are passed as method
+`JvmInstructionLowering`, `JvmBytecodeEmitter`, `VeraCompiler`) are stateless objects. Inputs are passed as method
 arguments, and mutable state is scoped to a single call. Stateful helpers are private classes
 named `*State` and are created per operation, so instances cannot accidentally retain state
 between compilations.
@@ -98,7 +111,8 @@ between compilations.
 ### Naming
 
 - **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
-- **All IR types** use the `JvmIr.` namespace prefix (e.g., `JvmIr.ReturnStatement`, `JvmIr.Program`, `JvmIr.Expression`)
+- **All structured IR types** use the `Jvm` prefix and live in `vera.jvm.ir` (e.g., `JvmProgram`, `JvmReturn`, `JvmExpression`)
+- **Flat instruction IR types** live in `vera.jvm.instruction` and are unprefixed (e.g., `GetStatic`, `InvokeVirtual`, `JvmInstructionProgram`)
 - **Local variable names mirror their layer**: AST-derived values use `vera*` (e.g., `veraFunction`, `veraPrimaryExpression`, `veraType`), while IR/JVM-derived and lowering-time values use `jvm*` (e.g., `jvmMethodBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`). Short scalar names (`index`, `builtin`) may omit the prefix when the layer is unambiguous. Prefer precise nouns over prefix-only names: `JvmLocalBinding`, not `JvmLocal`, because `JvmLocal` would be confused with `LocalTable.Local`.
 - **Lowering state classes** keep the full pipeline prefix: `JvmFunctionLoweringState`, not `FunctionLoweringState`.
 - **Lowering methods use consistent verb families**: `lower*` for all AST-to-IR lowering (including helpers that append IR instructions), `validate*`/`require*` for operand checks, and `tryLower*` when returning `Either`. Reserve `emit*` for actual JVM bytecode generation in `JvmBytecodeEmitter`.
@@ -133,9 +147,4 @@ Key language constructs:
 
 ## Run / Debug
 
-The `cli` module provides the entry point. Run via:
-```bash
-./gradlew :cli:run
-```
-
-Or build the fat JAR and run directly (check `cli/build/libs/` after build).
+The `cli` module provides the entry point (`Main.kt`, default package). No Gradle application/run task is currently configured, so `./gradlew :cli:run` is unavailable. Add the `application` plugin to `cli/build.gradle.kts` to expose it; otherwise run `MainKt` manually with the built classpath from `cli/build/libs/`.

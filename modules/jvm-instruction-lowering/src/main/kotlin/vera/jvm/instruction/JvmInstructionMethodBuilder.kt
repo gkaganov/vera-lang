@@ -1,5 +1,8 @@
-package vera.jvm.ir
+package vera.jvm.instruction
 
+import vera.jvm.ir.JvmMethodSignature
+import vera.jvm.ir.JvmParameter
+import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
 
 class OperandStack {
@@ -27,7 +30,9 @@ class OperandStack {
 }
 
 class LocalTable {
-    @JvmInline value class Slot(val index: Int)
+    @JvmInline
+    value class Slot(val index: Int)
+
     data class Local(val slot: Slot, val jvmType: JvmType)
 
     private val locals = mutableMapOf<Slot, Local>()
@@ -46,7 +51,11 @@ class LocalTable {
     fun snapshot(): Map<Slot, Local> = locals.toMap()
 }
 
-class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>, val returnType: JvmType) {
+class JvmInstructionMethodBuilder(
+    val name: Identifier,
+    val parameters: List<JvmParameter>,
+    val returnType: JvmType,
+) {
     private val locals = LocalTable()
     private val stack = OperandStack()
 
@@ -61,9 +70,14 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
         return LocalTable.Local(slot, jvmType)
     }
 
+    fun parameterLocal(index: Int): LocalTable.Local {
+        val parameter = parameters[index]
+        return LocalTable.Local(LocalTable.Slot(index), parameter.type)
+    }
+
     init {
-        parameters.forEach { param ->
-            locals.define(param.type)
+        parameters.forEach { parameter ->
+            locals.define(parameter.type)
         }
     }
 
@@ -88,7 +102,11 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
         )
     }
 
-    fun build(): JvmMethod = JvmMethod(name, instructions, JvmMethodSignature(parameters, returnType))
+    fun build(): JvmInstructionMethod = JvmInstructionMethod(
+        name,
+        instructions,
+        JvmMethodSignature(parameters, returnType),
+    )
 
     private fun verifyInstruction(instruction: JvmInstruction) {
         val pops = instruction.effect.stackPops
@@ -123,10 +141,6 @@ class JvmMethodBuilder(val name: Identifier, val parameters: List<JvmParameter>,
     private fun applyInstruction(instruction: JvmInstruction) {
         repeat(instruction.effect.stackPops.size) {
             stack.pop()
-        }
-
-        instruction.effect.localWrites.forEach {
-            locals.define(it.jvmType)
         }
 
         instruction.effect.stackPushes.forEach {

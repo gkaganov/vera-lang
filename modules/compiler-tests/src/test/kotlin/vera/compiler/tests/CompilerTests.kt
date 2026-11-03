@@ -31,6 +31,16 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `print evaluates arithmetic arguments`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1 + 2 * 3)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "7$EOL", testInfo)
+    }
+
+    @Test
     fun `functions can be called`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
