@@ -179,6 +179,8 @@ Lowest to highest:
 ```vera
 if condition {
     print("yes")
+} else if otherCondition {
+    print("maybe")
 } else {
     print("no")
 }
@@ -186,6 +188,7 @@ if condition {
 
 - The condition must be a `Bool`.
 - `else` is optional.
+- `else if` chains are supported and select the first matching branch.
 - `else` may appear on the next line, including after blank lines.
 - `if` is currently parsed as an expression, but its value type is `Unit`.
 

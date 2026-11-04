@@ -145,7 +145,7 @@ Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`
 - Rebinding: `name = expr` (the old `:=` operator is removed)
-- Control flow: `if`, `while` (`for` is not implemented yet)
+- Control flow: `if` / `else if` / `else`, `while` (`for` is not implemented yet)
 - Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
 - `and` and `or` are short-circuiting Bool operators and are reserved keywords
 - `|` is forward application: `value | f` lowers to `f(value)`

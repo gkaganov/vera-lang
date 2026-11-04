@@ -269,6 +269,87 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `else if executes the matching branch`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("if")
+                        } else if True {
+                            print("else if")
+                        } else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "else if$EOL", testInfo)
+    }
+
+    @Test
+    fun `else if falls through to else when no branch matches`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("if")
+                        } else if False {
+                            print("else if")
+                        } else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "else$EOL", testInfo)
+    }
+
+    @Test
+    fun `else if chains select the first matching branch`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("if")
+                        } else if False {
+                            print("second")
+                        } else if True {
+                            print("third")
+                        } else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "third$EOL", testInfo)
+    }
+
+    @Test
+    fun `else if without a final else terminates before following statement`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("if")
+                        } else if False {
+                            print("else if")
+                        }
+
+                        print("after")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "after$EOL", testInfo)
+    }
+
+    @Test
+    fun `newline before else if is ignored`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if False {
+                            print("if")
+                        }
+                        else if True {
+                            print("else if")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "else if$EOL", testInfo)
+    }
+
+    @Test
     fun `if without else still terminates before following statement`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

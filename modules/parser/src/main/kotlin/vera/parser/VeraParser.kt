@@ -291,7 +291,15 @@ private class ParserState(private val tokens: List<Token>) {
         expect(TokenType.IF)
         val condition = parseExpression()
         val thenBlock = parseBlock()
-        val elseBlock = if (matchElseAfterOptionalEols()) parseBlock() else emptyList()
+        val elseBlock = if (matchElseAfterOptionalEols()) {
+            if (at(TokenType.IF)) {
+                listOf(VeraExpression(parseIfExpression()))
+            } else {
+                parseBlock()
+            }
+        } else {
+            emptyList()
+        }
         return VeraIfExpression(
             condition = condition,
             thenBlock = NonEmptyList.of(thenBlock),
