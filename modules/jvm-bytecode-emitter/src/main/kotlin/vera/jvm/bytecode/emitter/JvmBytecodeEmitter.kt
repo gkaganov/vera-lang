@@ -18,6 +18,7 @@ import vera.jvm.instruction.JvmLabel
 import vera.jvm.instruction.JumpTo
 import vera.jvm.instruction.LoadConstant
 import vera.jvm.instruction.LoadLocal
+import vera.jvm.instruction.Pop
 import vera.jvm.instruction.Return
 import vera.jvm.instruction.StoreLocal
 import vera.shared.model.Identifier
@@ -141,10 +142,8 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
             is BindLabel -> codeBuilder.labelBinding(labels[instruction.label] ?: error("unbound label"))
             is JumpTo -> codeBuilder.goto_(labels[instruction.label] ?: error("unbound label"))
             is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label] ?: error("unbound label"))
-
-            is Return -> {
-                codeBuilder.return_(TypeKind.from(instruction.type.toClassDesc()))
-            }
+            is Pop -> codeBuilder.pop()
+            is Return -> codeBuilder.return_(TypeKind.from(instruction.type.toClassDesc()))
         }
     }
 

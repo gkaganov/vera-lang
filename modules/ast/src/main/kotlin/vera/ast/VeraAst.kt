@@ -1,18 +1,17 @@
 package vera.ast
 
-import arrow.core.NonEmptyList
 import vera.shared.model.Identifier
 
 data class VeraProgram(val declarations: List<VeraDeclaration>)
 
 sealed interface VeraDeclaration
-data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val statements: List<VeraStatement>) : VeraDeclaration
+data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val body: VeraExplicitReturnBlock) : VeraDeclaration
 
 sealed interface VeraStatement
 data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
 data class VeraRebindStatement(val name: Identifier, val expression: VeraExpression) : VeraStatement
 data class VeraReturnStatement(val expression: VeraExpression?) : VeraStatement
-data class VeraWhileStatement(val condition: VeraPrimaryExpression, val body: List<VeraStatement>) : VeraStatement
+data class VeraWhileStatement(val condition: VeraPrimaryExpression, val body: VeraUnitReturnBlock) : VeraStatement
 data class VeraExpression(val expression: VeraPrimaryExpression) : VeraStatement
 
 data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, val data: List<VeraChainedExpressionData> = emptyList()) : VeraPrimaryExpression
@@ -42,7 +41,28 @@ data class VeraIntLiteral(val value: Int) : VeraLiteral
 data class VeraStringLiteral(val value: String) : VeraLiteral
 enum class VeraBoolLiteral : VeraLiteral { TRUE, FALSE }
 data class VeraIdentifierAsExpression(val identifier: Identifier) : VeraPrimaryExpression
-data class VeraIfExpression(val condition: VeraPrimaryExpression, val thenBlock: NonEmptyList<VeraStatement>, val elseBlock: List<VeraStatement>) : VeraPrimaryExpression
+
+sealed interface VeraBlock {
+    val statements: List<VeraStatement>
+}
+
+/** A block whose statements use explicit `return` statements. */
+data class VeraExplicitReturnBlock(override val statements: List<VeraStatement>) : VeraBlock
+
+/** A block whose value is its final expression; it returns implicitly. */
+data class VeraImplicitReturnBlock(
+    override val statements: List<VeraStatement>,
+    val result: VeraPrimaryExpression,
+) : VeraBlock
+
+/** A block that produces no value and returns implicitly as `Unit`. */
+data class VeraUnitReturnBlock(override val statements: List<VeraStatement>) : VeraBlock
+
+data class VeraIfExpression(
+    val condition: VeraPrimaryExpression,
+    val thenBlock: VeraBlock,
+    val elseBlock: VeraBlock?,
+) : VeraPrimaryExpression
 
 data class VeraParameter(val name: Identifier, val type: VeraType)
 enum class VeraType { INT, STRING, BOOL, UNIT, UNKNOWN }

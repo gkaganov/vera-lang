@@ -6,7 +6,6 @@ Vera is a small, experimental programming language with a JVM target. It uses a 
 
 - [`docs/language.md`](docs/language.md) — concise current language guide for humans
 - [`docs/design-philosophy.md`](docs/design-philosophy.md) — long-term design vision and compiler principles
-- [`docs/structured-jvm-ir-migration.md`](docs/structured-jvm-ir-migration.md) — structured/flat IR architecture reference
 
 ## Quick Start
 
@@ -74,6 +73,7 @@ Key methods in `JvmFunctionLowering`:
 **Structured IR (`JvmIr`, module `jvm-ir`)**
 
 - **Expressions**: `JvmExpression` sealed interface with subtypes for literals, locals, binary operations, comparisons, logical operations, calls, builtins, and `if`
+- **Blocks**: `JvmBlock` sealed interface with three kinds: `JvmExplicitReturnBlock` (function body, explicit `return`), `JvmImplicitReturnBlock` (final-expression result), and `JvmUnitReturnBlock` (no value)
 - **Operators**: `IntBinaryOperator` and `ComparisonOperator` are independent enums (no shared sealed interface)
 - **Statements**: `JvmStatement` sealed interface (`JvmReturn`, `JvmVarDeclaration`, `JvmRebind`, `JvmExpressionStatement`, `JvmWhile`)
 - **Program**: `JvmProgram` — collection of `JvmClass` entries containing `JvmMethod` bodies
@@ -83,6 +83,7 @@ Key methods in `JvmFunctionLowering`:
 - `JvmInstructionProgram` contains classes/methods whose bodies are flat lists of `InstructionWithDebugInfo`
 - Instructions expose `InstructionEffect` (stack pushes/pops) so the builder verifies stack discipline
 - Labels are `JvmLabel`; control flow is explicit via `CreateLabel`, `BindLabel`, `JumpTo`, `IfFalseJumpTo`, `IntComparisonJumpTo`
+- `Pop` discards non-`Unit` expression results, including values from `if` expressions used as statements
 - `GetStatic` carries both the stack type (`fieldType`) and the real JVM field descriptor (`fieldDescriptor`) so reference-typed fields verify correctly
 - No structured expressions/statements remain at this layer; emitter consumes instructions only
 
@@ -114,10 +115,18 @@ between compilations.
 
 - Commit messages describe **what was done** in past tense (e.g. `added operator precedence`), not imperative instructions (e.g. `add operator precedence`)
 
+### Finishing a task
+
+When the user says **"finish"**:
+
+1. Review the current code and changes for problems, inconsistencies, and missing updates.
+2. Ask the user questions if anything needs clarification or a decision.
+3. Once questions are resolved, commit the changes and push them.
+
 ### Naming
 
-- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraWhileStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
-- **All structured IR types** use the `Jvm` prefix and live in `vera.jvm.ir` (e.g., `JvmProgram`, `JvmReturn`, `JvmExpression`)
+- **All AST types** use the `Vera` prefix (e.g., `VeraProgram`, `VeraExpression`, `VeraStatement`, `VeraBindStatement`, `VeraReturnStatement`, `VeraWhileStatement`, `VeraChainedExpression`, `VeraPrimaryExpression`, `VeraBinaryOperation`, `VeraOperator`, `VeraLiteral`, `VeraIntLiteral`, `VeraStringLiteral`, `VeraBoolLiteral`, `VeraIdentifierAsExpression`, `VeraIfExpression`, `VeraBlock`, `VeraExplicitReturnBlock`, `VeraImplicitReturnBlock`, `VeraUnitReturnBlock`, `VeraParameter`, `VeraMemberAccess`, `VeraArguments`, `VeraFunctionDeclaration`, `VeraDeclaration`)
+- **All structured IR types** use the `Jvm` prefix and live in `vera.jvm.ir` (e.g., `JvmProgram`, `JvmReturn`, `JvmExpression`, `JvmBlock`, `JvmExplicitReturnBlock`, `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`)
 - **Flat instruction IR types** live in `vera.jvm.instruction` and are unprefixed (e.g., `GetStatic`, `InvokeVirtual`, `JvmInstructionProgram`)
 - **Local variable names mirror their layer**: AST-derived values use `vera*` (e.g., `veraFunction`, `veraPrimaryExpression`, `veraType`), while IR/JVM-derived and lowering-time values use `jvm*` (e.g., `jvmBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`). Short scalar names (`index`, `builtin`) may omit the prefix when the layer is unambiguous. Prefer precise nouns over prefix-only names: `JvmLocalBinding`, not `JvmLocal`, because `JvmLocal` would be confused with `LocalTable.Local`.
 - **Lowering state classes** keep the full pipeline prefix: `JvmFunctionLoweringState`, not `FunctionLoweringState`.
@@ -145,7 +154,7 @@ Key language constructs:
 - Functions: `fn name(params) { body }`
 - Variables: `var name = expr`
 - Rebinding: `name = expr` (the old `:=` operator is removed)
-- Control flow: `if` / `else if` / `else`, `while` (`for` is not implemented yet)
+- Control flow: `if` / `else if` / `else` expressions, `while` (`for` is not implemented yet)
 - Operators (lowest to highest precedence): `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`
 - `and` and `or` are short-circuiting Bool operators and are reserved keywords
 - `|` is forward application: `value | f` lowers to `f(value)`

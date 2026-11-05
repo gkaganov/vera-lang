@@ -1,6 +1,7 @@
 package vera.jvm.instruction.lowering
 
 import vera.jvm.ir.ComparisonOperator
+import vera.jvm.ir.JvmBlock
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmClass
@@ -8,6 +9,7 @@ import vera.jvm.ir.JvmComparison
 import vera.jvm.ir.JvmExpression
 import vera.jvm.ir.JvmExpressionStatement
 import vera.jvm.ir.JvmIfExpression
+import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmLocal
@@ -24,6 +26,7 @@ import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmBoolLiteral
@@ -45,6 +48,7 @@ import vera.jvm.instruction.JumpTo
 import vera.jvm.instruction.LoadConstant
 import vera.jvm.instruction.LoadLocal
 import vera.jvm.instruction.LocalTable
+import vera.jvm.instruction.Pop
 import vera.jvm.instruction.Return
 import vera.jvm.instruction.StoreLocal
 import vera.shared.model.Identifier
@@ -83,7 +87,7 @@ private class JvmInstructionLoweringState {
                 jvmBuilder.parameterLocal(index)
         }
 
-        jvmMethod.body.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jvmMethod.body.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
         return jvmBuilder.build()
     }
 
@@ -111,7 +115,10 @@ private class JvmInstructionLoweringState {
             }
 
             is JvmExpressionStatement -> {
-                lowerExpression(jvmStatement.expression)
+                val jvmExpressionType = lowerExpression(jvmStatement.expression)
+                if (jvmExpressionType != JvmType.VOID) {
+                    append(Pop(jvmExpressionType))
+                }
             }
 
             is JvmWhile -> {
@@ -129,7 +136,7 @@ private class JvmInstructionLoweringState {
         bindLabel(jvmConditionLabel)
         lowerExpression(jvmWhile.condition)
         jumpIfFalse(jvmEndLabel)
-        jvmWhile.body.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jvmWhile.body.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
         jump(jvmConditionLabel)
         bindLabel(jvmEndLabel)
     }
@@ -200,7 +207,7 @@ private class JvmInstructionLoweringState {
 
             is JvmIfExpression -> {
                 lowerIfExpression(jvmExpression)
-                JvmType.VOID
+                jvmExpression.type
             }
         }
     }
@@ -297,14 +304,24 @@ private class JvmInstructionLoweringState {
     }
 
     private fun lowerIfExpression(jvmIfExpression: JvmIfExpression) {
+        val jvmResultLocal = if (jvmIfExpression.type == JvmType.VOID) {
+            null
+        } else {
+            jvmBuilder.allocateLocal(jvmIfExpression.type)
+        }
+
         lowerExpression(jvmIfExpression.condition)
 
         val jvmElseLabel = JvmLabel()
         createLabel(jvmElseLabel)
         jumpIfFalse(jvmElseLabel)
-        jvmIfExpression.thenBlock.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        lowerBlock(jvmIfExpression.thenBlock, discardResult = jvmResultLocal == null)
+        if (jvmResultLocal != null) {
+            append(StoreLocal(jvmResultLocal))
+        }
 
-        if (jvmIfExpression.elseBlock.isEmpty()) {
+        val jvmElseBlock = jvmIfExpression.elseBlock
+        if (jvmElseBlock == null) {
             bindLabel(jvmElseLabel)
         } else {
             val jvmEndLabel = JvmLabel()
@@ -312,9 +329,26 @@ private class JvmInstructionLoweringState {
             jump(jvmEndLabel)
 
             bindLabel(jvmElseLabel)
-            jvmIfExpression.elseBlock.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+            lowerBlock(jvmElseBlock, discardResult = jvmResultLocal == null)
+            if (jvmResultLocal != null) {
+                append(StoreLocal(jvmResultLocal))
+            }
 
             bindLabel(jvmEndLabel)
+        }
+
+        if (jvmResultLocal != null) {
+            append(LoadLocal(jvmResultLocal))
+        }
+    }
+
+    private fun lowerBlock(jvmBlock: JvmBlock, discardResult: Boolean) {
+        jvmBlock.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        if (jvmBlock is JvmImplicitReturnBlock) {
+            val jvmResultType = lowerExpression(jvmBlock.result)
+            if (discardResult && jvmResultType != JvmType.VOID) {
+                append(Pop(jvmResultType))
+            }
         }
     }
 

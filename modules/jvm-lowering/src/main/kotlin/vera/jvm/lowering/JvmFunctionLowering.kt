@@ -6,12 +6,15 @@ import arrow.core.Either.Right
 import vera.ast.VeraArguments
 import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
+import vera.ast.VeraBlock
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraChainedExpression
+import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
+import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraOperator
@@ -21,16 +24,20 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.jvm.ir.ComparisonOperator
 import vera.jvm.ir.IntBinaryOperator
+import vera.jvm.ir.JvmBlock
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.ir.JvmComparison
+import vera.jvm.ir.JvmExplicitReturnBlock
 import vera.jvm.ir.JvmExpression
 import vera.jvm.ir.JvmExpressionStatement
 import vera.jvm.ir.JvmIfExpression
+import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmLocal
@@ -46,6 +53,7 @@ import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.shared.model.Identifier
@@ -88,7 +96,7 @@ private class JvmFunctionLoweringState(
 
         val jvmStatements = mutableListOf<JvmStatement>()
         var explicitReturnOnAllBranches = false
-        veraFunction.statements.forEach { veraStatement ->
+        veraFunction.body.statements.forEach { veraStatement ->
             val loweredStatement = lowerStatement(veraStatement)
             jvmStatements += loweredStatement.jvmStatement
             explicitReturnOnAllBranches = explicitReturnOnAllBranches || loweredStatement.returns
@@ -101,7 +109,7 @@ private class JvmFunctionLoweringState(
             veraFunction.name,
             jvmParameters,
             veraFunction.returnType.toJvmType(),
-            jvmStatements,
+            JvmExplicitReturnBlock(jvmStatements),
         )
     }
 
@@ -134,10 +142,10 @@ private class JvmFunctionLoweringState(
     private fun lowerWhileStatement(veraWhileStatement: VeraWhileStatement): JvmStatement {
         val jvmCondition = lowerPrimaryExpression(veraWhileStatement.condition)
         if (jvmCondition.type != JvmType.BOOL) error("conditions must result in a bool")
-        val jvmBody = veraWhileStatement.body.map { veraStatement ->
+        val jvmBody = veraWhileStatement.body.statements.map { veraStatement ->
             lowerStatement(veraStatement).jvmStatement
         }
-        return JvmWhile(jvmCondition, jvmBody)
+        return JvmWhile(jvmCondition, JvmUnitReturnBlock(jvmBody))
     }
 
     private fun lowerRebindStatement(veraRebindStatement: VeraRebindStatement): JvmStatement {
@@ -327,6 +335,29 @@ private class JvmFunctionLoweringState(
         }
     }
 
+    private fun lowerBlock(veraBlock: VeraBlock): JvmBlock {
+        return when (veraBlock) {
+            is VeraExplicitReturnBlock -> {
+                JvmExplicitReturnBlock(lowerBlockStatements(veraBlock.statements))
+            }
+            is VeraImplicitReturnBlock -> {
+                JvmImplicitReturnBlock(
+                    lowerBlockStatements(veraBlock.statements),
+                    lowerPrimaryExpression(veraBlock.result),
+                )
+            }
+            is VeraUnitReturnBlock -> {
+                JvmUnitReturnBlock(lowerBlockStatements(veraBlock.statements))
+            }
+        }
+    }
+
+    private fun lowerBlockStatements(veraStatements: List<VeraStatement>): List<JvmStatement> {
+        return veraStatements.map { veraStatement ->
+            lowerStatement(veraStatement).jvmStatement
+        }
+    }
+
     private fun tryLowerPrimaryExpression(veraPrimaryExpression: VeraPrimaryExpression): Either<JvmExpression, PendingSymbol> {
         return when (veraPrimaryExpression) {
             is VeraIntLiteral -> {
@@ -345,11 +376,12 @@ private class JvmFunctionLoweringState(
                 val jvmCondition = lowerPrimaryExpression(veraPrimaryExpression.condition)
                 if (jvmCondition.type != JvmType.BOOL) error("conditions must result in a bool")
 
-                val jvmThenBlock = veraPrimaryExpression.thenBlock.map { veraStatement ->
-                    lowerStatement(veraStatement).jvmStatement
+                val jvmThenBlock = lowerBlock(veraPrimaryExpression.thenBlock)
+                val jvmElseBlock = veraPrimaryExpression.elseBlock?.let { veraElseBlock ->
+                    lowerBlock(veraElseBlock)
                 }
-                val jvmElseBlock = veraPrimaryExpression.elseBlock.map { veraStatement ->
-                    lowerStatement(veraStatement).jvmStatement
+                if (jvmElseBlock != null && jvmThenBlock.type != jvmElseBlock.type) {
+                    error("if branches must have the same type, got ${jvmThenBlock.type} and ${jvmElseBlock.type}")
                 }
                 Left(JvmIfExpression(jvmCondition, jvmThenBlock, jvmElseBlock))
             }

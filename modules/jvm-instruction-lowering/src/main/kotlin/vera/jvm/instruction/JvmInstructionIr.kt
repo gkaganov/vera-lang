@@ -130,3 +130,9 @@ data class Return(val type: JvmType = JvmType.VOID) : JvmInstruction {
         stackPops = if (type != JvmType.VOID) listOf(type) else emptyList(),
     )
 }
+
+data class Pop(val type: JvmType) : JvmInstruction {
+    override val effect = InstructionEffect(
+        stackPops = listOf(type),
+    )
+}

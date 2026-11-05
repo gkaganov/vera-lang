@@ -10,7 +10,7 @@ data class JvmMethod(
     val name: Identifier,
     val parameters: List<JvmParameter>,
     val returnType: JvmType,
-    val body: List<JvmStatement>,
+    val body: JvmExplicitReturnBlock,
 )
 
 data class JvmMethodSignature(val parameters: List<JvmParameter>, val returnType: JvmType)
@@ -19,6 +19,7 @@ data class JvmParameter(val name: Identifier, val type: JvmType)
 
 data class JvmLocal(val name: Identifier, val type: JvmType)
 
+/** JVM-level types. Vera `Unit` is represented as [JvmType.VOID]. */
 enum class JvmType { INT, STRING, BOOL, OBJECT, VOID }
 
 sealed interface JvmExpression {
@@ -94,12 +95,35 @@ data class JvmBuiltinCall(
     }
 }
 
+sealed interface JvmBlock {
+    val statements: List<JvmStatement>
+    val type: JvmType
+}
+
+/** A method body whose statements use explicit `return` statements. */
+data class JvmExplicitReturnBlock(override val statements: List<JvmStatement>) : JvmBlock {
+    override val type = JvmType.VOID
+}
+
+/** A branch body whose value is its final expression; it returns implicitly. */
+data class JvmImplicitReturnBlock(
+    override val statements: List<JvmStatement>,
+    val result: JvmExpression,
+) : JvmBlock {
+    override val type = result.type
+}
+
+/** A block that produces no value and returns implicitly as `Unit`. */
+data class JvmUnitReturnBlock(override val statements: List<JvmStatement>) : JvmBlock {
+    override val type = JvmType.VOID
+}
+
 data class JvmIfExpression(
     val condition: JvmExpression,
-    val thenBlock: List<JvmStatement>,
-    val elseBlock: List<JvmStatement>,
+    val thenBlock: JvmBlock,
+    val elseBlock: JvmBlock?,
 ) : JvmExpression {
-    override val type = JvmType.VOID
+    override val type = if (elseBlock != null) thenBlock.type else JvmType.VOID
 }
 
 sealed interface JvmStatement
@@ -112,4 +136,4 @@ data class JvmRebind(val local: JvmLocal, val expression: JvmExpression) : JvmSt
 
 data class JvmExpressionStatement(val expression: JvmExpression) : JvmStatement
 
-data class JvmWhile(val condition: JvmExpression, val body: List<JvmStatement>) : JvmStatement
+data class JvmWhile(val condition: JvmExpression, val body: JvmUnitReturnBlock) : JvmStatement

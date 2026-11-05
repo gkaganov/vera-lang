@@ -1,17 +1,19 @@
 package vera.parser
 
-import arrow.core.NonEmptyList
 import vera.ast.VeraArguments
 import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
+import vera.ast.VeraBlock
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraChainedExpression
 import vera.ast.VeraChainedExpressionData
 import vera.ast.VeraDeclaration
+import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
+import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraOperator
@@ -23,6 +25,7 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.shared.model.Identifier
 
@@ -65,8 +68,8 @@ private class ParserState(private val tokens: List<Token>) {
         }
         expect(TokenType.RPAREN)
         val returnType = if (match(TokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
-        val statements = parseBlock()
-        return VeraFunctionDeclaration(Identifier(name.text), parameters, returnType, statements)
+        val body = VeraExplicitReturnBlock(parseBlock())
+        return VeraFunctionDeclaration(Identifier(name.text), parameters, returnType, body)
     }
 
     private fun parseParameter(): VeraParameter {
@@ -97,7 +100,20 @@ private class ParserState(private val tokens: List<Token>) {
         }
     }
 
-    private fun parseBlock(): List<VeraStatement> {
+    private fun parseBlock(): List<VeraStatement> = parseBlockStatements()
+
+    private fun parseBranchBlock(): VeraBlock {
+        val statements = parseBlockStatements().toMutableList()
+        val result = (statements.lastOrNull() as? VeraExpression)?.expression
+        return if (result != null) {
+            statements.removeLast()
+            VeraImplicitReturnBlock(statements, result)
+        } else {
+            VeraUnitReturnBlock(statements)
+        }
+    }
+
+    private fun parseBlockStatements(): List<VeraStatement> {
         expect(TokenType.LBRACE)
         skipEols()
         val statements = mutableListOf<VeraStatement>()
@@ -111,7 +127,7 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseStatement(): VeraStatement {
         val statement = when {
             at(TokenType.VAR) || at(TokenType.VAL) -> parseBindStatement()
-            at(TokenType.IDENTIFIER) && peek(1).type == TokenType.BIND -> parseRebindStatement()
+            at(TokenType.IDENTIFIER) && peek().type == TokenType.BIND -> parseRebindStatement()
             at(TokenType.RETURN) -> parseReturnStatement()
             at(TokenType.WHILE) -> parseWhileStatement()
             else -> VeraExpression(parseExpression())
@@ -152,7 +168,7 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseWhileStatement(): VeraWhileStatement {
         expect(TokenType.WHILE)
         val condition = parseExpression()
-        val body = parseBlock()
+        val body = VeraUnitReturnBlock(parseBlock())
         return VeraWhileStatement(condition, body)
     }
 
@@ -290,19 +306,19 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseIfExpression(): VeraIfExpression {
         expect(TokenType.IF)
         val condition = parseExpression()
-        val thenBlock = parseBlock()
+        val thenBlock = parseBranchBlock()
         val elseBlock = if (matchElseAfterOptionalEols()) {
             if (at(TokenType.IF)) {
-                listOf(VeraExpression(parseIfExpression()))
+                VeraImplicitReturnBlock(emptyList(), parseIfExpression())
             } else {
-                parseBlock()
+                parseBranchBlock()
             }
         } else {
-            emptyList()
+            null
         }
         return VeraIfExpression(
             condition = condition,
-            thenBlock = NonEmptyList.of(thenBlock),
+            thenBlock = thenBlock,
             elseBlock = elseBlock,
         )
     }
@@ -326,7 +342,7 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun current(): Token = tokens[position]
 
-    private fun peek(offset: Int): Token = tokens[minOf(position + offset, tokens.lastIndex)]
+    private fun peek(): Token = tokens[minOf(position + 1, tokens.lastIndex)]
 
     private fun at(type: TokenType): Boolean = current().type == type
 

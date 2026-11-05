@@ -190,7 +190,29 @@ if condition {
 - `else` is optional.
 - `else if` chains are supported and select the first matching branch.
 - `else` may appear on the next line, including after blank lines.
-- `if` is currently parsed as an expression, but its value type is `Unit`.
+- An `if` is an expression. When both branches are present, the expression evaluates to the
+  result of the executed branch.
+- A branch result is the value of its last expression. Earlier expressions in the branch are
+  evaluated as statements and their values are discarded.
+- Both branches must produce the same type. A branch whose last statement is not an expression
+  produces `Unit`.
+- An `if` without `else` evaluates to `Unit`, discarding any branch result.
+
+```vera
+var label = if count > 0 {
+    "positive"
+} else {
+    "not positive"
+}
+
+var result = if count > 10 {
+    count * 2
+} else if count > 5 {
+    count + 1
+} else {
+    0
+}
+```
 
 ### `while`
 
@@ -291,5 +313,4 @@ decisions:
 ## Further reading
 
 - [Design Philosophy](design-philosophy.md) — long-term vision, planned language features, and compiler principles
-- [Structured JVM IR Migration](structured-jvm-ir-migration.md) — how the current two-layer IR was designed
 - [AGENTS.md](../AGENTS.md) — contributor and coding-agent conventions

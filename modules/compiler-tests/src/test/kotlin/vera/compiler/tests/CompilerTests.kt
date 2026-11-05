@@ -350,6 +350,151 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `if expressions evaluate to Unit when returned`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        return if False {
+                            print("if")
+                        } else {
+                            print("else")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "else$EOL", testInfo)
+    }
+
+    @Test
+    fun `if expressions return the matching branch value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(if True {
+                            1
+                        } else {
+                            2
+                        })
+                        print(if False {
+                            3
+                        } else {
+                            4
+                        })
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1${EOL}4${EOL}", testInfo)
+    }
+
+    @Test
+    fun `if expressions return the last expression in a branch`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(if True {
+                            var value = 40
+                            value + 2
+                        } else {
+                            0
+                        })
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "42$EOL", testInfo)
+    }
+
+    @Test
+    fun `if branch expression statements are discarded`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(if True {
+                            1 + 1
+                            3
+                        } else {
+                            4
+                        })
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "3$EOL", testInfo)
+    }
+
+    @Test
+    fun `else if expressions return the matching branch value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(if False {
+                            1
+                        } else if True {
+                            2
+                        } else {
+                            3
+                        })
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "2$EOL", testInfo)
+    }
+
+    @Test
+    fun `if expressions can be bound to a variable`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var value = if False {
+                            1
+                        } else {
+                            2
+                        }
+                        print(value)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "2$EOL", testInfo)
+    }
+
+    @Test
+    fun `if expressions can be returned`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return if False {
+                            1
+                        } else {
+                            2
+                        }
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 2, testInfo)
+    }
+
+    @Test
+    fun `if expressions used as statements discard their value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        if True {
+                            1
+                        } else {
+                            2
+                        }
+
+                        if True {
+                            3
+                        }
+
+                        print("after")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "after$EOL", testInfo)
+    }
+
+    @Test
+    fun `if expressions reject mismatched branch types`() {
+        assertCompilationFails(
+            """
+                fn $TEST_MAIN() {
+                    var value = if True {
+                        1
+                    } else {
+                        "no"
+                    }
+                    print(value)
+                }
+            """.trimIndent(),
+            expectedMessagePart = "if branches must have the same type",
+        )
+    }
+
+    @Test
     fun `if without else still terminates before following statement`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
