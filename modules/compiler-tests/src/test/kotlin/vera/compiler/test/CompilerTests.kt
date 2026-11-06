@@ -1,4 +1,4 @@
-package vera.compiler.tests
+package vera.compiler.test
 
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test

@@ -28,7 +28,7 @@ Run them with:
 
 ```bash
 ./gradlew :compiler-tests:test
-./gradlew :compiler-tests:test --tests "vera.compiler.tests.VeraCompilerTests.print function prints to system-out"
+./gradlew :compiler-tests:test --tests "vera.compiler.test.VeraCompilerTests.print function prints to system-out"
 ```
 
 ### Why this shape
@@ -53,7 +53,7 @@ experience was worse overall.
 
 ```
 modules/compiler-tests/src/test/
-  kotlin/vera/compiler/tests/
+  kotlin/vera/compiler/test/
     VeraCompilerTests.kt
     ByteArrayClassLoader.kt
   resources/fixtures/

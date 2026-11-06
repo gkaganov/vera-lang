@@ -12,7 +12,7 @@ Vera is a small, experimental programming language with a JVM target. It uses a 
 ```bash
 ./gradlew build                    # Compile, test, and assemble
 ./gradlew :compiler-tests:test     # Run integration tests
-./gradlew :compiler-tests:test --tests "vera.compiler.tests.VeraCompilerTests.print function prints to system-out"  # Single test
+./gradlew :compiler-tests:test --tests "vera.compiler.test.VeraCompilerTests.print function prints to system-out"  # Single test
 ```
 
 Build output goes to `out/` (compiler) and `build/` (Gradle).

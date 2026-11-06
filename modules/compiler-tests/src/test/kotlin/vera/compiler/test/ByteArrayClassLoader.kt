@@ -1,4 +1,4 @@
-package vera.compiler.tests
+package vera.compiler.test
 
 class ByteArrayClassLoader(
     private val classes: Map<String, ByteArray>

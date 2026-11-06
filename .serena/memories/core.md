@@ -14,7 +14,7 @@ All Gradle modules under `modules/<name>` (mapped in `settings.gradle.kts`).
 - `jvm-bytecode-emitter` — `vera.jvm.bytecode.emitter.JvmBytecodeEmitter`: flat instructions -> `.class`
 - `compiler` — `vera.compiler.VeraCompiler.compile(mainClassName, code): Map<Identifier, ByteArray>`
 - `cli` — root package `Main.kt`, reads `examples/main.vera`; no Gradle `run` task configured
-- `compiler-tests` — integration tests `vera.compiler.tests.VeraCompilerTests` + `ByteArrayClassLoader`
+- `compiler-tests` — integration tests `vera.compiler.test.VeraCompilerTests` + `ByteArrayClassLoader`
 
 ## Pipeline invariant
 `VeraCompiler.compile`: tokenize -> parse -> `JvmProgramLowering.lower` -> `JvmInstructionLowering.lower` -> `JvmBytecodeEmitter.emit`.

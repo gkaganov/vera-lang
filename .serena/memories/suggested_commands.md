@@ -4,7 +4,7 @@ Run from repo root `/home/nixos/projects/vera-lang` (Linux/bash, use `./gradlew`
 
 - Full build (compile + test + assemble): `./gradlew build`
 - All integration tests: `./gradlew :compiler-tests:test`
-- Single test: `./gradlew :compiler-tests:test --tests "vera.compiler.tests.VeraCompilerTests.<test name>"`
+- Single test: `./gradlew :compiler-tests:test --tests "vera.compiler.test.VeraCompilerTests.<test name>"`
   - test names are backtick prose names; quote the whole `--tests` argument.
 - Compile only: `./gradlew assemble`
 - Dependency updates report: `./gradlew dependencyUpdates --quiet`

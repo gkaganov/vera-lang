@@ -2,7 +2,7 @@ dependencies {
     testImplementation(project(":compiler"))
 
     testImplementation(libs.junit.jupiter)
-    testImplementation(kotlin("test"))
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
