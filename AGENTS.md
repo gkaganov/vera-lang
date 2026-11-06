@@ -109,7 +109,8 @@ between compilations.
 
 - JUnit 5 (JUnit 6 API) with JUnit Platform
 - Tests in `compiler-tests` module are **integration tests** — they compile Vera code, load it via a custom classloader, execute, and compare stdout
-- Test naming: `test_<scenario>_<detail>`
+- Test names are descriptive, usually backticked Kotlin method names (e.g. `` `print function prints to system-out` ``)
+- Test strategy, including the reverted fixture-based experiment and its trade-offs: [`docs/testing.md`](docs/testing.md)
 
 ### Git
 
