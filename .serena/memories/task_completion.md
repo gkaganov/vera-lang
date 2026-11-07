@@ -7,9 +7,8 @@ Run from repo root.
 - No separate linter/formatter/type-check task; Kotlin compilation is the type check.
 - For IR-boundary changes, verify:
   ```bash
-  rg -n "JvmMethodBuilder|CreateLabel|BindLabel|JumpTo|IfFalseJumpTo|LocalTable" modules/jvm-lowering
-  rg -n "swap\(|ComparisonOperation|is Print" modules/jvm-bytecode-emitter
-  rg -n "CreateLabel|BindLabel|JumpTo|IfFalseJumpTo|LocalTable|JvmMethodBuilder" modules/jvm-ir
+  rg -n "Flat[A-Z]|FlatLocalTable" modules/jvm-lowering modules/jvm-ir
+  rg -n "swap\(" modules/jvm-bytecode-emitter
   ```
   Expected: no matches.
 - `./gradlew :cli:run` is not currently configured; do not cite it as a passing check.

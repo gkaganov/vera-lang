@@ -3,18 +3,18 @@ package vera.parser
 import vera.shared.model.SourceLocation
 
 object VeraLexer {
-    fun tokenize(source: String): List<Token> = LexerState(source).tokenize()
+    fun tokenize(source: String): List<VeraToken> = VeraLexerState(source).tokenize()
 }
 
 /** Mutable state for a single lexing run. */
-private class LexerState(private val source: String) {
+private class VeraLexerState(private val source: String) {
     private var index = 0
     private var line = 1
     private var column = 1
 
-    private val tokens = mutableListOf<Token>()
+    private val tokens = mutableListOf<VeraToken>()
 
-    fun tokenize(): List<Token> {
+    fun tokenize(): List<VeraToken> {
         while (index < source.length) {
             when (val char = source[index]) {
                 ' ', '\t' -> advance()
@@ -28,7 +28,7 @@ private class LexerState(private val source: String) {
                 }
             }
         }
-        tokens += Token(TokenType.EOF, "", line, column)
+        tokens += VeraToken(VeraTokenType.EOF, "", line, column)
         return tokens
     }
 
@@ -36,7 +36,7 @@ private class LexerState(private val source: String) {
         val startLine = line
         val startColumn = column
         advance()
-        tokens += Token(TokenType.EOL, "\n", startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
     }
 
     private fun lexCarriageReturn() {
@@ -48,7 +48,7 @@ private class LexerState(private val source: String) {
             index++
         }
         line++
-        tokens += Token(TokenType.EOL, "\n", startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
     }
 
     private fun lexString() {
@@ -67,7 +67,7 @@ private class LexerState(private val source: String) {
             throw VeraLexException.UnterminatedString(SourceLocation(startLine, startColumn))
         }
         advance() // closing quote
-        tokens += Token(TokenType.STRING_LITERAL, source.substring(start, index), startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.STRING_LITERAL, source.substring(start, index), startLine, startColumn)
     }
 
     private fun lexInt() {
@@ -77,7 +77,7 @@ private class LexerState(private val source: String) {
         while (index < source.length && source[index] in '0'..'9') {
             advance()
         }
-        tokens += Token(TokenType.INT_LITERAL, source.substring(start, index), startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.INT_LITERAL, source.substring(start, index), startLine, startColumn)
     }
 
     private fun lexIdentifierOrKeyword() {
@@ -88,8 +88,8 @@ private class LexerState(private val source: String) {
             advance()
         }
         val text = source.substring(start, index)
-        val type = keywords[text] ?: TokenType.IDENTIFIER
-        tokens += Token(type, text, startLine, startColumn)
+        val type = keywords[text] ?: VeraTokenType.IDENTIFIER
+        tokens += VeraToken(type, text, startLine, startColumn)
     }
 
     private fun lexSymbol(char: Char) {
@@ -98,31 +98,31 @@ private class LexerState(private val source: String) {
         val next = source.getOrNull(index + 1)
 
         val (type, length) = when (char) {
-            '=' if next == '=' -> TokenType.EQ to 2
-            '!' if next == '=' -> TokenType.NEQ to 2
-            '<' if next == '=' -> TokenType.LTE to 2
-            '>' if next == '=' -> TokenType.GTE to 2
-            '=' -> TokenType.BIND to 1
-            ':' -> TokenType.COLON to 1
-            ',' -> TokenType.COMMA to 1
-            '.' -> TokenType.DOT to 1
-            '(' -> TokenType.LPAREN to 1
-            ')' -> TokenType.RPAREN to 1
-            '{' -> TokenType.LBRACE to 1
-            '}' -> TokenType.RBRACE to 1
-            '+' -> TokenType.PLUS to 1
-            '-' -> TokenType.MINUS to 1
-            '*' -> TokenType.STAR to 1
-            '/' -> TokenType.SLASH to 1
-            '%' -> TokenType.PERCENT to 1
-            '<' -> TokenType.LT to 1
-            '>' -> TokenType.GT to 1
-            '|' -> TokenType.PIPE to 1
+            '=' if next == '=' -> VeraTokenType.EQ to 2
+            '!' if next == '=' -> VeraTokenType.NEQ to 2
+            '<' if next == '=' -> VeraTokenType.LTE to 2
+            '>' if next == '=' -> VeraTokenType.GTE to 2
+            '=' -> VeraTokenType.BIND to 1
+            ':' -> VeraTokenType.COLON to 1
+            ',' -> VeraTokenType.COMMA to 1
+            '.' -> VeraTokenType.DOT to 1
+            '(' -> VeraTokenType.LPAREN to 1
+            ')' -> VeraTokenType.RPAREN to 1
+            '{' -> VeraTokenType.LBRACE to 1
+            '}' -> VeraTokenType.RBRACE to 1
+            '+' -> VeraTokenType.PLUS to 1
+            '-' -> VeraTokenType.MINUS to 1
+            '*' -> VeraTokenType.STAR to 1
+            '/' -> VeraTokenType.SLASH to 1
+            '%' -> VeraTokenType.PERCENT to 1
+            '<' -> VeraTokenType.LT to 1
+            '>' -> VeraTokenType.GT to 1
+            '|' -> VeraTokenType.PIPE to 1
             else -> throw VeraLexException.UnexpectedCharacter(char, SourceLocation(startLine, startColumn))
         }
 
         repeat(length) { advance() }
-        tokens += Token(type, source.substring(index - length, index), startLine, startColumn)
+        tokens += VeraToken(type, source.substring(index - length, index), startLine, startColumn)
     }
 
     private fun advance() {
@@ -142,22 +142,22 @@ private class LexerState(private val source: String) {
     private fun Char.isStringChar(): Boolean = this == ' ' || this == '!' || this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9'
 
     private companion object {
-        val keywords: Map<String, TokenType> = mapOf(
-            "fn" to TokenType.FN,
-            "if" to TokenType.IF,
-            "else" to TokenType.ELSE,
-            "while" to TokenType.WHILE,
-            "var" to TokenType.VAR,
-            "val" to TokenType.VAL,
-            "return" to TokenType.RETURN,
-            "and" to TokenType.AND,
-            "or" to TokenType.OR,
-            "Int" to TokenType.INT_TYPE,
-            "String" to TokenType.STRING_TYPE,
-            "Bool" to TokenType.BOOL_TYPE,
-            "Unit" to TokenType.UNIT_TYPE,
-            "True" to TokenType.BOOL_LITERAL,
-            "False" to TokenType.BOOL_LITERAL,
+        val keywords: Map<String, VeraTokenType> = mapOf(
+            "fn" to VeraTokenType.FN,
+            "if" to VeraTokenType.IF,
+            "else" to VeraTokenType.ELSE,
+            "while" to VeraTokenType.WHILE,
+            "var" to VeraTokenType.VAR,
+            "val" to VeraTokenType.VAL,
+            "return" to VeraTokenType.RETURN,
+            "and" to VeraTokenType.AND,
+            "or" to VeraTokenType.OR,
+            "Int" to VeraTokenType.INT_TYPE,
+            "String" to VeraTokenType.STRING_TYPE,
+            "Bool" to VeraTokenType.BOOL_TYPE,
+            "Unit" to VeraTokenType.UNIT_TYPE,
+            "True" to VeraTokenType.BOOL_LITERAL,
+            "False" to VeraTokenType.BOOL_LITERAL,
         )
     }
 }

@@ -22,8 +22,8 @@ Build output goes to `out/` (compiler) and `build/` (Gradle).
 ## Architecture
 
 ```text
-Vera source → lexer/parser → AST → JvmIr (structured IR) → JvmInstructionLowering →
-JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class files
+Vera source → lexer/parser → AST → JvmIr (structured IR) → FlatInstructionLowering →
+FlatProgram (flat instruction IR) → Bytecode Emitter → .class files
 ```
 
 ### Pipeline
@@ -31,9 +31,9 @@ JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class file
 1. **Parse** — `VeraLexer` → `VeraParser` → AST.
 2. **Lower to structured IR** — `JvmProgramLowering` / `JvmFunctionLowering`; expressions and
    statements remain nested.
-3. **Lower to instruction IR** — `JvmInstructionLowering` flattens IR and owns stack effects,
+3. **Lower to instruction IR** — `FlatInstructionLowering` flattens IR and owns stack effects,
    labels, jumps, and local slots.
-4. **Emit** — `JvmBytecodeEmitter` generates `.class` files via the Java ClassFile API.
+4. **Emit** — `BytecodeEmitter` generates `.class` files via the Java ClassFile API.
 
 ### Modules
 
@@ -44,11 +44,36 @@ JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class file
 | `ast` | AST node definitions |
 | `jvm-ir` | Structured JVM IR — classes, methods, expressions, statements, operators |
 | `jvm-lowering` | AST → structured IR (`JvmProgramLowering`, `JvmFunctionLowering`) |
-| `jvm-instruction-lowering` | Structured IR → flat instruction IR (`JvmInstructionLowering`) |
+| `jvm-instruction-lowering` | Structured IR → flat instruction IR (`FlatInstructionLowering`) |
 | `jvm-bytecode-emitter` | Flat instruction IR → JVM `.class` files |
 | `compiler` | Orchestration: `VeraCompiler` |
 | `cli` | Command-line entry point |
 | `compiler-tests` | Integration and compiler-error tests |
+
+### Naming by Stage
+
+| Stage | Module / package | Class naming | Method naming | Purpose |
+|---|---|---|---|---|
+| Shared model | `shared-model` / `vera.shared.model` | Shared concepts: `Identifier`, `SourceLocation`; base: `VeraException` | n/a | Identifiers, source locations, base exception |
+| Lexing | `parser` / `vera.parser` | `Vera*` (`VeraLexer`, `VeraToken`, `VeraLexException`) | `lex*` | Source → tokens |
+| Parsing | `parser`, `ast` / `vera.parser`, `vera.ast` | `Vera*` | `parse*` | Tokens → AST |
+| Structured IR | `jvm-ir` / `vera.jvm.ir` | `Jvm*` | n/a (data classes) | Resolved, nested JVM IR; no labels or slots |
+| AST lowering | `jvm-lowering` / `vera.jvm.lowering` | `Jvm*Lowering`, `Jvm*LoweringState`, `JvmLoweringException` | `lower*`, `validate*`, `require*` | AST → structured IR |
+| Instruction lowering | `jvm-instruction-lowering` / `vera.jvm.instruction` | `Flat*` (`FlatInstruction`, `FlatProgram`, `FlatLoadLocal`, `FlatLabel`, `FlatInstructionException`) | `lower*`, `append`, label helpers | Structured IR → flat instruction IR; owns stack, labels, and slots |
+| Bytecode emission | `jvm-bytecode-emitter` / `vera.jvm.bytecode.emitter` | `Bytecode*` (`BytecodeEmitter`, `BytecodeEmitterState`, `BytecodeEmitException`) | `emit*` | Flat IR → `.class` |
+| Orchestration | `compiler` / `vera.compiler` | `VeraCompiler` | `compile` | Runs the pipeline |
+
+Prefixes identify the data model, not the pipeline stage:
+
+- `Vera*` — source/AST types and source-facing services (`VeraLexer`, `VeraParser`, `VeraToken`,
+  `VeraCompiler`).
+- `Jvm*` — structured JVM IR and its lowering services/exceptions (`JvmProgram`, `JvmMethod`,
+  `JvmProgramLowering`, `JvmLoweringException`).
+- `Flat*` — flat instruction IR and its lowering/builder/exceptions (`FlatProgram`, `FlatMethod`,
+  `FlatLoadLocal`, `FlatInstructionLowering`, `FlatMethodBuilder`).
+- `Bytecode*` — bytecode emission (`BytecodeEmitter`, `BytecodeEmitException`).
+
+Shared concepts such as `Identifier` and `SourceLocation` intentionally have no prefix.
 
 ### Lowering
 
@@ -63,11 +88,11 @@ JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class file
 - **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmMethod`, `JvmExpression`,
   `JvmStatement`, and block kinds `JvmExplicitReturnBlock`, `JvmImplicitReturnBlock`,
   `JvmUnitReturnBlock`.
-- **Operators**: `IntBinaryOperator` and `ComparisonOperator` are independent enums.
+- **Operators**: `JvmIntBinaryOperator` and `JvmComparisonOperator` are independent enums.
 - **Flat instruction IR** (`vera.jvm.instruction`): flat instruction lists with explicit
-  `InstructionEffect`, `JvmLabel` control flow, and `InstructionWithDebugInfo`.
-- `Pop` discards non-`Unit` expression results, including `if` values used as statements.
-- `GetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
+  `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
+- `FlatPop` discards non-`Unit` expression results, including `if` values used as statements.
+- `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
 - No structured expressions/statements remain at the flat layer.
 
 ## Conventions
@@ -77,12 +102,12 @@ JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class file
 - Kotlin 2.4.0; Java 25 source and bytecode.
 - 4-space indentation.
 - Sealed interfaces for IR hierarchies.
-- `Jvm` prefix for structured IR; flat instruction types are unprefixed.
+- `Jvm*` for structured IR, `Flat*` for flat instruction IR, and `Bytecode*` for emission.
 
 ### API Style
 
 - Public pipeline services are stateless objects: `VeraLexer`, `VeraParser`,
-  `JvmProgramLowering`, `JvmInstructionLowering`, `JvmBytecodeEmitter`, `VeraCompiler`.
+  `JvmProgramLowering`, `FlatInstructionLowering`, `BytecodeEmitter`, `VeraCompiler`.
 - Inputs are method arguments; mutable state is scoped to a single call.
 - Stateful helpers are private `*State` classes created per operation.
 
@@ -90,7 +115,7 @@ JvmInstructionProgram (flat instruction IR) → Bytecode Emitter → .class file
 
 - Expected failures throw named exceptions extending `vera.shared.model.VeraException`.
 - Each stage has a sealed hierarchy: `VeraLexException`, `VeraParseException`,
-  `JvmLoweringException`, `JvmInstructionException`, `JvmEmitException`.
+  `JvmLoweringException`, `FlatInstructionException`, `BytecodeEmitException`.
 - Exceptions carry structured fields and build a user-facing `render()` message.
 - `VeraCompiler.compile` propagates exceptions; CLI and tests catch `VeraException`.
 - Do not use `error()`, `require`, `check`, `TODO()`, `!!`, or unsafe casts in compiler modules.
@@ -118,12 +143,16 @@ When the user says **"finish"**:
 
 ### Naming
 
-- AST types use the `Vera` prefix (`VeraProgram`, `VeraExpression`, `VeraStatement`, ...).
-- Structured IR types use the `Jvm` prefix in `vera.jvm.ir` (`JvmProgram`, `JvmReturn`, ...).
-- Flat instruction IR types live in `vera.jvm.instruction` and are unprefixed (`GetStatic`,
-  `JvmInstructionProgram`, ...).
-- Mirror the layer in local names: `vera*` for AST values, `jvm*` for IR/JVM/lowering values.
-- Lowering state classes keep the full prefix: `JvmFunctionLoweringState`.
+- Source/AST types use `Vera*` (`VeraProgram`, `VeraExpression`, `VeraToken`, ...).
+- Structured IR types use `Jvm*` in `vera.jvm.ir` (`JvmProgram`, `JvmReturn`, ...).
+- Flat instruction IR types use `Flat*` in `vera.jvm.instruction` (`FlatProgram`, `FlatLoadLocal`,
+  ...).
+- Lowering services are named by their target: `JvmProgramLowering` / `JvmFunctionLowering` produce
+  structured IR; `FlatInstructionLowering` produces flat instruction IR.
+- Mirror the data model in local names: `vera*` for AST values, `jvm*` for structured IR values,
+  `flat*` for flat instruction values.
+- Stateful helpers keep the full pipeline prefix: `JvmFunctionLoweringState`,
+  `FlatInstructionLoweringState`, `VeraParserState`, `BytecodeEmitterState`.
 - Use `lower*` for AST-to-IR and structured-to-instruction lowering; use `validate*`/`require*` for
   operand checks; use `append(...)` for one flat instruction.
 - Reserve `emit*` for actual bytecode generation.

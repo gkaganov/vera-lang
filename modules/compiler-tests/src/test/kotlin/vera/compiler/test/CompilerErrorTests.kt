@@ -5,18 +5,18 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import vera.compiler.VeraCompiler
-import vera.jvm.bytecode.emitter.JvmBytecodeEmitter
-import vera.jvm.bytecode.emitter.JvmEmitException
-import vera.jvm.instruction.JvmInstructionClass
-import vera.jvm.instruction.JvmInstructionException
-import vera.jvm.instruction.JvmInstructionMethod
-import vera.jvm.instruction.JvmInstructionMethodBuilder
-import vera.jvm.instruction.JvmInstructionProgram
-import vera.jvm.instruction.JvmLabel
-import vera.jvm.instruction.JumpTo
-import vera.jvm.instruction.LoadConstant
-import vera.jvm.instruction.Pop
-import vera.jvm.instruction.lowering.JvmInstructionLowering
+import vera.jvm.bytecode.emitter.BytecodeEmitter
+import vera.jvm.bytecode.emitter.BytecodeEmitException
+import vera.jvm.instruction.FlatClass
+import vera.jvm.instruction.FlatInstructionException
+import vera.jvm.instruction.FlatMethod
+import vera.jvm.instruction.FlatMethodBuilder
+import vera.jvm.instruction.FlatProgram
+import vera.jvm.instruction.FlatLabel
+import vera.jvm.instruction.FlatJump
+import vera.jvm.instruction.FlatLoadConstant
+import vera.jvm.instruction.FlatPop
+import vera.jvm.instruction.lowering.FlatInstructionLowering
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmClass
@@ -223,16 +223,16 @@ class CompilerErrorTests {
             listOf(JvmClass(Identifier("ErrorTest"), listOf(method))),
         )
 
-        private fun methodBuilder(): JvmInstructionMethodBuilder = JvmInstructionMethodBuilder(
+        private fun methodBuilder(): FlatMethodBuilder = FlatMethodBuilder(
             Identifier(TEST_MAIN),
             emptyList(),
             JvmType.VOID,
         )
 
-        private fun emit(method: JvmInstructionMethod): Map<Identifier, ByteArray> =
-            JvmBytecodeEmitter.emit(
-                JvmInstructionProgram(
-                    listOf(JvmInstructionClass(Identifier("ErrorTest"), listOf(method))),
+        private fun emit(method: FlatMethod): Map<Identifier, ByteArray> =
+            BytecodeEmitter.emit(
+                FlatProgram(
+                    listOf(FlatClass(Identifier("ErrorTest"), listOf(method))),
                 ),
             )
     }
@@ -257,23 +257,23 @@ class CompilerErrorTests {
 
     @Test
     fun `instruction builder rejects stack underflow`() {
-        assertCompilerError<JvmInstructionException.StackUnderflow>("stack underflow") {
-            methodBuilder().addInstruction(Pop(JvmType.INT))
+        assertCompilerError<FlatInstructionException.StackUnderflow>("stack underflow") {
+            methodBuilder().addInstruction(FlatPop(JvmType.INT))
         }
     }
 
     @Test
     fun `instruction builder rejects stack type mismatches`() {
-        assertCompilerError<JvmInstructionException.StackTypeMismatch>("invalid stack type") {
+        assertCompilerError<FlatInstructionException.StackTypeMismatch>("invalid stack type") {
             val builder = methodBuilder()
-            builder.addInstruction(LoadConstant(JvmType.BOOL, true))
-            builder.addInstruction(Pop(JvmType.INT))
+            builder.addInstruction(FlatLoadConstant(JvmType.BOOL, true))
+            builder.addInstruction(FlatPop(JvmType.INT))
         }
     }
 
     @Test
     fun `instruction builder rejects out-of-range parameter indexes`() {
-        assertCompilerError<JvmInstructionException.InternalInvariant>("parameter index 1 is out of bounds") {
+        assertCompilerError<FlatInstructionException.InternalInvariant>("parameter index 1 is out of bounds") {
             methodBuilder().parameterLocal(1)
         }
     }
@@ -281,8 +281,8 @@ class CompilerErrorTests {
     @Test
     fun `instruction lowering rejects undefined locals`() {
         val missingLocal = JvmLocal(Identifier("missing"), JvmType.INT)
-        assertCompilerError<JvmInstructionException.UndefinedLocal>("local missing is not defined") {
-            JvmInstructionLowering.lower(
+        assertCompilerError<FlatInstructionException.UndefinedLocal>("local missing is not defined") {
+            FlatInstructionLowering.lower(
                 jvmProgram(jvmMethod(listOf(JvmRebind(missingLocal, JvmIntLiteral(1))))),
             )
         }
@@ -294,8 +294,8 @@ class CompilerErrorTests {
             JvmBuiltin.PRINT,
             listOf(JvmIntLiteral(1), JvmIntLiteral(2)),
         )
-        assertCompilerError<JvmInstructionException.BuiltinArityMismatch>("print requires exactly 1 argument") {
-            JvmInstructionLowering.lower(
+        assertCompilerError<FlatInstructionException.BuiltinArityMismatch>("print requires exactly 1 argument") {
+            FlatInstructionLowering.lower(
                 jvmProgram(jvmMethod(listOf(JvmExpressionStatement(printCall)))),
             )
         }
@@ -304,8 +304,8 @@ class CompilerErrorTests {
     @Test
     fun `bytecode emission rejects unbound labels`() {
         val builder = methodBuilder()
-        builder.addInstruction(JumpTo(JvmLabel()))
-        assertCompilerError<JvmEmitException.UnboundLabel>("unbound label") {
+        builder.addInstruction(FlatJump(FlatLabel()))
+        assertCompilerError<BytecodeEmitException.UnboundLabel>("unbound label") {
             emit(builder.build())
         }
     }
@@ -313,8 +313,8 @@ class CompilerErrorTests {
     @Test
     fun `bytecode emission rejects unsupported constants`() {
         val builder = methodBuilder()
-        builder.addInstruction(LoadConstant(JvmType.OBJECT, "value"))
-        assertCompilerError<JvmEmitException.UnsupportedConstant>("unsupported constant type") {
+        builder.addInstruction(FlatLoadConstant(JvmType.OBJECT, "value"))
+        assertCompilerError<BytecodeEmitException.UnsupportedConstant>("unsupported constant type") {
             emit(builder.build())
         }
     }
@@ -322,8 +322,8 @@ class CompilerErrorTests {
     @Test
     fun `bytecode emission rejects constants of the wrong type`() {
         val builder = methodBuilder()
-        builder.addInstruction(LoadConstant(JvmType.INT, "not an Int"))
-        assertCompilerError<JvmEmitException.InvalidConstant>("invalid constant for type INT") {
+        builder.addInstruction(FlatLoadConstant(JvmType.INT, "not an Int"))
+        assertCompilerError<BytecodeEmitException.InvalidConstant>("invalid constant for type INT") {
             emit(builder.build())
         }
     }

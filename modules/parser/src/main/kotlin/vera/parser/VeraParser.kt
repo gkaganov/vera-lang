@@ -30,18 +30,18 @@ import vera.ast.VeraWhileStatement
 import vera.shared.model.Identifier
 
 object VeraParser {
-    fun parse(tokens: List<Token>): VeraProgram = ParserState(tokens).parse()
+    fun parse(tokens: List<VeraToken>): VeraProgram = VeraParserState(tokens).parse()
 }
 
 /** Mutable state for a single parse run. */
-private class ParserState(private val tokens: List<Token>) {
+private class VeraParserState(private val tokens: List<VeraToken>) {
 
     private var position = 0
 
     fun parse(): VeraProgram {
         val declarations = mutableListOf<VeraDeclaration>()
         skipEols()
-        while (!at(TokenType.EOF)) {
+        while (!at(VeraTokenType.EOF)) {
             declarations += parseDeclaration()
             skipEols()
         }
@@ -50,7 +50,7 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun parseDeclaration(): VeraDeclaration {
         return when {
-            at(TokenType.FN) -> parseFunctionDeclaration()
+            at(VeraTokenType.FN) -> parseFunctionDeclaration()
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedFunctionDeclaration(token, token.location())
@@ -59,18 +59,18 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseFunctionDeclaration(): VeraFunctionDeclaration {
-        expect(TokenType.FN)
-        val name = expect(TokenType.IDENTIFIER, "function name")
-        expect(TokenType.LPAREN)
+        expect(VeraTokenType.FN)
+        val name = expect(VeraTokenType.IDENTIFIER, "function name")
+        expect(VeraTokenType.LPAREN)
         val parameters = mutableListOf<VeraParameter>()
-        if (!at(TokenType.RPAREN)) {
+        if (!at(VeraTokenType.RPAREN)) {
             parameters += parseParameter()
-            while (match(TokenType.COMMA)) {
+            while (match(VeraTokenType.COMMA)) {
                 parameters += parseParameter()
             }
         }
-        expect(TokenType.RPAREN)
-        val returnType = if (match(TokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
+        expect(VeraTokenType.RPAREN)
+        val returnType = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
         val body = parseBlock()
         return VeraFunctionDeclaration(
             Identifier(name.text),
@@ -81,29 +81,29 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseParameter(): VeraParameter {
-        val name = expect(TokenType.IDENTIFIER, "parameter name")
-        expect(TokenType.COLON)
+        val name = expect(VeraTokenType.IDENTIFIER, "parameter name")
+        expect(VeraTokenType.COLON)
         return VeraParameter(Identifier(name.text), parseTypeRef())
     }
 
     private fun parseTypeRef(): VeraType {
         return when (current().type) {
-            TokenType.INT_TYPE -> {
+            VeraTokenType.INT_TYPE -> {
                 advance()
                 VeraType.INT
             }
 
-            TokenType.STRING_TYPE -> {
+            VeraTokenType.STRING_TYPE -> {
                 advance()
                 VeraType.STRING
             }
 
-            TokenType.BOOL_TYPE -> {
+            VeraTokenType.BOOL_TYPE -> {
                 advance()
                 VeraType.BOOL
             }
 
-            TokenType.UNIT_TYPE -> {
+            VeraTokenType.UNIT_TYPE -> {
                 advance()
                 VeraType.UNIT
             }
@@ -129,22 +129,22 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseBlockStatements(): List<VeraStatement> {
-        expect(TokenType.LBRACE)
+        expect(VeraTokenType.LBRACE)
         skipEols()
         val statements = mutableListOf<VeraStatement>()
-        while (!at(TokenType.RBRACE) && !at(TokenType.EOF)) {
+        while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
             statements += parseStatement()
         }
-        expect(TokenType.RBRACE)
+        expect(VeraTokenType.RBRACE)
         return statements
     }
 
     private fun parseStatement(): VeraStatement {
         val statement = when {
-            at(TokenType.VAR) || at(TokenType.VAL) -> parseBindStatement()
-            at(TokenType.IDENTIFIER) && peek().type == TokenType.BIND -> parseRebindStatement()
-            at(TokenType.RETURN) -> parseReturnStatement()
-            at(TokenType.WHILE) -> parseWhileStatement()
+            at(VeraTokenType.VAR) || at(VeraTokenType.VAL) -> parseBindStatement()
+            at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND -> parseRebindStatement()
+            at(VeraTokenType.RETURN) -> parseReturnStatement()
+            at(VeraTokenType.WHILE) -> parseWhileStatement()
             else -> VeraExpression(parseExpression())
         }
         parseStatementTerminator()
@@ -153,17 +153,17 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun parseBindStatement(): VeraBindStatement {
         advance() // var | val
-        val name = expect(TokenType.IDENTIFIER, "variable name")
-        val type = if (match(TokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
-        expect(TokenType.BIND)
+        val name = expect(VeraTokenType.IDENTIFIER, "variable name")
+        val type = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
+        expect(VeraTokenType.BIND)
         val expression = parseExpression()
         return VeraBindStatement(Identifier(name.text), type, VeraExpression(expression))
     }
 
     private fun parseRebindStatement(): VeraRebindStatement {
-        val name = expect(TokenType.IDENTIFIER, "variable name")
-        expect(TokenType.BIND)
-        if (at(TokenType.LBRACE)) {
+        val name = expect(VeraTokenType.IDENTIFIER, "variable name")
+        expect(VeraTokenType.BIND)
+        if (at(VeraTokenType.LBRACE)) {
             // The AST has no representation for update blocks yet.
             throw VeraParseException.UnsupportedRebindUpdateBlock(current().location())
         }
@@ -172,8 +172,8 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseReturnStatement(): VeraReturnStatement {
-        expect(TokenType.RETURN)
-        val expression = if (at(TokenType.EOL) || at(TokenType.EOF) || at(TokenType.RBRACE)) {
+        expect(VeraTokenType.RETURN)
+        val expression = if (at(VeraTokenType.EOL) || at(VeraTokenType.EOF) || at(VeraTokenType.RBRACE)) {
             null
         } else {
             VeraExpression(parseExpression())
@@ -182,7 +182,7 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseWhileStatement(): VeraWhileStatement {
-        expect(TokenType.WHILE)
+        expect(VeraTokenType.WHILE)
         val condition = parseExpression()
         val body = parseBlock()
         return VeraWhileStatement(condition, VeraUnitReturnBlock(body))
@@ -190,8 +190,8 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun parseStatementTerminator() {
         when {
-            at(TokenType.EOL) -> skipEols()
-            at(TokenType.EOF) -> Unit
+            at(VeraTokenType.EOL) -> skipEols()
+            at(VeraTokenType.EOF) -> Unit
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedEndOfLine(token, token.location())
@@ -202,20 +202,20 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseExpression(): VeraPrimaryExpression = parseForwardApplication()
 
     private fun parseForwardApplication(): VeraPrimaryExpression =
-        parseBinary(::parseLogicalOr, mapOf(TokenType.PIPE to VeraOperator.PIPE))
+        parseBinary(::parseLogicalOr, mapOf(VeraTokenType.PIPE to VeraOperator.PIPE))
 
     private fun parseLogicalOr(): VeraPrimaryExpression =
-        parseBinary(::parseLogicalAnd, mapOf(TokenType.OR to VeraOperator.OR))
+        parseBinary(::parseLogicalAnd, mapOf(VeraTokenType.OR to VeraOperator.OR))
 
     private fun parseLogicalAnd(): VeraPrimaryExpression =
-        parseBinary(::parseEquality, mapOf(TokenType.AND to VeraOperator.AND))
+        parseBinary(::parseEquality, mapOf(VeraTokenType.AND to VeraOperator.AND))
 
     private fun parseEquality(): VeraPrimaryExpression =
         parseBinary(
             ::parseComparison,
             mapOf(
-                TokenType.EQ to VeraOperator.EQUALS,
-                TokenType.NEQ to VeraOperator.NOT_EQUALS,
+                VeraTokenType.EQ to VeraOperator.EQUALS,
+                VeraTokenType.NEQ to VeraOperator.NOT_EQUALS,
             ),
         )
 
@@ -223,10 +223,10 @@ private class ParserState(private val tokens: List<Token>) {
         parseBinary(
             ::parseAdditive,
             mapOf(
-                TokenType.LT to VeraOperator.LESS,
-                TokenType.GT to VeraOperator.GREATER,
-                TokenType.LTE to VeraOperator.LESS_EQ,
-                TokenType.GTE to VeraOperator.GREATER_EQ,
+                VeraTokenType.LT to VeraOperator.LESS,
+                VeraTokenType.GT to VeraOperator.GREATER,
+                VeraTokenType.LTE to VeraOperator.LESS_EQ,
+                VeraTokenType.GTE to VeraOperator.GREATER_EQ,
             ),
         )
 
@@ -234,8 +234,8 @@ private class ParserState(private val tokens: List<Token>) {
         parseBinary(
             ::parseMultiplicative,
             mapOf(
-                TokenType.PLUS to VeraOperator.ADD,
-                TokenType.MINUS to VeraOperator.SUBTRACT,
+                VeraTokenType.PLUS to VeraOperator.ADD,
+                VeraTokenType.MINUS to VeraOperator.SUBTRACT,
             ),
         )
 
@@ -243,15 +243,15 @@ private class ParserState(private val tokens: List<Token>) {
         parseBinary(
             ::parseChainedPrimary,
             mapOf(
-                TokenType.STAR to VeraOperator.MULTIPLY,
-                TokenType.SLASH to VeraOperator.DIVIDE,
-                TokenType.PERCENT to VeraOperator.PERCENT,
+                VeraTokenType.STAR to VeraOperator.MULTIPLY,
+                VeraTokenType.SLASH to VeraOperator.DIVIDE,
+                VeraTokenType.PERCENT to VeraOperator.PERCENT,
             ),
         )
 
     private fun parseBinary(
         operand: () -> VeraPrimaryExpression,
-        operators: Map<TokenType, VeraOperator>,
+        operators: Map<VeraTokenType, VeraOperator>,
     ): VeraPrimaryExpression {
         var left = operand()
         while (true) {
@@ -268,12 +268,12 @@ private class ParserState(private val tokens: List<Token>) {
         val data = mutableListOf<VeraChainedExpressionData>()
         while (true) {
             when {
-                match(TokenType.DOT) -> {
-                    val name = expect(TokenType.IDENTIFIER, "member name")
+                match(VeraTokenType.DOT) -> {
+                    val name = expect(VeraTokenType.IDENTIFIER, "member name")
                     data += VeraMemberAccess(Identifier(name.text))
                 }
 
-                at(TokenType.LPAREN) -> {
+                at(VeraTokenType.LPAREN) -> {
                     data += VeraArguments(parseArgumentList())
                 }
 
@@ -284,50 +284,50 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseArgumentList(): List<VeraPrimaryExpression> {
-        expect(TokenType.LPAREN)
+        expect(VeraTokenType.LPAREN)
         val arguments = mutableListOf<VeraPrimaryExpression>()
-        if (!at(TokenType.RPAREN)) {
+        if (!at(VeraTokenType.RPAREN)) {
             arguments += parseExpression()
-            while (match(TokenType.COMMA)) {
+            while (match(VeraTokenType.COMMA)) {
                 arguments += parseExpression()
             }
         }
-        expect(TokenType.RPAREN)
+        expect(VeraTokenType.RPAREN)
         return arguments
     }
 
     private fun parsePrimary(): VeraPrimaryExpression {
         return when (current().type) {
-            TokenType.INT_LITERAL -> {
+            VeraTokenType.INT_LITERAL -> {
                 val token = advance()
                 val value = token.text.toIntOrNull()
                     ?: throw VeraParseException.InvalidIntLiteral(token, token.location())
                 VeraIntLiteral(value)
             }
 
-            TokenType.STRING_LITERAL -> {
+            VeraTokenType.STRING_LITERAL -> {
                 val token = advance()
                 VeraStringLiteral(token.text.removeSurrounding("\""))
             }
 
-            TokenType.BOOL_LITERAL -> {
+            VeraTokenType.BOOL_LITERAL -> {
                 val token = advance()
                 if (token.text == "True") VeraBoolLiteral.TRUE else VeraBoolLiteral.FALSE
             }
 
-            TokenType.IDENTIFIER -> {
+            VeraTokenType.IDENTIFIER -> {
                 val token = advance()
                 VeraIdentifierAsExpression(Identifier(token.text))
             }
 
-            TokenType.LPAREN -> {
+            VeraTokenType.LPAREN -> {
                 advance()
                 val expression = parseExpression()
-                expect(TokenType.RPAREN)
+                expect(VeraTokenType.RPAREN)
                 expression
             }
 
-            TokenType.IF -> parseIfExpression()
+            VeraTokenType.IF -> parseIfExpression()
 
             else -> {
                 val token = current()
@@ -337,11 +337,11 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun parseIfExpression(): VeraIfExpression {
-        expect(TokenType.IF)
+        expect(VeraTokenType.IF)
         val condition = parseExpression()
         val thenBlock = parseBranchBlock()
         val elseBlock = if (matchElseAfterOptionalEols()) {
-            if (at(TokenType.IF)) {
+            if (at(VeraTokenType.IF)) {
                 VeraImplicitReturnBlock(
                     emptyList(),
                     parseIfExpression(),
@@ -362,7 +362,7 @@ private class ParserState(private val tokens: List<Token>) {
     private fun matchElseAfterOptionalEols(): Boolean {
         val positionBeforeEols = position
         skipEols()
-        if (at(TokenType.ELSE)) {
+        if (at(VeraTokenType.ELSE)) {
             advance()
             return true
         }
@@ -371,32 +371,32 @@ private class ParserState(private val tokens: List<Token>) {
     }
 
     private fun skipEols() {
-        while (at(TokenType.EOL)) {
+        while (at(VeraTokenType.EOL)) {
             advance()
         }
     }
 
-    private fun current(): Token = tokens[position]
+    private fun current(): VeraToken = tokens[position]
 
-    private fun peek(): Token = tokens[minOf(position + 1, tokens.lastIndex)]
+    private fun peek(): VeraToken = tokens[minOf(position + 1, tokens.lastIndex)]
 
-    private fun at(type: TokenType): Boolean = current().type == type
+    private fun at(type: VeraTokenType): Boolean = current().type == type
 
-    private fun advance(): Token {
+    private fun advance(): VeraToken {
         val token = current()
-        if (token.type != TokenType.EOF) {
+        if (token.type != VeraTokenType.EOF) {
             position++
         }
         return token
     }
 
-    private fun match(type: TokenType): Boolean {
+    private fun match(type: VeraTokenType): Boolean {
         if (!at(type)) return false
         advance()
         return true
     }
 
-    private fun expect(type: TokenType, what: String? = null): Token {
+    private fun expect(type: VeraTokenType, what: String? = null): VeraToken {
         if (!at(type)) {
             val token = current()
             throw VeraParseException.ExpectedToken(what ?: type.name, token, token.location())

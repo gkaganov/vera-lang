@@ -5,7 +5,7 @@ import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
 import vera.shared.model.VeraException
 
-enum class ForwardApplicationIssue {
+enum class JvmForwardApplicationIssue {
     RIGHT_SIDE_NOT_FUNCTION_NAME,
     RIGHT_SIDE_CONTAINS_MEMBER_ACCESS,
     MULTIPLE_ARGUMENT_LISTS,
@@ -55,13 +55,13 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "if branches must have the same type, got $thenType and $elseType",
     )
 
-    class InvalidForwardApplication(val issue: ForwardApplicationIssue) : JvmLoweringException(
+    class InvalidForwardApplication(val issue: JvmForwardApplicationIssue) : JvmLoweringException(
         when (issue) {
-            ForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME ->
+            JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME ->
                 "right-hand side of '|' must be a function name"
-            ForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS ->
+            JvmForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS ->
                 "right-hand side of '|' must not contain member access"
-            ForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS ->
+            JvmForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS ->
                 "right-hand side of '|' must contain at most one argument list"
         },
     )

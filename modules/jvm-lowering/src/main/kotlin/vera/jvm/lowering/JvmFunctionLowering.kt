@@ -23,8 +23,8 @@ import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
 import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
-import vera.jvm.ir.ComparisonOperator
-import vera.jvm.ir.IntBinaryOperator
+import vera.jvm.ir.JvmComparisonOperator
+import vera.jvm.ir.JvmIntBinaryOperator
 import vera.jvm.ir.JvmBlock
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
@@ -214,17 +214,17 @@ private class JvmFunctionLoweringState(
         validateIntOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
 
         return when (veraOperation.operator) {
-            VeraOperator.EQUALS -> JvmComparison(ComparisonOperator.EQ, jvmLeft, jvmRight)
-            VeraOperator.NOT_EQUALS -> JvmComparison(ComparisonOperator.NEQ, jvmLeft, jvmRight)
-            VeraOperator.LESS -> JvmComparison(ComparisonOperator.LT, jvmLeft, jvmRight)
-            VeraOperator.GREATER -> JvmComparison(ComparisonOperator.GT, jvmLeft, jvmRight)
-            VeraOperator.LESS_EQ -> JvmComparison(ComparisonOperator.LTE, jvmLeft, jvmRight)
-            VeraOperator.GREATER_EQ -> JvmComparison(ComparisonOperator.GTE, jvmLeft, jvmRight)
-            VeraOperator.ADD -> JvmIntBinary(IntBinaryOperator.ADD, jvmLeft, jvmRight)
-            VeraOperator.SUBTRACT -> JvmIntBinary(IntBinaryOperator.SUB, jvmLeft, jvmRight)
-            VeraOperator.MULTIPLY -> JvmIntBinary(IntBinaryOperator.MUL, jvmLeft, jvmRight)
-            VeraOperator.DIVIDE -> JvmIntBinary(IntBinaryOperator.DIV, jvmLeft, jvmRight)
-            VeraOperator.PERCENT -> JvmIntBinary(IntBinaryOperator.REM, jvmLeft, jvmRight)
+            VeraOperator.EQUALS -> JvmComparison(JvmComparisonOperator.EQ, jvmLeft, jvmRight)
+            VeraOperator.NOT_EQUALS -> JvmComparison(JvmComparisonOperator.NEQ, jvmLeft, jvmRight)
+            VeraOperator.LESS -> JvmComparison(JvmComparisonOperator.LT, jvmLeft, jvmRight)
+            VeraOperator.GREATER -> JvmComparison(JvmComparisonOperator.GT, jvmLeft, jvmRight)
+            VeraOperator.LESS_EQ -> JvmComparison(JvmComparisonOperator.LTE, jvmLeft, jvmRight)
+            VeraOperator.GREATER_EQ -> JvmComparison(JvmComparisonOperator.GTE, jvmLeft, jvmRight)
+            VeraOperator.ADD -> JvmIntBinary(JvmIntBinaryOperator.ADD, jvmLeft, jvmRight)
+            VeraOperator.SUBTRACT -> JvmIntBinary(JvmIntBinaryOperator.SUB, jvmLeft, jvmRight)
+            VeraOperator.MULTIPLY -> JvmIntBinary(JvmIntBinaryOperator.MUL, jvmLeft, jvmRight)
+            VeraOperator.DIVIDE -> JvmIntBinary(JvmIntBinaryOperator.DIV, jvmLeft, jvmRight)
+            VeraOperator.PERCENT -> JvmIntBinary(JvmIntBinaryOperator.REM, jvmLeft, jvmRight)
             VeraOperator.AND, VeraOperator.OR, VeraOperator.PIPE ->
                 throw JvmLoweringException.InternalInvariant("unreachable binary operator")
         }
@@ -237,7 +237,7 @@ private class JvmFunctionLoweringState(
                 val veraBase = veraRight.primaryExpression
                 if (veraBase !is VeraIdentifierAsExpression) {
                     throw JvmLoweringException.InvalidForwardApplication(
-                        ForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
+                        JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
                     )
                 }
                 val veraArgumentLists = mutableListOf<VeraArguments>()
@@ -245,20 +245,20 @@ private class JvmFunctionLoweringState(
                     when (veraChainedData) {
                         is VeraArguments -> veraArgumentLists += veraChainedData
                         is VeraMemberAccess -> throw JvmLoweringException.InvalidForwardApplication(
-                            ForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS,
+                            JvmForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS,
                         )
                     }
                 }
                 if (veraArgumentLists.size > 1) {
                     throw JvmLoweringException.InvalidForwardApplication(
-                        ForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS,
+                        JvmForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS,
                     )
                 }
                 veraBase.identifier to (veraArgumentLists.firstOrNull()?.expressions ?: emptyList())
             }
 
             else -> throw JvmLoweringException.InvalidForwardApplication(
-                ForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
+                JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
             )
         }
 

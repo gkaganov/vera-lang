@@ -5,7 +5,7 @@ import vera.jvm.ir.JvmParameter
 import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
 
-class OperandStack {
+class FlatOperandStack {
     private val types = mutableListOf<JvmType>()
 
     fun push(value: JvmType) {
@@ -29,7 +29,7 @@ class OperandStack {
     }
 }
 
-class LocalTable {
+class FlatLocalTable {
     @JvmInline
     value class Slot(val index: Int)
 
@@ -51,29 +51,29 @@ class LocalTable {
     fun snapshot(): Map<Slot, Local> = locals.toMap()
 }
 
-class JvmInstructionMethodBuilder(
+class FlatMethodBuilder(
     val name: Identifier,
     val parameters: List<JvmParameter>,
     val returnType: JvmType,
 ) {
-    private val locals = LocalTable()
-    private val stack = OperandStack()
+    private val locals = FlatLocalTable()
+    private val stack = FlatOperandStack()
 
-    val instructions: List<InstructionWithDebugInfo>
-        field = mutableListOf<InstructionWithDebugInfo>()
+    val instructions: List<FlatInstructionWithDebugInfo>
+        field = mutableListOf<FlatInstructionWithDebugInfo>()
 
-    val nextFreeLocalSlot: LocalTable.Slot
+    val nextFreeLocalSlot: FlatLocalTable.Slot
         get() = locals.nextFreeSlot
 
-    fun allocateLocal(jvmType: JvmType): LocalTable.Local {
+    fun allocateLocal(jvmType: JvmType): FlatLocalTable.Local {
         val slot = locals.define(jvmType)
-        return LocalTable.Local(slot, jvmType)
+        return FlatLocalTable.Local(slot, jvmType)
     }
 
-    fun parameterLocal(index: Int): LocalTable.Local {
+    fun parameterLocal(index: Int): FlatLocalTable.Local {
         val parameter = parameters.getOrNull(index)
-            ?: throw JvmInstructionException.InternalInvariant("parameter index $index is out of bounds")
-        return LocalTable.Local(LocalTable.Slot(index), parameter.type)
+            ?: throw FlatInstructionException.InternalInvariant("parameter index $index is out of bounds")
+        return FlatLocalTable.Local(FlatLocalTable.Slot(index), parameter.type)
     }
 
     init {
@@ -82,39 +82,39 @@ class JvmInstructionMethodBuilder(
         }
     }
 
-    fun addInstruction(instruction: JvmInstruction) {
+    fun addInstruction(instruction: FlatInstruction) {
         verifyInstruction(instruction)
 
-        val before = DebugFrameSnapshot(
+        val before = FlatFrameSnapshot(
             stack = stack.snapshot(),
             locals = locals.snapshot(),
         )
 
         applyInstruction(instruction)
 
-        val after = DebugFrameSnapshot(
+        val after = FlatFrameSnapshot(
             stack = stack.snapshot(),
             locals = locals.snapshot(),
         )
 
-        instructions += InstructionWithDebugInfo(
+        instructions += FlatInstructionWithDebugInfo(
             instruction = instruction,
             before = before,
             after = after,
         )
     }
 
-    fun build(): JvmInstructionMethod = JvmInstructionMethod(
+    fun build(): FlatMethod = FlatMethod(
         name,
         instructions,
         JvmMethodSignature(parameters, returnType),
     )
 
-    private fun verifyInstruction(instruction: JvmInstruction) {
+    private fun verifyInstruction(instruction: FlatInstruction) {
         val pops = instruction.effect.stackPops
 
         if (stack.size() < pops.size) {
-            throw JvmInstructionException.StackUnderflow(
+            throw FlatInstructionException.StackUnderflow(
                 instruction::class.simpleName ?: "instruction",
                 pops.size,
                 stack.size(),
@@ -125,7 +125,7 @@ class JvmInstructionMethodBuilder(
 
         actual.zip(pops).forEach { (actualType, expectedType) ->
             if (actualType != expectedType) {
-                throw JvmInstructionException.StackTypeMismatch(
+                throw FlatInstructionException.StackTypeMismatch(
                     instruction::class.simpleName ?: "instruction",
                     expectedType,
                     actualType,
@@ -135,12 +135,12 @@ class JvmInstructionMethodBuilder(
 
         instruction.effect.localReads.forEach { local ->
             if (locals.read(local.slot) == null) {
-                throw JvmInstructionException.InternalInvariant("read from undefined local: $local")
+                throw FlatInstructionException.InternalInvariant("read from undefined local: $local")
             }
         }
     }
 
-    private fun applyInstruction(instruction: JvmInstruction) {
+    private fun applyInstruction(instruction: FlatInstruction) {
         repeat(instruction.effect.stackPops.size) {
             stack.pop()
         }

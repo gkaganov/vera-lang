@@ -1,0 +1,384 @@
+package vera.jvm.instruction.lowering
+
+import vera.jvm.ir.JvmComparisonOperator
+import vera.jvm.ir.JvmBlock
+import vera.jvm.ir.JvmBuiltin
+import vera.jvm.ir.JvmBuiltinCall
+import vera.jvm.ir.JvmClass
+import vera.jvm.ir.JvmComparison
+import vera.jvm.ir.JvmExpression
+import vera.jvm.ir.JvmExpressionStatement
+import vera.jvm.ir.JvmIfExpression
+import vera.jvm.ir.JvmImplicitReturnBlock
+import vera.jvm.ir.JvmIntBinary
+import vera.jvm.ir.JvmIntLiteral
+import vera.jvm.ir.JvmLocal
+import vera.jvm.ir.JvmLocalRead
+import vera.jvm.ir.JvmLogicalAnd
+import vera.jvm.ir.JvmLogicalOr
+import vera.jvm.ir.JvmMethod
+import vera.jvm.ir.JvmMethodSignature
+import vera.jvm.ir.JvmParameter
+import vera.jvm.ir.JvmProgram
+import vera.jvm.ir.JvmRebind
+import vera.jvm.ir.JvmReturn
+import vera.jvm.ir.JvmStatement
+import vera.jvm.ir.JvmStaticCall
+import vera.jvm.ir.JvmStringLiteral
+import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUnitReturnBlock
+import vera.jvm.ir.JvmVarDeclaration
+import vera.jvm.ir.JvmWhile
+import vera.jvm.ir.JvmBoolLiteral
+import vera.jvm.instruction.FlatBindLabel
+import vera.jvm.instruction.FlatCreateLabel
+import vera.jvm.instruction.FlatGetStatic
+import vera.jvm.instruction.FlatIfFalseJump
+import vera.jvm.instruction.FlatIntBinaryOperation
+import vera.jvm.instruction.FlatIntComparisonJump
+import vera.jvm.instruction.FlatInvokeVirtual
+import vera.jvm.instruction.FlatInvokestatic
+import vera.jvm.instruction.FlatInstruction
+import vera.jvm.instruction.FlatClass
+import vera.jvm.instruction.FlatInstructionException
+import vera.jvm.instruction.FlatMethod
+import vera.jvm.instruction.FlatMethodBuilder
+import vera.jvm.instruction.FlatProgram
+import vera.jvm.instruction.FlatLabel
+import vera.jvm.instruction.FlatJump
+import vera.jvm.instruction.FlatLoadConstant
+import vera.jvm.instruction.FlatLoadLocal
+import vera.jvm.instruction.FlatLocalTable
+import vera.jvm.instruction.FlatPop
+import vera.jvm.instruction.FlatReturn
+import vera.jvm.instruction.FlatStoreLocal
+import vera.shared.model.Identifier
+
+object FlatInstructionLowering {
+
+    fun lower(jvmProgram: JvmProgram): FlatProgram =
+        FlatInstructionLoweringState().lower(jvmProgram)
+}
+
+private class FlatInstructionLoweringState {
+
+    private val flatLocalSlots = mutableMapOf<JvmLocal, FlatLocalTable.Local>()
+    private lateinit var flatBuilder: FlatMethodBuilder
+
+    fun lower(jvmProgram: JvmProgram): FlatProgram {
+        val instructionClasses = mutableListOf<FlatClass>()
+        jvmProgram.classes.forEach { jvmClass ->
+            instructionClasses += lowerClass(jvmClass)
+        }
+        return FlatProgram(instructionClasses)
+    }
+
+    private fun lowerClass(jvmClass: JvmClass): FlatClass {
+        val instructionMethods = mutableListOf<FlatMethod>()
+        jvmClass.methods.forEach { jvmMethod ->
+            instructionMethods += lowerMethod(jvmMethod)
+        }
+        return FlatClass(jvmClass.name, instructionMethods)
+    }
+
+    private fun lowerMethod(jvmMethod: JvmMethod): FlatMethod {
+        flatLocalSlots.clear()
+        flatBuilder = FlatMethodBuilder(
+            jvmMethod.name,
+            jvmMethod.parameters,
+            jvmMethod.returnType,
+        )
+
+        jvmMethod.parameters.forEachIndexed { index, jvmParameter ->
+            val local = flatBuilder.parameterLocal(index)
+            flatLocalSlots[JvmLocal(jvmParameter.name, jvmParameter.type)] = local
+        }
+
+        jvmMethod.body.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
+        return flatBuilder.build()
+    }
+
+    private fun lowerStatement(jvmStatement: JvmStatement) {
+        when (jvmStatement) {
+            is JvmReturn -> {
+                val jvmReturnType = jvmStatement.expression
+                    ?.let { jvmExpression -> lowerExpression(jvmExpression) }
+                    ?: JvmType.VOID
+                append(FlatReturn(jvmReturnType))
+            }
+
+            is JvmVarDeclaration -> {
+                lowerExpression(jvmStatement.expression)
+                val flatLocal = flatBuilder.allocateLocal(jvmStatement.local.type)
+                flatLocalSlots[jvmStatement.local] = flatLocal
+                append(FlatStoreLocal(flatLocal))
+            }
+
+            is JvmRebind -> {
+                lowerExpression(jvmStatement.expression)
+                val flatLocal = flatLocalSlots[jvmStatement.local]
+                    ?: throw FlatInstructionException.UndefinedLocal(jvmStatement.local.name)
+                append(FlatStoreLocal(flatLocal))
+            }
+
+            is JvmExpressionStatement -> {
+                val jvmExpressionType = lowerExpression(jvmStatement.expression)
+                if (jvmExpressionType != JvmType.VOID) {
+                    append(FlatPop(jvmExpressionType))
+                }
+            }
+
+            is JvmWhile -> {
+                lowerWhile(jvmStatement)
+            }
+        }
+    }
+
+    private fun lowerWhile(jvmWhile: JvmWhile) {
+        val flatConditionLabel = FlatLabel()
+        val flatEndLabel = FlatLabel()
+
+        createLabel(flatConditionLabel)
+        createLabel(flatEndLabel)
+        bindLabel(flatConditionLabel)
+        lowerExpression(jvmWhile.condition)
+        jumpIfFalse(flatEndLabel)
+        jvmWhile.body.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
+        jump(flatConditionLabel)
+        bindLabel(flatEndLabel)
+    }
+
+    private fun lowerExpression(jvmExpression: JvmExpression): JvmType {
+        return when (jvmExpression) {
+            is JvmIntLiteral -> {
+                append(FlatLoadConstant(JvmType.INT, jvmExpression.value))
+                JvmType.INT
+            }
+
+            is JvmStringLiteral -> {
+                append(FlatLoadConstant(JvmType.STRING, jvmExpression.value))
+                JvmType.STRING
+            }
+
+            is JvmBoolLiteral -> {
+                append(FlatLoadConstant(JvmType.BOOL, jvmExpression.value))
+                JvmType.BOOL
+            }
+
+            is JvmLocalRead -> {
+                val flatLocal = flatLocalSlots[jvmExpression.local]
+                    ?: throw FlatInstructionException.UndefinedLocal(jvmExpression.local.name)
+                append(FlatLoadLocal(flatLocal))
+                flatLocal.jvmType
+            }
+
+            is JvmIntBinary -> {
+                lowerExpression(jvmExpression.left)
+                lowerExpression(jvmExpression.right)
+                append(FlatIntBinaryOperation(jvmExpression.operator))
+                JvmType.INT
+            }
+
+            is JvmComparison -> {
+                lowerExpression(jvmExpression.left)
+                lowerExpression(jvmExpression.right)
+                lowerComparison(jvmExpression.operator)
+                JvmType.BOOL
+            }
+
+            is JvmLogicalAnd -> {
+                lowerLogicalAnd(jvmExpression)
+                JvmType.BOOL
+            }
+
+            is JvmLogicalOr -> {
+                lowerLogicalOr(jvmExpression)
+                JvmType.BOOL
+            }
+
+            is JvmStaticCall -> {
+                jvmExpression.arguments.forEach { jvmArgument ->
+                    lowerExpression(jvmArgument)
+                }
+                append(
+                    FlatInvokestatic(
+                        jvmExpression.ownerClass,
+                        jvmExpression.methodName,
+                        jvmExpression.signature,
+                    ),
+                )
+                jvmExpression.signature.returnType
+            }
+
+            is JvmBuiltinCall -> lowerBuiltinCall(jvmExpression)
+
+            is JvmIfExpression -> {
+                lowerIfExpression(jvmExpression)
+                jvmExpression.type
+            }
+        }
+    }
+
+    private fun lowerComparison(jvmOperator: JvmComparisonOperator) {
+        val flatResultLocal = flatBuilder.allocateLocal(JvmType.BOOL)
+        val flatTrueLabel = FlatLabel()
+        val flatEndLabel = FlatLabel()
+
+        createLabel(flatTrueLabel)
+        createLabel(flatEndLabel)
+        jumpIfIntComparison(jvmOperator, flatTrueLabel)
+        append(FlatLoadConstant(JvmType.BOOL, false))
+        append(FlatStoreLocal(flatResultLocal))
+        jump(flatEndLabel)
+        bindLabel(flatTrueLabel)
+        append(FlatLoadConstant(JvmType.BOOL, true))
+        append(FlatStoreLocal(flatResultLocal))
+        bindLabel(flatEndLabel)
+        append(FlatLoadLocal(flatResultLocal))
+    }
+
+    private fun lowerLogicalAnd(jvmExpression: JvmLogicalAnd) {
+        val flatResultLocal = flatBuilder.allocateLocal(JvmType.BOOL)
+        val flatFalseLabel = FlatLabel()
+        val flatEndLabel = FlatLabel()
+
+        lowerExpression(jvmExpression.left)
+
+        createLabel(flatFalseLabel)
+        jumpIfFalse(flatFalseLabel)
+
+        lowerExpression(jvmExpression.right)
+        append(FlatStoreLocal(flatResultLocal))
+        createLabel(flatEndLabel)
+        jump(flatEndLabel)
+
+        bindLabel(flatFalseLabel)
+        append(FlatLoadConstant(JvmType.BOOL, false))
+        append(FlatStoreLocal(flatResultLocal))
+
+        bindLabel(flatEndLabel)
+        append(FlatLoadLocal(flatResultLocal))
+    }
+
+    private fun lowerLogicalOr(jvmExpression: JvmLogicalOr) {
+        val flatResultLocal = flatBuilder.allocateLocal(JvmType.BOOL)
+        val flatRightLabel = FlatLabel()
+        val flatEndLabel = FlatLabel()
+
+        lowerExpression(jvmExpression.left)
+
+        createLabel(flatRightLabel)
+        jumpIfFalse(flatRightLabel)
+        append(FlatLoadConstant(JvmType.BOOL, true))
+        append(FlatStoreLocal(flatResultLocal))
+        createLabel(flatEndLabel)
+        jump(flatEndLabel)
+
+        bindLabel(flatRightLabel)
+        lowerExpression(jvmExpression.right)
+        append(FlatStoreLocal(flatResultLocal))
+
+        bindLabel(flatEndLabel)
+        append(FlatLoadLocal(flatResultLocal))
+    }
+
+    private fun lowerBuiltinCall(jvmBuiltinCall: JvmBuiltinCall): JvmType {
+        return when (jvmBuiltinCall.builtin) {
+            JvmBuiltin.PRINT -> {
+                if (jvmBuiltinCall.arguments.size != 1) {
+                    throw FlatInstructionException.BuiltinArityMismatch(1, jvmBuiltinCall.arguments.size)
+                }
+                append(
+                    FlatGetStatic(
+                        Identifier("java.lang.System"),
+                        Identifier("out"),
+                        JvmType.OBJECT,
+                        Identifier("java.io.PrintStream"),
+                    ),
+                )
+                val jvmArgumentType = lowerExpression(jvmBuiltinCall.arguments.first())
+                append(
+                    FlatInvokeVirtual(
+                        Identifier("java.io.PrintStream"),
+                        Identifier("println"),
+                        JvmMethodSignature(
+                            listOf(JvmParameter(Identifier("value"), jvmArgumentType)),
+                            JvmType.VOID,
+                        ),
+                    ),
+                )
+                JvmType.VOID
+            }
+        }
+    }
+
+    private fun lowerIfExpression(jvmIfExpression: JvmIfExpression) {
+        val flatResultLocal = if (jvmIfExpression.type == JvmType.VOID) {
+            null
+        } else {
+            flatBuilder.allocateLocal(jvmIfExpression.type)
+        }
+
+        lowerExpression(jvmIfExpression.condition)
+
+        val flatElseLabel = FlatLabel()
+        createLabel(flatElseLabel)
+        jumpIfFalse(flatElseLabel)
+        lowerBlock(jvmIfExpression.thenBlock, discardResult = flatResultLocal == null)
+        if (flatResultLocal != null) {
+            append(FlatStoreLocal(flatResultLocal))
+        }
+
+        val jvmElseBlock = jvmIfExpression.elseBlock
+        if (jvmElseBlock == null) {
+            bindLabel(flatElseLabel)
+        } else {
+            val flatEndLabel = FlatLabel()
+            createLabel(flatEndLabel)
+            jump(flatEndLabel)
+
+            bindLabel(flatElseLabel)
+            lowerBlock(jvmElseBlock, discardResult = flatResultLocal == null)
+            if (flatResultLocal != null) {
+                append(FlatStoreLocal(flatResultLocal))
+            }
+
+            bindLabel(flatEndLabel)
+        }
+
+        if (flatResultLocal != null) {
+            append(FlatLoadLocal(flatResultLocal))
+        }
+    }
+
+    private fun lowerBlock(jvmBlock: JvmBlock, discardResult: Boolean) {
+        jvmBlock.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
+        if (jvmBlock is JvmImplicitReturnBlock) {
+            val jvmResultType = lowerExpression(jvmBlock.result)
+            if (discardResult && jvmResultType != JvmType.VOID) {
+                append(FlatPop(jvmResultType))
+            }
+        }
+    }
+
+    private fun append(flatInstruction: FlatInstruction) {
+        flatBuilder.addInstruction(flatInstruction)
+    }
+
+    private fun createLabel(flatLabel: FlatLabel) = append(FlatCreateLabel(flatLabel))
+
+    private fun bindLabel(flatLabel: FlatLabel) = append(FlatBindLabel(flatLabel))
+
+    private fun jump(flatLabel: FlatLabel) = append(FlatJump(flatLabel))
+
+    private fun jumpIfFalse(flatLabel: FlatLabel) = append(FlatIfFalseJump(flatLabel))
+
+    private fun jumpIfIntComparison(jvmOperator: JvmComparisonOperator, flatLabel: FlatLabel) =
+        append(FlatIntComparisonJump(jvmOperator, flatLabel))
+}

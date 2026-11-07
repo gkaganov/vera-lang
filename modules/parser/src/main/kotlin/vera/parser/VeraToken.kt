@@ -1,6 +1,6 @@
 package vera.parser
 
-enum class TokenType {
+enum class VeraTokenType {
     // Keywords
     FN,
     IF,
@@ -51,8 +51,8 @@ enum class TokenType {
     EOF,
 }
 
-data class Token(
-    val type: TokenType,
+data class VeraToken(
+    val type: VeraTokenType,
     val text: String,
     val line: Int,
     val column: Int,

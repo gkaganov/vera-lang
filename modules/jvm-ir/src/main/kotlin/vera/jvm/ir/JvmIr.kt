@@ -42,11 +42,11 @@ data class JvmLocalRead(val local: JvmLocal) : JvmExpression {
     override val type = local.type
 }
 
-enum class IntBinaryOperator { ADD, SUB, MUL, DIV, REM }
-enum class ComparisonOperator { EQ, NEQ, LT, GT, LTE, GTE }
+enum class JvmIntBinaryOperator { ADD, SUB, MUL, DIV, REM }
+enum class JvmComparisonOperator { EQ, NEQ, LT, GT, LTE, GTE }
 
 data class JvmIntBinary(
-    val operator: IntBinaryOperator,
+    val operator: JvmIntBinaryOperator,
     val left: JvmExpression,
     val right: JvmExpression,
 ) : JvmExpression {
@@ -54,7 +54,7 @@ data class JvmIntBinary(
 }
 
 data class JvmComparison(
-    val operator: ComparisonOperator,
+    val operator: JvmComparisonOperator,
     val left: JvmExpression,
     val right: JvmExpression,
 ) : JvmExpression {
