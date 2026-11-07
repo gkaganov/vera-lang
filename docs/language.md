@@ -1,55 +1,39 @@
 # Vera Language
 
-> **Status: experimental.** This document describes the syntax that is implemented today.  
-> For the long-term vision and planned features, see [Design Philosophy](design-philosophy.md).
+> **Status: experimental.** Current syntax only. See [Design Philosophy](design-philosophy.md) for
+> long-term direction.
 
-## What is Vera?
+## Overview
 
-Vera is a small, statically typed programming language targeting the JVM. It aims to combine
-practical functional programming with straightforward data-oriented design, while keeping the
-compiler pipeline explicit and predictable.
-
-Vera is not a Java replacement and not a purely functional language. It is a pragmatic experiment
-in a small language with strong compile-time checks and a direct JVM target.
-
-## Design goals
-
-- Prefer a small, coherent language over a large feature set.
-- Make mutation and side effects explicit.
-- Provide useful compile-time guarantees without excessive annotation.
-- Favor composition over inheritance.
-- Treat the JVM as a first-class target.
-- Keep the compiler understandable: lexer → parser → AST → structured IR → instruction IR → emitter.
-
-Some of these goals are not implemented yet; see [Current limitations](#current-limitations).
-
-## Current status
+- Statically typed, JVM-targeting language.
+- Compiles through: source → lexer → parser → AST → structured IR → instruction IR → `.class`.
+- Top-level functions compile to static JVM methods.
+- The compiler receives the generated class name; `main` has no special language meaning.
 
 Implemented:
 
-- Top-level functions with typed parameters and optional return types
-- `var` bindings and rebinding with `=`
-- `Int`, `String`, `Bool`, and `Unit` types
-- Integer arithmetic and comparisons
-- `and` / `or` short-circuiting boolean operators
-- `if` / `else`
-- `while`
-- Function calls and `print`
-- Forward application with `|`
+- Top-level functions with typed parameters and optional return types.
+- `var` bindings and rebinding with `=`.
+- `Int`, `String`, `Bool`, and `Unit`.
+- Integer arithmetic and comparisons.
+- `and` / `or` short-circuiting boolean operators.
+- `if` / `else if` / `else` expressions.
+- `while`.
+- Function calls, `print`, and forward application with `|`.
 
-Not implemented yet:
+Not implemented:
 
-- `val` immutability enforcement
-- Records, traits, classes, and inheritance
-- Effects/capabilities, services, and errors-as-values
-- `for`, member/field access, Java interop
-- `long`, `float`, `double`, and numeric conversions
-- Comments, block scoping, and unary operators
-- User-defined `main` entry-point conventions
+- `val` immutability enforcement.
+- Records, traits, classes, inheritance.
+- Effects, capabilities, services, errors-as-values.
+- `for`, member/field access, Java interop.
+- `long`, `float`, `double`, numeric conversions.
+- Comments, block scoping, unary operators.
+- User-defined entry-point conventions.
 
 ## Program structure
 
-A Vera program is a sequence of top-level function declarations.
+A program is a sequence of top-level function declarations.
 
 ```vera
 fn add(a: Int, b: Int): Int {
@@ -61,23 +45,20 @@ fn main() {
 }
 ```
 
-Functions are compiled as static JVM methods. The compiler is given the generated class name; the
-language itself does not currently assign special meaning to a function named `main`.
-
 ## Functions
 
 ```vera
 fn name(parameter: Type, other: Type): ReturnType {
-    // body
     return expression
 }
 ```
 
-- Parameters require an explicit name and type.
-- The return type is optional. A function without a return type is treated as returning `Unit`.
-- `return` with no expression returns from a `Unit` function.
-- A function without a top-level `return` statement gets an implicit `return` at the end. Returns nested inside `if` or `while` blocks do not currently suppress this implicit return.
-- Functions can only be declared at the top level.
+- Parameters require a name and type.
+- Return type is optional; omitted return type means `Unit`.
+- `return` without an expression returns from a `Unit` function.
+- A function without a top-level `return` gets an implicit final `return`.
+- Returns nested inside `if` or `while` do not suppress that implicit return.
+- Functions can only be declared at top level.
 
 ## Variables and rebinding
 
@@ -88,26 +69,24 @@ var name: String = "Vera"
 count = count + 1
 ```
 
-- `var` introduces a binding. The type can be inferred from the initializer or declared explicitly.
+- `var` introduces a binding; the type is inferred or declared explicitly.
 - `name = expression` rebinds an existing variable.
-- The new value must have the same type as the existing variable.
+- Rebinding requires the same type as the existing variable.
 - Rebinding an unknown variable is a compile-time error.
-- `val` is currently parsed but is not yet enforced as immutable.
-
-Bindings are currently tracked per function. Block scoping is planned but not implemented.
+- `val` parses but is not yet enforced as immutable.
+- Bindings are function-scoped; block scoping is not implemented.
 
 ## Types
 
 | Type | Meaning | Examples |
 |---|---|---|
-| `Int` | 32-bit signed integer | `0`, `42`, `100` |
+| `Int` | 32-bit signed integer | `0`, `42` |
 | `String` | Text | `"hello"` |
 | `Bool` | Boolean | `True`, `False` |
 | `Unit` | No useful value | Return type of `print` |
 
-String literals currently accept a limited character set: letters, digits, spaces, and `!`.
-
-`long`, `float`, `double`, records, traits, and user-defined types are not implemented yet.
+- String literals accept letters, digits, spaces, and `!` only.
+- Other numeric, structured, and user-defined types are not implemented.
 
 ## Expressions
 
@@ -121,7 +100,8 @@ String literals currently accept a limited character set: letters, digits, space
 7 % 3
 ```
 
-Arithmetic operators are defined for `Int` only. There is no unary minus yet.
+- `+`, `-`, `*`, `/`, `%` are `Int`-only.
+- No unary minus yet.
 
 ### Comparisons
 
@@ -134,7 +114,7 @@ a <= b
 a >= b
 ```
 
-Comparisons are defined for `Int` only and produce a `Bool`.
+- Comparisons are `Int`-only and produce `Bool`.
 
 ### Boolean logic
 
@@ -143,7 +123,8 @@ left and right
 left or right
 ```
 
-`and` and `or` are short-circuiting and require `Bool` operands.
+- `and` and `or` are short-circuiting.
+- Both operands must be `Bool`.
 
 ### Function calls
 
@@ -158,7 +139,8 @@ print("hello")
 2 | add(1)
 ```
 
-`value | f(args)` is lowered to `f(value, args)`. `value | f` is lowered to `f(value)`.
+- `value | f(args)` lowers to `f(value, args)`.
+- `value | f` lowers to `f(value)`.
 
 ## Operator precedence
 
@@ -186,17 +168,15 @@ if condition {
 }
 ```
 
-- The condition must be a `Bool`.
+- Condition must be `Bool`.
 - `else` is optional.
-- `else if` chains are supported and select the first matching branch.
+- `else if` chains select the first matching branch.
 - `else` may appear on the next line, including after blank lines.
-- An `if` is an expression. When both branches are present, the expression evaluates to the
-  result of the executed branch.
-- A branch result is the value of its last expression. Earlier expressions in the branch are
-  evaluated as statements and their values are discarded.
-- Both branches must produce the same type. A branch whose last statement is not an expression
-  produces `Unit`.
-- An `if` without `else` evaluates to `Unit`, discarding any branch result.
+- `if` is an expression when both branches are present.
+- A branch result is its final expression; earlier expressions are discarded.
+- Both branches must have the same type.
+- A branch without a final expression produces `Unit`.
+- `if` without `else` produces `Unit`.
 
 ```vera
 var label = if count > 0 {
@@ -225,11 +205,10 @@ while counter < 3 {
 }
 ```
 
-- The condition must be a `Bool`.
-- The body is a block and may contain blank lines.
+- Condition must be `Bool`.
+- Body is a block and may contain blank lines.
 - `while` is a statement and produces no value.
-
-`for` is not implemented yet.
+- `for` is not implemented.
 
 ## Built-in `print`
 
@@ -239,7 +218,8 @@ print("hello")
 print(True)
 ```
 
-`print` writes one value followed by a newline to standard output and returns `Unit`.
+- Writes one value followed by a newline to standard output.
+- Returns `Unit`.
 
 ## Newlines and blocks
 
@@ -248,7 +228,7 @@ print(True)
 - Blank lines are ignored.
 - Blank lines are allowed at block boundaries and before `else`.
 - CRLF line endings are supported.
-- Comments are not implemented yet.
+- Comments are not implemented.
 
 ## Example
 
@@ -273,44 +253,7 @@ fn main() {
 }
 ```
 
-## Compiler architecture
-
-The current pipeline is:
-
-```text
-Source
-  → lexer
-  → recursive-descent parser
-  → AST
-  → structured JVM IR (JvmIr)
-  → flat instruction IR (JvmInstructionProgram)
-  → JVM bytecode emitter
-  → .class files
-```
-
-The structured IR represents expressions and statements without labels or local slots. The
-instruction-lowering pass owns control flow, local slot allocation, and stack verification. The
-bytecode emitter only translates verified flat instructions.
-
-See [AGENTS.md](../AGENTS.md) for the current architecture and contributor conventions.
-
-## Current limitations
-
-These are intentional gaps in the current implementation, not necessarily permanent language
-decisions:
-
-- No comments.
-- No block scoping.
-- No unary operators.
-- No `for` loops.
-- No member access, field access, or Java interop.
-- No records, traits, classes, or inheritance.
-- No effects, capabilities, services, or errors-as-values.
-- No `val` immutability enforcement.
-- No `long`, `float`, `double`, or numeric conversions.
-- String literals only support letters, digits, spaces, and `!`.
-
 ## Further reading
 
-- [Design Philosophy](design-philosophy.md) — long-term vision, planned language features, and compiler principles
+- [Design Philosophy](design-philosophy.md) — long-term direction and compiler principles
 - [AGENTS.md](../AGENTS.md) — contributor and coding-agent conventions

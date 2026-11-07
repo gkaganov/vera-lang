@@ -3,7 +3,7 @@ dependencies {
 
     implementation(project(":parser"))
     implementation(project(":jvm-lowering"))
-    implementation(project(":jvm-ir"))
     implementation(project(":jvm-instruction-lowering"))
     implementation(project(":jvm-bytecode-emitter"))
+    implementation(project(":jvm-ir"))
 }

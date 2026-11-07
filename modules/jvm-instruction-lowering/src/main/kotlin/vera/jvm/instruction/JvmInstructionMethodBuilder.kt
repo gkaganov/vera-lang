@@ -71,7 +71,8 @@ class JvmInstructionMethodBuilder(
     }
 
     fun parameterLocal(index: Int): LocalTable.Local {
-        val parameter = parameters[index]
+        val parameter = parameters.getOrNull(index)
+            ?: throw JvmInstructionException.InternalInvariant("parameter index $index is out of bounds")
         return LocalTable.Local(LocalTable.Slot(index), parameter.type)
     }
 
@@ -82,12 +83,13 @@ class JvmInstructionMethodBuilder(
     }
 
     fun addInstruction(instruction: JvmInstruction) {
+        verifyInstruction(instruction)
+
         val before = DebugFrameSnapshot(
             stack = stack.snapshot(),
             locals = locals.snapshot(),
         )
 
-        verifyInstruction(instruction)
         applyInstruction(instruction)
 
         val after = DebugFrameSnapshot(
@@ -112,10 +114,10 @@ class JvmInstructionMethodBuilder(
         val pops = instruction.effect.stackPops
 
         if (stack.size() < pops.size) {
-            error(
-                "Stack underflow. " +
-                        "Instruction=${instruction::class.simpleName}, " +
-                        "Expected=${pops.size}, Actual=${stack.size()}"
+            throw JvmInstructionException.StackUnderflow(
+                instruction::class.simpleName ?: "instruction",
+                pops.size,
+                stack.size(),
             )
         }
 
@@ -123,17 +125,17 @@ class JvmInstructionMethodBuilder(
 
         actual.zip(pops).forEach { (actualType, expectedType) ->
             if (actualType != expectedType) {
-                error(
-                    "Invalid stack type. " +
-                            "Instruction=${instruction::class.simpleName}, " +
-                            "Expected=$expectedType, Actual=$actualType"
+                throw JvmInstructionException.StackTypeMismatch(
+                    instruction::class.simpleName ?: "instruction",
+                    expectedType,
+                    actualType,
                 )
             }
         }
 
         instruction.effect.localReads.forEach { local ->
             if (locals.read(local.slot) == null) {
-                error("Read from undefined local: $local")
+                throw JvmInstructionException.InternalInvariant("read from undefined local: $local")
             }
         }
     }

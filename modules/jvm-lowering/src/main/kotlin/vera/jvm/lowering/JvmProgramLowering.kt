@@ -3,6 +3,7 @@ package vera.jvm.lowering
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraProgram
 import vera.jvm.ir.JvmClass
+import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmProgram
 import vera.shared.model.Identifier
 
@@ -15,10 +16,12 @@ object JvmProgramLowering {
             .associateBy { it.name }
 
         // Second pass - lower each function.
-        val jvmMethods = program.declarations
+        val jvmMethods = mutableListOf<JvmMethod>()
+        program.declarations
             .filterIsInstance<VeraFunctionDeclaration>()
-            .map { declaration ->
-                JvmFunctionLowering.lower(mainClassName, functionDeclarations, declaration)
+            .forEach { declaration ->
+                jvmMethods += JvmFunctionLowering
+                    .lower(mainClassName, functionDeclarations, declaration)
             }
 
         return JvmProgram(listOf(JvmClass(mainClassName, jvmMethods)))

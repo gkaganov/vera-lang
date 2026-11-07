@@ -3,12 +3,10 @@ kotlin = "2.4.0"
 gradleVersionsCheck = "0.54.0"
 junitJupiter = "6.0.3"
 jvm = "25"
-arrow = "2.2.3"
 
 [libraries]
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junitJupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitJupiter" }
-arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

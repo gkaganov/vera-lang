@@ -40,6 +40,7 @@ import vera.jvm.instruction.InvokeVirtual
 import vera.jvm.instruction.Invokestatic
 import vera.jvm.instruction.JvmInstruction
 import vera.jvm.instruction.JvmInstructionClass
+import vera.jvm.instruction.JvmInstructionException
 import vera.jvm.instruction.JvmInstructionMethod
 import vera.jvm.instruction.JvmInstructionMethodBuilder
 import vera.jvm.instruction.JvmInstructionProgram
@@ -65,12 +66,18 @@ private class JvmInstructionLoweringState {
     private lateinit var jvmBuilder: JvmInstructionMethodBuilder
 
     fun lower(jvmProgram: JvmProgram): JvmInstructionProgram {
-        val instructionClasses = jvmProgram.classes.map { jvmClass -> lowerClass(jvmClass) }
+        val instructionClasses = mutableListOf<JvmInstructionClass>()
+        jvmProgram.classes.forEach { jvmClass ->
+            instructionClasses += lowerClass(jvmClass)
+        }
         return JvmInstructionProgram(instructionClasses)
     }
 
     private fun lowerClass(jvmClass: JvmClass): JvmInstructionClass {
-        val instructionMethods = jvmClass.methods.map { jvmMethod -> lowerMethod(jvmMethod) }
+        val instructionMethods = mutableListOf<JvmInstructionMethod>()
+        jvmClass.methods.forEach { jvmMethod ->
+            instructionMethods += lowerMethod(jvmMethod)
+        }
         return JvmInstructionClass(jvmClass.name, instructionMethods)
     }
 
@@ -83,11 +90,13 @@ private class JvmInstructionLoweringState {
         )
 
         jvmMethod.parameters.forEachIndexed { index, jvmParameter ->
-            jvmLocalSlots[JvmLocal(jvmParameter.name, jvmParameter.type)] =
-                jvmBuilder.parameterLocal(index)
+            val local = jvmBuilder.parameterLocal(index)
+            jvmLocalSlots[JvmLocal(jvmParameter.name, jvmParameter.type)] = local
         }
 
-        jvmMethod.body.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jvmMethod.body.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
         return jvmBuilder.build()
     }
 
@@ -110,7 +119,7 @@ private class JvmInstructionLoweringState {
             is JvmRebind -> {
                 lowerExpression(jvmStatement.expression)
                 val jvmLocal = jvmLocalSlots[jvmStatement.local]
-                    ?: error("local ${jvmStatement.local.name.value} is not defined")
+                    ?: throw JvmInstructionException.UndefinedLocal(jvmStatement.local.name)
                 append(StoreLocal(jvmLocal))
             }
 
@@ -136,7 +145,9 @@ private class JvmInstructionLoweringState {
         bindLabel(jvmConditionLabel)
         lowerExpression(jvmWhile.condition)
         jumpIfFalse(jvmEndLabel)
-        jvmWhile.body.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jvmWhile.body.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
         jump(jvmConditionLabel)
         bindLabel(jvmEndLabel)
     }
@@ -160,7 +171,7 @@ private class JvmInstructionLoweringState {
 
             is JvmLocalRead -> {
                 val jvmLocal = jvmLocalSlots[jvmExpression.local]
-                    ?: error("local ${jvmExpression.local.name.value} is not defined")
+                    ?: throw JvmInstructionException.UndefinedLocal(jvmExpression.local.name)
                 append(LoadLocal(jvmLocal))
                 jvmLocal.jvmType
             }
@@ -190,20 +201,20 @@ private class JvmInstructionLoweringState {
             }
 
             is JvmStaticCall -> {
-                jvmExpression.arguments.forEach { jvmArgument -> lowerExpression(jvmArgument) }
+                jvmExpression.arguments.forEach { jvmArgument ->
+                    lowerExpression(jvmArgument)
+                }
                 append(
                     Invokestatic(
                         jvmExpression.ownerClass,
                         jvmExpression.methodName,
                         jvmExpression.signature,
-                    )
+                    ),
                 )
                 jvmExpression.signature.returnType
             }
 
-            is JvmBuiltinCall -> {
-                lowerBuiltinCall(jvmExpression)
-            }
+            is JvmBuiltinCall -> lowerBuiltinCall(jvmExpression)
 
             is JvmIfExpression -> {
                 lowerIfExpression(jvmExpression)
@@ -278,14 +289,16 @@ private class JvmInstructionLoweringState {
     private fun lowerBuiltinCall(jvmBuiltinCall: JvmBuiltinCall): JvmType {
         return when (jvmBuiltinCall.builtin) {
             JvmBuiltin.PRINT -> {
-                if (jvmBuiltinCall.arguments.size != 1) error("print requires exactly 1 argument")
+                if (jvmBuiltinCall.arguments.size != 1) {
+                    throw JvmInstructionException.BuiltinArityMismatch(1, jvmBuiltinCall.arguments.size)
+                }
                 append(
                     GetStatic(
                         Identifier("java.lang.System"),
                         Identifier("out"),
                         JvmType.OBJECT,
                         Identifier("java.io.PrintStream"),
-                    )
+                    ),
                 )
                 val jvmArgumentType = lowerExpression(jvmBuiltinCall.arguments.first())
                 append(
@@ -296,7 +309,7 @@ private class JvmInstructionLoweringState {
                             listOf(JvmParameter(Identifier("value"), jvmArgumentType)),
                             JvmType.VOID,
                         ),
-                    )
+                    ),
                 )
                 JvmType.VOID
             }
@@ -343,7 +356,9 @@ private class JvmInstructionLoweringState {
     }
 
     private fun lowerBlock(jvmBlock: JvmBlock, discardResult: Boolean) {
-        jvmBlock.statements.forEach { jvmStatement -> lowerStatement(jvmStatement) }
+        jvmBlock.statements.forEach { jvmStatement ->
+            lowerStatement(jvmStatement)
+        }
         if (jvmBlock is JvmImplicitReturnBlock) {
             val jvmResultType = lowerExpression(jvmBlock.result)
             if (discardResult && jvmResultType != JvmType.VOID) {

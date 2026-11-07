@@ -14,8 +14,6 @@ object VeraCompiler {
         val ast = VeraParser.parse(tokens)
         val jvmProgram = JvmProgramLowering.lower(mainClassName, ast)
         val jvmInstructionProgram = JvmInstructionLowering.lower(jvmProgram)
-        val bytecode = JvmBytecodeEmitter.emit(jvmInstructionProgram)
-
-        return bytecode
+        return JvmBytecodeEmitter.emit(jvmInstructionProgram)
     }
 }

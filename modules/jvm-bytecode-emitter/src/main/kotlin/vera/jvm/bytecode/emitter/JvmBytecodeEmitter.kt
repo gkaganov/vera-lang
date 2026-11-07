@@ -36,7 +36,8 @@ import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
 
 object JvmBytecodeEmitter {
-    fun emit(jvmProgram: JvmInstructionProgram): Map<Identifier, ByteArray> = EmitterState(jvmProgram).emit()
+    fun emit(jvmProgram: JvmInstructionProgram): Map<Identifier, ByteArray> =
+        EmitterState(jvmProgram).emit()
 }
 
 /** Mutable state for a single emit run. */
@@ -47,15 +48,15 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
     /** @return a map of classnames to their bytecode */
     fun emit(): Map<Identifier, ByteArray> {
         val classFile = ClassFile.of()
+        val bytecode = mutableMapOf<Identifier, ByteArray>()
 
-        return jvmProgram.classes.associate { clazz ->
+        jvmProgram.classes.forEach { clazz ->
             val bytes = classFile.build(ClassDesc.of(clazz.name.value)) { classBuilder ->
-
                 clazz.methods.forEach { method ->
                     classBuilder.withMethod(
                         method.name.value,
                         method.signature.toMethodTypeDesc(),
-                        ACC_PUBLIC or ACC_STATIC
+                        ACC_PUBLIC or ACC_STATIC,
                     ) { methodBuilder ->
                         methodBuilder.withCode { codeBuilder ->
                             method.instructions.forEach { instruction ->
@@ -66,8 +67,10 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
                 }
             }
 
-            clazz.name to bytes
+            bytecode[clazz.name] = bytes
         }
+
+        return bytecode
     }
 
     private fun emitInstruction(codeBuilder: CodeBuilder, instructionWithDebugInfo: InstructionWithDebugInfo) {
@@ -75,22 +78,15 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
 
             is LoadLocal -> codeBuilder.loadLocal(
                 TypeKind.from(instruction.local.jvmType.toClassDesc()),
-                instruction.local.slot.index
+                instruction.local.slot.index,
             )
 
             is StoreLocal -> codeBuilder.storeLocal(
                 TypeKind.from(instruction.local.jvmType.toClassDesc()),
-                instruction.local.slot.index
+                instruction.local.slot.index,
             )
 
-            is LoadConstant -> {
-                when (instruction.type) {
-                    JvmType.INT -> codeBuilder.loadConstant(instruction.value as Int)
-                    JvmType.STRING -> codeBuilder.ldc(codeBuilder.constantPool().stringEntry(instruction.value as String))
-                    JvmType.BOOL -> codeBuilder.loadConstant(if (instruction.value as Boolean) 1 else 0)
-                    else -> error("Unsupported constant: ${instruction.type}")
-                }
-            }
+            is LoadConstant -> emitLoadConstant(codeBuilder, instruction)
 
             is IntBinaryOperation -> {
                 when (instruction.operator) {
@@ -103,7 +99,8 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
             }
 
             is IntComparisonJumpTo -> {
-                val label = labels[instruction.label] ?: error("unbound label in comparison jump")
+                val label = labels[instruction.label]
+                    ?: throw JvmEmitException.UnboundLabel(instruction.label)
                 when (instruction.operator) {
                     ComparisonOperator.EQ -> codeBuilder.if_icmpeq(label)
                     ComparisonOperator.NEQ -> codeBuilder.if_icmpne(label)
@@ -139,11 +136,53 @@ private class EmitterState(private val jvmProgram: JvmInstructionProgram) {
             }
 
             is CreateLabel -> labels[instruction.label] = codeBuilder.newLabel()
-            is BindLabel -> codeBuilder.labelBinding(labels[instruction.label] ?: error("unbound label"))
-            is JumpTo -> codeBuilder.goto_(labels[instruction.label] ?: error("unbound label"))
-            is IfFalseJumpTo -> codeBuilder.ifeq(labels[instruction.label] ?: error("unbound label"))
+            is BindLabel -> {
+                val label = labels[instruction.label]
+                    ?: throw JvmEmitException.UnboundLabel(instruction.label)
+                codeBuilder.labelBinding(label)
+            }
+            is JumpTo -> {
+                val label = labels[instruction.label]
+                    ?: throw JvmEmitException.UnboundLabel(instruction.label)
+                codeBuilder.goto_(label)
+            }
+            is IfFalseJumpTo -> {
+                val label = labels[instruction.label]
+                    ?: throw JvmEmitException.UnboundLabel(instruction.label)
+                codeBuilder.ifeq(label)
+            }
             is Pop -> codeBuilder.pop()
             is Return -> codeBuilder.return_(TypeKind.from(instruction.type.toClassDesc()))
+        }
+    }
+
+    private fun emitLoadConstant(codeBuilder: CodeBuilder, instruction: LoadConstant) {
+        when (instruction.type) {
+            JvmType.INT -> {
+                val value = instruction.value
+                if (value !is Int) {
+                    throw JvmEmitException.InvalidConstant(instruction.type, value)
+                }
+                codeBuilder.loadConstant(value)
+            }
+
+            JvmType.STRING -> {
+                val value = instruction.value
+                if (value !is String) {
+                    throw JvmEmitException.InvalidConstant(instruction.type, value)
+                }
+                codeBuilder.ldc(codeBuilder.constantPool().stringEntry(value))
+            }
+
+            JvmType.BOOL -> {
+                val value = instruction.value
+                if (value !is Boolean) {
+                    throw JvmEmitException.InvalidConstant(instruction.type, value)
+                }
+                codeBuilder.loadConstant(if (value) 1 else 0)
+            }
+
+            else -> throw JvmEmitException.UnsupportedConstant(instruction.type)
         }
     }
 

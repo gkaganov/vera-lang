@@ -51,7 +51,10 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseDeclaration(): VeraDeclaration {
         return when {
             at(TokenType.FN) -> parseFunctionDeclaration()
-            else -> error("expected a function declaration")
+            else -> {
+                val token = current()
+                throw VeraParseException.ExpectedFunctionDeclaration(token, token.location())
+            }
         }
     }
 
@@ -68,8 +71,13 @@ private class ParserState(private val tokens: List<Token>) {
         }
         expect(TokenType.RPAREN)
         val returnType = if (match(TokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
-        val body = VeraExplicitReturnBlock(parseBlock())
-        return VeraFunctionDeclaration(Identifier(name.text), parameters, returnType, body)
+        val body = parseBlock()
+        return VeraFunctionDeclaration(
+            Identifier(name.text),
+            parameters,
+            returnType,
+            VeraExplicitReturnBlock(body),
+        )
     }
 
     private fun parseParameter(): VeraParameter {
@@ -84,19 +92,26 @@ private class ParserState(private val tokens: List<Token>) {
                 advance()
                 VeraType.INT
             }
+
             TokenType.STRING_TYPE -> {
                 advance()
                 VeraType.STRING
             }
+
             TokenType.BOOL_TYPE -> {
                 advance()
                 VeraType.BOOL
             }
+
             TokenType.UNIT_TYPE -> {
                 advance()
                 VeraType.UNIT
             }
-            else -> error("expected a type")
+
+            else -> {
+                val token = current()
+                throw VeraParseException.ExpectedType(token, token.location())
+            }
         }
     }
 
@@ -150,9 +165,10 @@ private class ParserState(private val tokens: List<Token>) {
         expect(TokenType.BIND)
         if (at(TokenType.LBRACE)) {
             // The AST has no representation for update blocks yet.
-            error("rebind update blocks are not supported")
+            throw VeraParseException.UnsupportedRebindUpdateBlock(current().location())
         }
-        return VeraRebindStatement(Identifier(name.text), VeraExpression(parseExpression()))
+        val expression = parseExpression()
+        return VeraRebindStatement(Identifier(name.text), VeraExpression(expression))
     }
 
     private fun parseReturnStatement(): VeraReturnStatement {
@@ -168,15 +184,18 @@ private class ParserState(private val tokens: List<Token>) {
     private fun parseWhileStatement(): VeraWhileStatement {
         expect(TokenType.WHILE)
         val condition = parseExpression()
-        val body = VeraUnitReturnBlock(parseBlock())
-        return VeraWhileStatement(condition, body)
+        val body = parseBlock()
+        return VeraWhileStatement(condition, VeraUnitReturnBlock(body))
     }
 
     private fun parseStatementTerminator() {
         when {
             at(TokenType.EOL) -> skipEols()
             at(TokenType.EOF) -> Unit
-            else -> error("expected end of line")
+            else -> {
+                val token = current()
+                throw VeraParseException.ExpectedEndOfLine(token, token.location())
+            }
         }
     }
 
@@ -238,7 +257,8 @@ private class ParserState(private val tokens: List<Token>) {
         while (true) {
             val operator = operators[current().type] ?: break
             advance()
-            left = VeraBinaryOperation(left, operator, operand())
+            val right = operand()
+            left = VeraBinaryOperation(left, operator, right)
         }
         return left
     }
@@ -252,9 +272,11 @@ private class ParserState(private val tokens: List<Token>) {
                     val name = expect(TokenType.IDENTIFIER, "member name")
                     data += VeraMemberAccess(Identifier(name.text))
                 }
+
                 at(TokenType.LPAREN) -> {
                     data += VeraArguments(parseArgumentList())
                 }
+
                 else -> break
             }
         }
@@ -278,28 +300,39 @@ private class ParserState(private val tokens: List<Token>) {
         return when (current().type) {
             TokenType.INT_LITERAL -> {
                 val token = advance()
-                VeraIntLiteral(token.text.toInt())
+                val value = token.text.toIntOrNull()
+                    ?: throw VeraParseException.InvalidIntLiteral(token, token.location())
+                VeraIntLiteral(value)
             }
+
             TokenType.STRING_LITERAL -> {
                 val token = advance()
                 VeraStringLiteral(token.text.removeSurrounding("\""))
             }
+
             TokenType.BOOL_LITERAL -> {
                 val token = advance()
                 if (token.text == "True") VeraBoolLiteral.TRUE else VeraBoolLiteral.FALSE
             }
+
             TokenType.IDENTIFIER -> {
                 val token = advance()
                 VeraIdentifierAsExpression(Identifier(token.text))
             }
+
             TokenType.LPAREN -> {
                 advance()
                 val expression = parseExpression()
                 expect(TokenType.RPAREN)
                 expression
             }
+
             TokenType.IF -> parseIfExpression()
-            else -> error("expected an expression")
+
+            else -> {
+                val token = current()
+                throw VeraParseException.ExpectedExpression(token, token.location())
+            }
         }
     }
 
@@ -309,7 +342,10 @@ private class ParserState(private val tokens: List<Token>) {
         val thenBlock = parseBranchBlock()
         val elseBlock = if (matchElseAfterOptionalEols()) {
             if (at(TokenType.IF)) {
-                VeraImplicitReturnBlock(emptyList(), parseIfExpression())
+                VeraImplicitReturnBlock(
+                    emptyList(),
+                    parseIfExpression(),
+                )
             } else {
                 parseBranchBlock()
             }
@@ -362,15 +398,9 @@ private class ParserState(private val tokens: List<Token>) {
 
     private fun expect(type: TokenType, what: String? = null): Token {
         if (!at(type)) {
-            error("expected ${what ?: type}")
+            val token = current()
+            throw VeraParseException.ExpectedToken(what ?: type.name, token, token.location())
         }
         return advance()
-    }
-
-    private fun error(message: String): Nothing {
-        val token = current()
-        throw IllegalStateException(
-            "$message at line ${token.line}, column ${token.column} (found '${token.text}')"
-        )
     }
 }

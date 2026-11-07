@@ -9,8 +9,14 @@ Authoritative details live in repo `AGENTS.md`; update it when changing conventi
 - Local variable names mirror their layer: AST-derived `vera*` (`veraFunction`, `veraPrimaryExpression`, `veraType`); IR/JVM-derived and lowering-time values `jvm*` (`jvmBuilder`, `jvmParameters`, `jvmEndLabel`, `jvmLocalBindings`, `JvmLocalBinding`).
 - Prefer precise nouns over prefix-only names (`JvmLocalBinding`, not `JvmLocal`, which collides with `LocalTable.Local`).
 - Lowering state classes keep the full pipeline prefix (`JvmFunctionLoweringState`).
-- Verb families: `lower*` for AST->IR and structured->instruction lowering, `validate*`/`require*` for operand checks, `tryLower*` when returning `Either`. Use the `append(...)` helper (or the method builder) for one flat IR instruction.
+- Verb families: `lower*` for AST->IR and structured->instruction lowering, `validate*`/`require*` for operand checks. Use the `append(...)` helper (or the method builder) for one flat IR instruction.
 - `emit*` means produce JVM bytecode, not append IR. Reserve `emit*` for `JvmBytecodeEmitter` and actual bytecode generation.
+
+## Errors
+- Compiler stages throw named exceptions deriving from `vera.shared.model.VeraException`; each stage has a sealed hierarchy (`VeraLexException`, `VeraParseException`, `JvmLoweringException`, `JvmInstructionException`, `JvmEmitException`) with structured fields and a rendered message.
+- `VeraCompiler.compile` propagates these exceptions; the CLI and tests catch `VeraException` at the boundary and call `render()`.
+- No `error()`, `require`, `check`, `TODO()`, `!!`, or unsafe casts in compiler modules. Throw a project-specific exception instead.
+- Unexpected JDK ClassFile API exceptions are treated as compiler bugs and propagate unwrapped; only deliberate emit failures use `JvmEmitException`.
 
 ## Naming
 - AST types: `Vera` prefix (`VeraProgram`, `VeraExpression`, ...).
@@ -39,4 +45,4 @@ Authoritative details live in repo `AGENTS.md`; update it when changing conventi
 - Commit messages describe what was done in past tense (e.g. `added operator precedence`).
 
 ## Known TODOs
-- `VeraMemberAccess` lowering is `TODO()`.
+- `VeraMemberAccess` lowering is not implemented and throws `JvmLoweringException.MemberAccessNotSupported`.

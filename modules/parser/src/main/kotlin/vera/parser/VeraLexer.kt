@@ -1,5 +1,7 @@
 package vera.parser
 
+import vera.shared.model.SourceLocation
+
 object VeraLexer {
     fun tokenize(source: String): List<Token> = LexerState(source).tokenize()
 }
@@ -57,12 +59,12 @@ private class LexerState(private val source: String) {
         while (index < source.length && source[index] != '"') {
             val char = source[index]
             if (char == '\n' || char == '\r' || !char.isStringChar()) {
-                error("unexpected character '$char' in string literal", startLine, startColumn)
+                throw VeraLexException.UnexpectedStringCharacter(char, SourceLocation(startLine, startColumn))
             }
             advance()
         }
         if (index >= source.length) {
-            error("unterminated string literal", startLine, startColumn)
+            throw VeraLexException.UnterminatedString(SourceLocation(startLine, startColumn))
         }
         advance() // closing quote
         tokens += Token(TokenType.STRING_LITERAL, source.substring(start, index), startLine, startColumn)
@@ -116,7 +118,7 @@ private class LexerState(private val source: String) {
             '<' -> TokenType.LT to 1
             '>' -> TokenType.GT to 1
             '|' -> TokenType.PIPE to 1
-            else -> error("unexpected character '$char'", startLine, startColumn)
+            else -> throw VeraLexException.UnexpectedCharacter(char, SourceLocation(startLine, startColumn))
         }
 
         repeat(length) { advance() }
@@ -131,10 +133,6 @@ private class LexerState(private val source: String) {
             column++
         }
         index++
-    }
-
-    private fun error(message: String, errorLine: Int, errorColumn: Int): Nothing {
-        throw IllegalStateException("$message at line $errorLine, column $errorColumn")
     }
 
     private fun Char.isIdentifierStart(): Boolean = this == '_' || this in 'a'..'z' || this in 'A'..'Z'
