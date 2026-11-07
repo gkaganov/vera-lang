@@ -27,9 +27,3 @@ See [`AGENTS.md`](AGENTS.md) for module details and naming conventions.
 ./gradlew build
 ./gradlew :compiler-tests:test
 ```
-
-## Dependency updates
-
-```bash
-./gradlew dependencyUpdates --quiet
-```

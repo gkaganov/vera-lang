@@ -1,6 +1,5 @@
 [versions]
 kotlin = "2.4.0"
-gradleVersionsCheck = "0.54.0"
 junitJupiter = "6.0.3"
 jvm = "25"
 
@@ -10,4 +9,3 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-gradle-versions-check = { id = "com.github.ben-manes.versions", version.ref = "gradleVersionsCheck" }

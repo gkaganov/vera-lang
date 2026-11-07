@@ -9,13 +9,11 @@ allprojects {
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
-    alias(libs.plugins.gradle.versions.check) apply false
 }
 
 val jvmVersion = libs.versions.jvm.get().toInt()
 subprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
-    apply(plugin = "com.github.ben-manes.versions")
 
     extensions.configure<KotlinJvmProjectExtension> { jvmToolchain(jvmVersion) }
     extensions.configure<JavaPluginExtension> { toolchain.languageVersion.set(JavaLanguageVersion.of(jvmVersion)) }
