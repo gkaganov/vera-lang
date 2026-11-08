@@ -26,7 +26,7 @@ Not implemented:
 - `val` immutability enforcement.
 - Records, traits, classes, inheritance.
 - Effects, capabilities, services, errors-as-values.
-- `for`, member/field access, Java interop.
+- Member/field access and Java interop.
 - `long`, `float`, `double`, numeric conversions.
 - Comments, block scoping, unary operators.
 - User-defined entry-point conventions.
@@ -78,12 +78,12 @@ count = count + 1
 
 ## Types
 
-| Type | Meaning | Examples |
-|---|---|---|
-| `Int` | 32-bit signed integer | `0`, `42` |
-| `String` | Text | `"hello"` |
-| `Bool` | Boolean | `True`, `False` |
-| `Unit` | No useful value | Return type of `print` |
+| Type     | Meaning               | Examples               |
+|----------|-----------------------|------------------------|
+| `Int`    | 32-bit signed integer | `0`, `42`              |
+| `String` | Text                  | `"hello"`              |
+| `Bool`   | Boolean               | `True`, `False`        |
+| `Unit`   | No useful value       | Return type of `print` |
 
 - String literals accept letters, digits, spaces, and `!` only.
 - Other numeric, structured, and user-defined types are not implemented.
@@ -208,7 +208,6 @@ while counter < 3 {
 - Condition must be `Bool`.
 - Body is a block and may contain blank lines.
 - `while` is a statement and produces no value.
-- `for` is not implemented.
 
 ## Built-in `print`
 

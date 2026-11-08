@@ -171,7 +171,6 @@ When the user says **"finish"**:
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.
 - Constructs: `fn`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`, `print`.
-- `for` is not implemented.
 - Operators, lowest to highest: `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|` is forward application: `value | f` lowers to `f(value)`.
