@@ -839,6 +839,53 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `forward application binds looser than or`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(True or False |> negate)
+                    }
+                    fn negate(value: Bool): Bool {
+                        return if value {
+                            False
+                        } else {
+                            True
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "false$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application binds looser than and`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(False and True |> negate)
+                    }
+                    fn negate(value: Bool): Bool {
+                        return if value {
+                            False
+                        } else {
+                            True
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application binds looser than equality`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1 == 1 |> identityBool)
+                    }
+                    fn identityBool(value: Bool): Bool {
+                        return value
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true$EOL", testInfo)
+    }
+
+    @Test
     fun `forward application chains left to right`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
@@ -879,6 +926,39 @@ class VeraCompilerTests {
                     }
                 """.trimIndent()
         assertProgramPrints(source, "2$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application works inside arguments`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        return 1 |> add(2 |> double)
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                    fn add(left: Int, right: Int): Int {
+                        return left + right
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 5, testInfo)
+    }
+
+    @Test
+    fun `forward application accepts field access on the left`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(3, 4).x |> double
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 6, testInfo)
     }
 
     @Test
@@ -1016,6 +1096,19 @@ class VeraCompilerTests {
                     fn $TEST_MAIN(): Int {
                         var result: Unit = if False {
                             print("no")
+                        }
+                        return 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `if without else discards a non-Unit branch value`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var result: Unit = if False {
+                            1
                         }
                         return 1
                     }

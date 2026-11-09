@@ -205,6 +205,12 @@ class CompilerErrorTests {
                 "right-hand side of '|>' must contain at most one argument list",
             ),
             CompileErrorCase(
+                "forward application groups an or-expression on the right",
+                function("print(1 |> f or True)"),
+                JvmLoweringException.InvalidForwardApplication::class,
+                "right-hand side of '|>' must be a function name",
+            ),
+            CompileErrorCase(
                 "calls to unknown functions",
                 function("missing()"),
                 JvmLoweringException.UnknownFunction::class,
@@ -233,6 +239,12 @@ class CompilerErrorTests {
                 record("Point", "x: Int") + function("print(Point(1))"),
                 JvmLoweringException.PrintArgumentTypeNotSupported::class,
                 "print does not support values of type Point",
+            ),
+            CompileErrorCase(
+                "printing Unit",
+                function("print(Unit)"),
+                JvmLoweringException.PrintArgumentTypeNotSupported::class,
+                "print does not support values of type Unit",
             ),
             CompileErrorCase(
                 "duplicate record fields",
@@ -403,6 +415,15 @@ class CompilerErrorTests {
         builder.addInstruction(FlatLoadConstant(JvmType.INT, "not an Int"))
         assertCompilerError<BytecodeEmitException.InvalidConstant>("invalid constant for type INT") {
             emit(builder.build())
+        }
+    }
+
+    @Test
+    fun `program class name cannot collide with Unit`() {
+        assertCompilerError<JvmLoweringException.ProgramClassConflictsWithUnit>(
+            "program class Unit conflicts with the built-in Unit class",
+        ) {
+            VeraCompiler.compile(Identifier("Unit"), "fn testMain() { }")
         }
     }
 
