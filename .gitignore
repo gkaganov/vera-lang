@@ -13,3 +13,6 @@ build/
 
 # pi agent local config
 .pi/
+
+# serena local config and cache
+.serena/
