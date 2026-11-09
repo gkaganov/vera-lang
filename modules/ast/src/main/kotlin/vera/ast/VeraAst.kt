@@ -6,6 +6,8 @@ data class VeraProgram(val declarations: List<VeraDeclaration>)
 
 sealed interface VeraDeclaration
 data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val body: VeraExplicitReturnBlock) : VeraDeclaration
+data class VeraRecordDeclaration(val name: Identifier, val fields: List<VeraRecordField>) : VeraDeclaration
+data class VeraRecordField(val name: Identifier, val type: VeraType)
 
 sealed interface VeraStatement
 data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
@@ -40,6 +42,7 @@ sealed interface VeraLiteral : VeraPrimaryExpression
 data class VeraIntLiteral(val value: Int) : VeraLiteral
 data class VeraStringLiteral(val value: String) : VeraLiteral
 enum class VeraBoolLiteral : VeraLiteral { TRUE, FALSE }
+data object VeraUnitLiteral : VeraLiteral
 data class VeraIdentifierAsExpression(val identifier: Identifier) : VeraPrimaryExpression
 
 sealed interface VeraBlock {
@@ -65,4 +68,17 @@ data class VeraIfExpression(
 ) : VeraPrimaryExpression
 
 data class VeraParameter(val name: Identifier, val type: VeraType)
-enum class VeraType { INT, STRING, BOOL, UNIT, UNKNOWN }
+
+sealed interface VeraType {
+    data object INT : VeraType
+    data object STRING : VeraType
+    data object BOOL : VeraType
+    data object UNIT : VeraType
+    data object UNKNOWN : VeraType
+    data class Record(val name: Identifier) : VeraType
+}
+
+fun VeraType.render(): String = when (this) {
+    is VeraType.Record -> name.value
+    else -> toString()
+}

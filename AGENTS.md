@@ -78,21 +78,31 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 ### Lowering
 
 - `JvmProgramLowering.lower(mainClassName, program)` is the public entry point.
-- First pass collects function declarations by name; second pass lowers each function.
+- First pass collects record and function declarations by name; records lower to their own
+  classes, then functions lower to static methods on the program class.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
 - The flat instruction layer verifies stack discipline and resolves labels/jumps.
 - The emitter must not interpret structured expressions or control flow.
 
 ### IR Design
 
-- **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmMethod`, `JvmExpression`,
-  `JvmStatement`, and block kinds `JvmExplicitReturnBlock`, `JvmImplicitReturnBlock`,
-  `JvmUnitReturnBlock`.
+- **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmField`, `JvmConstructor`,
+  `JvmMethod`, `JvmExpression`, `JvmStatement`, and block kinds `JvmExplicitReturnBlock`,
+  `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`.
+- Record construction is `JvmRecordConstruction`; field reads are `JvmGetField`.
+- `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
+  it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
+  `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
 - **Operators**: `JvmIntBinaryOperator` and `JvmComparisonOperator` are independent enums.
 - **Flat instruction IR** (`vera.jvm.instruction`): flat instruction lists with explicit
   `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
-- `FlatPop` discards non-`Unit` expression results, including `if` values used as statements.
+- Record construction uses `FlatNew`, `FlatDup`, and `FlatInvokeSpecial`; generated constructors
+  initialize fields with `FlatPutField`.
+- `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
+  statements.
 - `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
+- `FlatPutStatic` stores static fields; static fields carry `isStatic` from `JvmField`/`FlatField`
+  through to the emitter.
 - No structured expressions/statements remain at the flat layer.
 
 ## Conventions
@@ -156,6 +166,11 @@ When the user says **"finish"**:
 - Use `lower*` for AST-to-IR and structured-to-instruction lowering; use `validate*`/`require*` for
   operand checks; use `append(...)` for one flat instruction.
 - Reserve `emit*` for actual bytecode generation.
+- Record types are `VeraRecordDeclaration`/`VeraRecordField`, `JvmField`/`JvmConstructor`/
+  `JvmRecordConstruction`/`JvmGetField`, and `FlatNew`/`FlatGetField`/`FlatPutField`/
+  `FlatInvokeSpecial`.
+- `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
+  `FlatGetStatic`/`FlatPutStatic`.
 - JVM types use standard naming (e.g. `VeraMain`, `VeraApp`).
 
 ### AGENTS.md
@@ -170,15 +185,15 @@ When the user says **"finish"**:
 - Newlines terminate statements.
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.
-- Constructs: `fn`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`, `print`.
+- Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
+  `print`.
 - Operators, lowest to highest: `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|` is forward application: `value | f` lowers to `f(value)`.
 
 ## Known TODOs
 
-- **VeraMemberAccess**: `JvmFunctionLowering.lowerChainedExpression` — member/field access is not
-  implemented and throws `JvmLoweringException.MemberAccessNotSupported`.
+- Record methods, record mutation, and persistent collections are not implemented.
 
 ## Run / Debug
 

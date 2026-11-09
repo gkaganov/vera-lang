@@ -56,6 +56,12 @@ class CompilerErrorTests {
             appendLine("}")
         }
 
+        private fun record(name: String, vararg lines: String): String = buildString {
+            appendLine("record $name {")
+            lines.forEach { appendLine("    $it") }
+            appendLine("}")
+        }
+
         @JvmStatic
         fun lexerErrors(): List<CompileErrorCase> = listOf(
             CompileErrorCase(
@@ -83,20 +89,14 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "non-function declarations",
                 "var value = 1",
-                VeraParseException.ExpectedFunctionDeclaration::class,
-                "expected a function declaration",
+                VeraParseException.ExpectedDeclaration::class,
+                "expected a function or record declaration",
             ),
             CompileErrorCase(
                 "missing tokens",
                 "fn $TEST_MAIN( { }",
                 VeraParseException.ExpectedToken::class,
                 "expected parameter name",
-            ),
-            CompileErrorCase(
-                "invalid type names",
-                "fn $TEST_MAIN(): Nope { }",
-                VeraParseException.ExpectedType::class,
-                "expected a type",
             ),
             CompileErrorCase(
                 "missing expressions",
@@ -143,6 +143,12 @@ class CompilerErrorTests {
                 function("var value = 1", "value = \"text\""),
                 JvmLoweringException.RebindTypeMismatch::class,
                 "cannot rebind variable value",
+            ),
+            CompileErrorCase(
+                "returns without a value in non-Unit functions",
+                "fn $TEST_MAIN(): Int {\n    return\n}",
+                JvmLoweringException.MissingReturnValue::class,
+                "return without an expression requires a Unit function",
             ),
             CompileErrorCase(
                 "bindings that contradict their declared type",
@@ -205,10 +211,76 @@ class CompilerErrorTests {
                 "print requires exactly 1 argument",
             ),
             CompileErrorCase(
-                "member access on resolved expressions",
+                "invalid type names",
+                "fn $TEST_MAIN(): Nope { }",
+                JvmLoweringException.UnknownRecordType::class,
+                "record type Nope is not defined",
+            ),
+            CompileErrorCase(
+                "member access on non-record values",
                 function("var x = 1", "print(x.foo)"),
-                JvmLoweringException.MemberAccessNotSupported::class,
-                "not supported yet",
+                JvmLoweringException.MemberAccessRequiresRecord::class,
+                "member access requires a record value",
+            ),
+            CompileErrorCase(
+                "printing records",
+                record("Point", "x: Int") + function("print(Point(1))"),
+                JvmLoweringException.PrintArgumentTypeNotSupported::class,
+                "print does not support values of type Point",
+            ),
+            CompileErrorCase(
+                "duplicate record fields",
+                record("Point", "x: Int", "x: String"),
+                JvmLoweringException.DuplicateRecordField::class,
+                "record Point has duplicate field x",
+            ),
+            CompileErrorCase(
+                "unknown record field types",
+                record("Point", "x: Missing"),
+                JvmLoweringException.UnknownRecordType::class,
+                "record type Missing is not defined",
+            ),
+            CompileErrorCase(
+                "duplicate record types",
+                record("Point", "x: Int") + record("Point", "y: Int"),
+                JvmLoweringException.DuplicateRecordType::class,
+                "record Point is declared more than once",
+            ),
+            CompileErrorCase(
+                "record names conflicting with the program class",
+                record("ErrorTest", "x: Int"),
+                JvmLoweringException.RecordNameConflictsWithProgramClass::class,
+                "record ErrorTest conflicts with the generated program class",
+            ),
+            CompileErrorCase(
+                "record constructors with the wrong arity",
+                record("Point", "x: Int") + function("var point = Point()"),
+                JvmLoweringException.RecordConstructorArityMismatch::class,
+                "record Point constructor requires 1 arguments, got 0",
+            ),
+            CompileErrorCase(
+                "record constructor arguments with the wrong type",
+                record("Point", "x: Int") + function("var point = Point(\"wrong\")"),
+                JvmLoweringException.RecordConstructorArgumentTypeMismatch::class,
+                "record Point field x requires INT, got STRING",
+            ),
+            CompileErrorCase(
+                "unknown record fields",
+                record("Point", "x: Int") + function("print(Point(1).y)"),
+                JvmLoweringException.UnknownRecordField::class,
+                "record Point has no field y",
+            ),
+            CompileErrorCase(
+                "record types used as values",
+                record("Point", "x: Int") + function("var point = Point"),
+                JvmLoweringException.RecordTypeUsedAsValue::class,
+                "record type Point cannot be used as a value",
+            ),
+            CompileErrorCase(
+                "calling record fields",
+                record("Point", "x: Int") + function("print(Point(1).x())"),
+                JvmLoweringException.ValueCallNotSupported::class,
+                "calling a value is not supported yet",
             ),
         )
 

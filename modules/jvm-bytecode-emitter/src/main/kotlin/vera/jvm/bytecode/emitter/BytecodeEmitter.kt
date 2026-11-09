@@ -6,11 +6,14 @@ import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmType
 import vera.jvm.instruction.FlatBindLabel
 import vera.jvm.instruction.FlatCreateLabel
+import vera.jvm.instruction.FlatDup
+import vera.jvm.instruction.FlatGetField
 import vera.jvm.instruction.FlatGetStatic
 import vera.jvm.instruction.FlatIfFalseJump
 import vera.jvm.instruction.FlatInstructionWithDebugInfo
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
+import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
 import vera.jvm.instruction.FlatInvokestatic
 import vera.jvm.instruction.FlatProgram
@@ -18,11 +21,15 @@ import vera.jvm.instruction.FlatLabel
 import vera.jvm.instruction.FlatJump
 import vera.jvm.instruction.FlatLoadConstant
 import vera.jvm.instruction.FlatLoadLocal
+import vera.jvm.instruction.FlatNew
 import vera.jvm.instruction.FlatPop
+import vera.jvm.instruction.FlatPutField
+import vera.jvm.instruction.FlatPutStatic
 import vera.jvm.instruction.FlatReturn
 import vera.jvm.instruction.FlatStoreLocal
 import vera.shared.model.Identifier
 import java.lang.classfile.ClassFile
+import java.lang.classfile.ClassFile.ACC_FINAL
 import java.lang.classfile.ClassFile.ACC_PUBLIC
 import java.lang.classfile.ClassFile.ACC_STATIC
 import java.lang.classfile.CodeBuilder
@@ -31,6 +38,7 @@ import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs.CD_Object
 import java.lang.constant.ConstantDescs.CD_boolean
+import java.lang.constant.ConstantDescs.CD_String
 import java.lang.constant.ConstantDescs.CD_int
 import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
@@ -52,11 +60,23 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
 
         flatProgram.classes.forEach { clazz ->
             val bytes = classFile.build(ClassDesc.of(clazz.name.value)) { classBuilder ->
+                classBuilder.withFlags(ACC_PUBLIC or ACC_FINAL)
+                classBuilder.withSuperclass(CD_Object)
+                clazz.fields.forEach { flatField ->
+                    val fieldFlags = (ACC_PUBLIC or ACC_FINAL) or
+                        (if (flatField.isStatic) ACC_STATIC else 0)
+                    classBuilder.withField(
+                        flatField.name.value,
+                        flatField.type.toClassDesc(),
+                        fieldFlags,
+                    )
+                }
                 clazz.methods.forEach { method ->
+                    val methodFlags = ACC_PUBLIC or if (method.isStatic) ACC_STATIC else 0
                     classBuilder.withMethod(
                         method.name.value,
                         method.signature.toMethodTypeDesc(),
-                        ACC_PUBLIC or ACC_STATIC,
+                        methodFlags,
                     ) { methodBuilder ->
                         methodBuilder.withCode { codeBuilder ->
                             method.instructions.forEach { instruction ->
@@ -135,6 +155,42 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 )
             }
 
+            is FlatInvokeSpecial -> {
+                codeBuilder.invokespecial(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.methodName.value,
+                    instruction.methodSignature.toMethodTypeDesc(),
+                )
+            }
+
+            is FlatNew -> codeBuilder.new_(ClassDesc.of(instruction.type.name.value))
+
+            is FlatDup -> codeBuilder.dup()
+
+            is FlatGetField -> {
+                codeBuilder.getfield(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.fieldName.value,
+                    instruction.fieldType.toClassDesc(),
+                )
+            }
+
+            is FlatPutField -> {
+                codeBuilder.putfield(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.fieldName.value,
+                    instruction.fieldType.toClassDesc(),
+                )
+            }
+
+            is FlatPutStatic -> {
+                codeBuilder.putstatic(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.fieldName.value,
+                    ClassDesc.of(instruction.fieldDescriptor.value),
+                )
+            }
+
             is FlatCreateLabel -> labels[instruction.label] = codeBuilder.newLabel()
             is FlatBindLabel -> {
                 val label = labels[instruction.label]
@@ -193,9 +249,10 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
 
     private fun JvmType.toClassDesc(): ClassDesc = when (this) {
         JvmType.INT -> CD_int
-        JvmType.STRING -> CD_Object
+        JvmType.STRING -> CD_String
         JvmType.BOOL -> CD_boolean
         JvmType.OBJECT -> CD_Object
         JvmType.VOID -> CD_void
+        is JvmType.ClassType -> ClassDesc.of(name.value)
     }
 }

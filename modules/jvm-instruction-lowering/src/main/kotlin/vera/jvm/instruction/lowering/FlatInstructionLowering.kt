@@ -6,8 +6,11 @@ import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmClass
 import vera.jvm.ir.JvmComparison
+import vera.jvm.ir.JvmConstructor
+import vera.jvm.ir.JvmExplicitReturnBlock
 import vera.jvm.ir.JvmExpression
 import vera.jvm.ir.JvmExpressionStatement
+import vera.jvm.ir.JvmGetField
 import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmIntBinary
@@ -18,24 +21,32 @@ import vera.jvm.ir.JvmLogicalAnd
 import vera.jvm.ir.JvmLogicalOr
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodSignature
+import vera.jvm.ir.JvmPutStatic
 import vera.jvm.ir.JvmParameter
 import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmRebind
+import vera.jvm.ir.JvmRecordConstruction
 import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUnitLiteral
 import vera.jvm.ir.JvmUnitReturnBlock
+import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.instruction.FlatBindLabel
 import vera.jvm.instruction.FlatCreateLabel
+import vera.jvm.instruction.FlatDup
+import vera.jvm.instruction.FlatField
+import vera.jvm.instruction.FlatGetField
 import vera.jvm.instruction.FlatGetStatic
 import vera.jvm.instruction.FlatIfFalseJump
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
+import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
 import vera.jvm.instruction.FlatInvokestatic
 import vera.jvm.instruction.FlatInstruction
@@ -49,7 +60,10 @@ import vera.jvm.instruction.FlatJump
 import vera.jvm.instruction.FlatLoadConstant
 import vera.jvm.instruction.FlatLoadLocal
 import vera.jvm.instruction.FlatLocalTable
+import vera.jvm.instruction.FlatNew
 import vera.jvm.instruction.FlatPop
+import vera.jvm.instruction.FlatPutField
+import vera.jvm.instruction.FlatPutStatic
 import vera.jvm.instruction.FlatReturn
 import vera.jvm.instruction.FlatStoreLocal
 import vera.shared.model.Identifier
@@ -64,6 +78,7 @@ private class FlatInstructionLoweringState {
 
     private val flatLocalSlots = mutableMapOf<JvmLocal, FlatLocalTable.Local>()
     private lateinit var flatBuilder: FlatMethodBuilder
+    private var currentReturnType: JvmType = JvmType.VOID
 
     fun lower(jvmProgram: JvmProgram): FlatProgram {
         val instructionClasses = mutableListOf<FlatClass>()
@@ -74,15 +89,52 @@ private class FlatInstructionLoweringState {
     }
 
     private fun lowerClass(jvmClass: JvmClass): FlatClass {
+        val flatFields = jvmClass.fields.map { jvmField ->
+            FlatField(jvmField.name, jvmField.type, jvmField.isStatic)
+        }
         val instructionMethods = mutableListOf<FlatMethod>()
+        jvmClass.constructors.forEach { jvmConstructor ->
+            instructionMethods += lowerConstructor(jvmClass, jvmConstructor)
+        }
         jvmClass.methods.forEach { jvmMethod ->
             instructionMethods += lowerMethod(jvmMethod)
         }
-        return FlatClass(jvmClass.name, instructionMethods)
+        return FlatClass(jvmClass.name, instructionMethods, flatFields)
+    }
+
+    private fun lowerConstructor(jvmClass: JvmClass, jvmConstructor: JvmConstructor): FlatMethod {
+        flatLocalSlots.clear()
+        currentReturnType = JvmType.VOID
+        val receiverType = JvmType.ClassType(jvmClass.name)
+        flatBuilder = FlatMethodBuilder(
+            Identifier("<init>"),
+            jvmConstructor.parameters,
+            JvmType.VOID,
+            receiverType,
+        )
+        val receiver = flatBuilder.receiverLocal()
+        append(FlatLoadLocal(receiver))
+        append(
+            FlatInvokeSpecial(
+                receiverType = receiverType,
+                ownerClass = Identifier("java.lang.Object"),
+                methodName = Identifier("<init>"),
+                methodSignature = JvmMethodSignature(emptyList(), JvmType.VOID),
+            ),
+        )
+        jvmClass.fields.filterNot { jvmField -> jvmField.isStatic }
+            .forEachIndexed { index, jvmField ->
+                append(FlatLoadLocal(receiver))
+                append(FlatLoadLocal(flatBuilder.parameterLocal(index)))
+                append(FlatPutField(jvmClass.name, jvmField.name, jvmField.type))
+            }
+        append(FlatReturn(JvmType.VOID))
+        return flatBuilder.build()
     }
 
     private fun lowerMethod(jvmMethod: JvmMethod): FlatMethod {
         flatLocalSlots.clear()
+        currentReturnType = jvmMethod.returnType
         flatBuilder = FlatMethodBuilder(
             jvmMethod.name,
             jvmMethod.parameters,
@@ -103,10 +155,28 @@ private class FlatInstructionLoweringState {
     private fun lowerStatement(jvmStatement: JvmStatement) {
         when (jvmStatement) {
             is JvmReturn -> {
-                val jvmReturnType = jvmStatement.expression
-                    ?.let { jvmExpression -> lowerExpression(jvmExpression) }
-                    ?: JvmType.VOID
+                val jvmReturnExpression = jvmStatement.expression
+                val jvmReturnType = if (jvmReturnExpression != null) {
+                    lowerExpression(jvmReturnExpression)
+                } else {
+                    if (currentReturnType == JvmUnitType) {
+                        emitUnitValue()
+                    }
+                    currentReturnType
+                }
                 append(FlatReturn(jvmReturnType))
+            }
+
+            is JvmPutStatic -> {
+                lowerExpression(jvmStatement.value)
+                append(
+                    FlatPutStatic(
+                        jvmStatement.ownerClass,
+                        jvmStatement.fieldName,
+                        jvmStatement.fieldType,
+                        jvmStatement.fieldDescriptor,
+                    ),
+                )
             }
 
             is JvmVarDeclaration -> {
@@ -169,6 +239,11 @@ private class FlatInstructionLoweringState {
                 JvmType.BOOL
             }
 
+            is JvmUnitLiteral -> {
+                emitUnitValue()
+                JvmUnitType
+            }
+
             is JvmLocalRead -> {
                 val flatLocal = flatLocalSlots[jvmExpression.local]
                     ?: throw FlatInstructionException.UndefinedLocal(jvmExpression.local.name)
@@ -198,6 +273,36 @@ private class FlatInstructionLoweringState {
             is JvmLogicalOr -> {
                 lowerLogicalOr(jvmExpression)
                 JvmType.BOOL
+            }
+
+            is JvmRecordConstruction -> {
+                val classType = JvmType.ClassType(jvmExpression.recordName)
+                append(FlatNew(classType))
+                append(FlatDup(classType))
+                jvmExpression.arguments.forEach { jvmArgument ->
+                    lowerExpression(jvmArgument)
+                }
+                append(
+                    FlatInvokeSpecial(
+                        receiverType = classType,
+                        ownerClass = jvmExpression.recordName,
+                        methodName = Identifier("<init>"),
+                        methodSignature = jvmExpression.signature,
+                    ),
+                )
+                classType
+            }
+
+            is JvmGetField -> {
+                lowerExpression(jvmExpression.receiver)
+                append(
+                    FlatGetField(
+                        jvmExpression.ownerClass,
+                        jvmExpression.fieldName,
+                        jvmExpression.fieldType,
+                    ),
+                )
+                jvmExpression.fieldType
             }
 
             is JvmStaticCall -> {
@@ -311,44 +416,49 @@ private class FlatInstructionLoweringState {
                         ),
                     ),
                 )
-                JvmType.VOID
+                emitUnitValue()
+                JvmUnitType
             }
         }
     }
 
     private fun lowerIfExpression(jvmIfExpression: JvmIfExpression) {
+        lowerExpression(jvmIfExpression.condition)
+
+        val flatElseLabel = FlatLabel()
+        createLabel(flatElseLabel)
+        jumpIfFalse(flatElseLabel)
+
+        val jvmElseBlock = jvmIfExpression.elseBlock
+        if (jvmElseBlock == null) {
+            lowerBlock(jvmIfExpression.thenBlock, discardResult = true)
+            bindLabel(flatElseLabel)
+            emitUnitValue()
+            return
+        }
+
         val flatResultLocal = if (jvmIfExpression.type == JvmType.VOID) {
             null
         } else {
             flatBuilder.allocateLocal(jvmIfExpression.type)
         }
 
-        lowerExpression(jvmIfExpression.condition)
-
-        val flatElseLabel = FlatLabel()
-        createLabel(flatElseLabel)
-        jumpIfFalse(flatElseLabel)
         lowerBlock(jvmIfExpression.thenBlock, discardResult = flatResultLocal == null)
         if (flatResultLocal != null) {
             append(FlatStoreLocal(flatResultLocal))
         }
 
-        val jvmElseBlock = jvmIfExpression.elseBlock
-        if (jvmElseBlock == null) {
-            bindLabel(flatElseLabel)
-        } else {
-            val flatEndLabel = FlatLabel()
-            createLabel(flatEndLabel)
-            jump(flatEndLabel)
+        val flatEndLabel = FlatLabel()
+        createLabel(flatEndLabel)
+        jump(flatEndLabel)
 
-            bindLabel(flatElseLabel)
-            lowerBlock(jvmElseBlock, discardResult = flatResultLocal == null)
-            if (flatResultLocal != null) {
-                append(FlatStoreLocal(flatResultLocal))
-            }
-
-            bindLabel(flatEndLabel)
+        bindLabel(flatElseLabel)
+        lowerBlock(jvmElseBlock, discardResult = flatResultLocal == null)
+        if (flatResultLocal != null) {
+            append(FlatStoreLocal(flatResultLocal))
         }
+
+        bindLabel(flatEndLabel)
 
         if (flatResultLocal != null) {
             append(FlatLoadLocal(flatResultLocal))
@@ -359,12 +469,33 @@ private class FlatInstructionLoweringState {
         jvmBlock.statements.forEach { jvmStatement ->
             lowerStatement(jvmStatement)
         }
-        if (jvmBlock is JvmImplicitReturnBlock) {
-            val jvmResultType = lowerExpression(jvmBlock.result)
-            if (discardResult && jvmResultType != JvmType.VOID) {
-                append(FlatPop(jvmResultType))
+        when (jvmBlock) {
+            is JvmImplicitReturnBlock -> {
+                val jvmResultType = lowerExpression(jvmBlock.result)
+                if (discardResult && jvmResultType != JvmType.VOID) {
+                    append(FlatPop(jvmResultType))
+                }
             }
+
+            is JvmUnitReturnBlock -> {
+                if (!discardResult) {
+                    emitUnitValue()
+                }
+            }
+
+            is JvmExplicitReturnBlock -> {}
         }
+    }
+
+    private fun emitUnitValue() {
+        append(
+            FlatGetStatic(
+                JvmUnitType.name,
+                Identifier("INSTANCE"),
+                JvmUnitType,
+                Identifier("Unit"),
+            ),
+        )
     }
 
     private fun append(flatInstruction: FlatInstruction) {

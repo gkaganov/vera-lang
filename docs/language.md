@@ -20,20 +20,21 @@ Implemented:
 - `if` / `else if` / `else` expressions.
 - `while`.
 - Function calls, `print`, and forward application with `|`.
+- Top-level `record` declarations with immutable fields, positional construction, and field access.
 
 Not implemented:
 
 - `val` immutability enforcement.
-- Records, traits, classes, inheritance.
+- Record mutation, record methods, traits, classes, inheritance.
 - Effects, capabilities, services, errors-as-values.
-- Member/field access and Java interop.
+- Java interop.
 - `long`, `float`, `double`, numeric conversions.
 - Comments, block scoping, unary operators.
 - User-defined entry-point conventions.
 
 ## Program structure
 
-A program is a sequence of top-level function declarations.
+A program is a sequence of top-level function and record declarations.
 
 ```vera
 fn add(a: Int, b: Int): Int {
@@ -60,6 +61,32 @@ fn name(parameter: Type, other: Type): ReturnType {
 - Returns nested inside `if` or `while` do not suppress that implicit return.
 - Functions can only be declared at top level.
 
+## Records
+
+```vera
+record Point {
+    x: Int
+    y: Int
+}
+
+fn main() {
+    var point = Point(1, 2)
+    print(point.x)
+    print(point.y)
+}
+```
+
+- `record` declarations are top-level.
+- Fields are declared one per line as `name: Type`.
+- Field types may be `Int`, `String`, `Bool`, `Unit`, or another record type.
+- Records are immutable; fields are read-only from Vera source.
+- The compiler generates a positional constructor in field declaration order.
+- Field access uses `.` and can be chained: `line.start.x`.
+- Record types can be used in parameter, return, and local type annotations.
+- Records compile to their own JVM classes with final fields and a generated constructor.
+- Methods, inheritance, mutation, equality, default values, and printing whole records are not
+  implemented.
+
 ## Variables and rebinding
 
 ```vera
@@ -78,15 +105,18 @@ count = count + 1
 
 ## Types
 
-| Type     | Meaning               | Examples               |
-|----------|-----------------------|------------------------|
-| `Int`    | 32-bit signed integer | `0`, `42`              |
-| `String` | Text                  | `"hello"`              |
-| `Bool`   | Boolean               | `True`, `False`        |
-| `Unit`   | No useful value       | Return type of `print` |
+| Type     | Meaning                      | Examples               |
+|----------|------------------------------|------------------------|
+| `Int`    | 32-bit signed integer        | `0`, `42`              |
+| `String` | Text                         | `"hello"`              |
+| `Bool`   | Boolean                      | `True`, `False`        |
+| `Unit`   | Exactly one value            | `Unit`                 |
+| Record   | User-defined immutable value | `Point`                |
 
+- `Unit` is a real value: it can be stored in fields and variables, passed, and returned.
+  The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
 - String literals accept letters, digits, spaces, and `!` only.
-- Other numeric, structured, and user-defined types are not implemented.
+- Other numeric types are not implemented.
 
 ## Expressions
 
@@ -226,6 +256,7 @@ print(True)
 - Semicolons are not used.
 - Blank lines are ignored.
 - Blank lines are allowed at block boundaries and before `else`.
+- Record fields are also newline-terminated.
 - CRLF line endings are supported.
 - Comments are not implemented.
 

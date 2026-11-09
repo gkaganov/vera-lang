@@ -55,6 +55,7 @@ class FlatMethodBuilder(
     val name: Identifier,
     val parameters: List<JvmParameter>,
     val returnType: JvmType,
+    private val receiverType: JvmType? = null,
 ) {
     private val locals = FlatLocalTable()
     private val stack = FlatOperandStack()
@@ -70,13 +71,21 @@ class FlatMethodBuilder(
         return FlatLocalTable.Local(slot, jvmType)
     }
 
+    fun receiverLocal(): FlatLocalTable.Local {
+        val type = receiverType
+            ?: throw FlatInstructionException.InternalInvariant("method has no receiver")
+        return FlatLocalTable.Local(FlatLocalTable.Slot(0), type)
+    }
+
     fun parameterLocal(index: Int): FlatLocalTable.Local {
         val parameter = parameters.getOrNull(index)
             ?: throw FlatInstructionException.InternalInvariant("parameter index $index is out of bounds")
-        return FlatLocalTable.Local(FlatLocalTable.Slot(index), parameter.type)
+        val slot = index + if (receiverType == null) 0 else 1
+        return FlatLocalTable.Local(FlatLocalTable.Slot(slot), parameter.type)
     }
 
     init {
+        receiverType?.let { receiver -> locals.define(receiver) }
         parameters.forEach { parameter ->
             locals.define(parameter.type)
         }
@@ -108,6 +117,7 @@ class FlatMethodBuilder(
         name,
         instructions,
         JvmMethodSignature(parameters, returnType),
+        isStatic = receiverType == null,
     )
 
     private fun verifyInstruction(instruction: FlatInstruction) {

@@ -812,6 +812,148 @@ class VeraCompilerTests {
         assertProgramPrints(source, "4${EOL}3${EOL}", testInfo)
     }
 
+    @Test
+    fun `records can be constructed and fields read`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var point = Point(1, 2)
+                        return point.x + point.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
+    fun `record fields can hold records and chained field access works`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    record Line {
+                        start: Point
+                        end: Point
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var line = Line(Point(1, 2), Point(3, 4))
+                        return line.start.x + line.end.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 5, testInfo)
+    }
+
+    @Test
+    fun `records can be passed to and returned from functions`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn add(left: Point, right: Point): Point {
+                        return Point(left.x + right.x, left.y + right.y)
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var result = add(Point(1, 2), Point(3, 4))
+                        return result.x * 10 + result.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 46, testInfo)
+    }
+
+    @Test
+    fun `record fields can hold String and Bool values`(testInfo: TestInfo) {
+        val source = """
+                    record Message {
+                        text: String
+                        active: Bool
+                    }
+                    fn $TEST_MAIN() {
+                        var message = Message("Hello", False)
+                        print(message.text)
+                        print(message.active)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Hello${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `field access can follow a constructor call`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(4, 5).y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 5, testInfo)
+    }
+
+    @Test
+    fun `record types work in local annotations and field access follows function calls`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn makePoint(): Point {
+                        return Point(7, 8)
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var point: Point = makePoint()
+                        return point.x + makePoint().y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 15, testInfo)
+    }
+
+    @Test
+    fun `Unit values can be stored in records and read back`(testInfo: TestInfo) {
+        val source = """
+                    record Signal {
+                        flag: Unit
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var signal = Signal(Unit)
+                        var flag: Unit = signal.flag
+                        return 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `Unit values can be passed and returned`(testInfo: TestInfo) {
+        val source = """
+                    fn identity(unit: Unit): Unit {
+                        return unit
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var unit = identity(Unit)
+                        return 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `if without else produces Unit`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var result: Unit = if False {
+                            print("no")
+                        }
+                        return 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,
@@ -819,9 +961,10 @@ class VeraCompilerTests {
         compileToOut: Boolean = false,
     ) {
         val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-        val bytecode = compileOrFail(className, source)[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
-        if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(bytecode)
-        val classLoader = ByteArrayClassLoader(mapOf(className.value to bytecode))
+        val bytecode = compileOrFail(className, source)
+        val mainBytecode = bytecode[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
+        if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(mainBytecode)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
         val testMethod = classLoader.loadClass(className.value).getMethod(TEST_MAIN)
         val actual = testMethod.invoke(null)
         Assertions.assertEquals(expected, actual)
@@ -834,11 +977,12 @@ class VeraCompilerTests {
         compileToOut: Boolean = false,
     ) {
         val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-        val bytecode = compileOrFail(className, source)[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
-        if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(bytecode)
+        val bytecode = compileOrFail(className, source)
+        val mainBytecode = bytecode[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
+        if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(mainBytecode)
         val oldOut = System.out
         val baos = ByteArrayOutputStream()
-        val classLoader = ByteArrayClassLoader(mapOf(className.value to bytecode))
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
         val testMethod = classLoader.loadClass(className.value).getMethod(TEST_MAIN)
         try {
             System.setOut(PrintStream(baos))

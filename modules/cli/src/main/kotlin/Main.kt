@@ -10,18 +10,20 @@ import kotlin.system.exitProcess
 fun main() {
     val className = Identifier("Main")
     val inputPath = Path.of("examples", "main.vera")
-    val outputPath = Path.of("out", "$className.class")
 
     val sourcecode = inputPath.readText()
 
     try {
-        val bytecode = VeraCompiler.compile(className, sourcecode)[className]
-        if (bytecode == null) {
+        val bytecode = VeraCompiler.compile(className, sourcecode)
+        if (bytecode.isEmpty()) {
             System.err.println("internal error: no bytecode emitted for ${className.value}")
             exitProcess(1)
         }
-        outputPath.createParentDirectories()
-        outputPath.writeBytes(bytecode)
+        bytecode.forEach { (emittedClassName, bytes) ->
+            val outputPath = Path.of("out", "${emittedClassName.value}.class")
+            outputPath.createParentDirectories()
+            outputPath.writeBytes(bytes)
+        }
     } catch (exception: VeraException) {
         System.err.println(exception.render())
         exitProcess(1)

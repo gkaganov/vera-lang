@@ -21,10 +21,13 @@ import vera.ast.VeraParameter
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraProgram
 import vera.ast.VeraRebindStatement
+import vera.ast.VeraRecordDeclaration
+import vera.ast.VeraRecordField
 import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraUnitLiteral
 import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.shared.model.Identifier
@@ -51,9 +54,10 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseDeclaration(): VeraDeclaration {
         return when {
             at(VeraTokenType.FN) -> parseFunctionDeclaration()
+            at(VeraTokenType.RECORD) -> parseRecordDeclaration()
             else -> {
                 val token = current()
-                throw VeraParseException.ExpectedFunctionDeclaration(token, token.location())
+                throw VeraParseException.ExpectedDeclaration(token, token.location())
             }
         }
     }
@@ -78,6 +82,23 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             returnType,
             VeraExplicitReturnBlock(body),
         )
+    }
+
+    private fun parseRecordDeclaration(): VeraRecordDeclaration {
+        expect(VeraTokenType.RECORD)
+        val name = expect(VeraTokenType.IDENTIFIER, "record name")
+        expect(VeraTokenType.LBRACE)
+        skipEols()
+        val fields = mutableListOf<VeraRecordField>()
+        while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
+            val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
+            expect(VeraTokenType.COLON)
+            fields += VeraRecordField(Identifier(fieldName.text), parseTypeRef())
+            parseStatementTerminator()
+            skipEols()
+        }
+        expect(VeraTokenType.RBRACE)
+        return VeraRecordDeclaration(Identifier(name.text), fields)
     }
 
     private fun parseParameter(): VeraParameter {
@@ -106,6 +127,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             VeraTokenType.UNIT_TYPE -> {
                 advance()
                 VeraType.UNIT
+            }
+
+            VeraTokenType.IDENTIFIER -> {
+                val token = advance()
+                VeraType.Record(Identifier(token.text))
             }
 
             else -> {
@@ -313,6 +339,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             VeraTokenType.BOOL_LITERAL -> {
                 val token = advance()
                 if (token.text == "True") VeraBoolLiteral.TRUE else VeraBoolLiteral.FALSE
+            }
+
+            VeraTokenType.UNIT_TYPE -> {
+                advance()
+                VeraUnitLiteral
             }
 
             VeraTokenType.IDENTIFIER -> {

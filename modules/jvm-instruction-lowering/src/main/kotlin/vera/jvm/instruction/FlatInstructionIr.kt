@@ -8,12 +8,19 @@ import vera.shared.model.Identifier
 
 data class FlatProgram(val classes: List<FlatClass>)
 
-data class FlatClass(val name: Identifier, val methods: List<FlatMethod>)
+data class FlatClass(
+    val name: Identifier,
+    val methods: List<FlatMethod>,
+    val fields: List<FlatField> = emptyList(),
+)
+
+data class FlatField(val name: Identifier, val type: JvmType, val isStatic: Boolean = false)
 
 data class FlatMethod(
     val name: Identifier,
     val instructions: List<FlatInstructionWithDebugInfo>,
     val signature: JvmMethodSignature,
+    val isStatic: Boolean = true,
 )
 
 data class FlatFrameSnapshot(
@@ -96,6 +103,17 @@ data class FlatGetStatic(
     )
 }
 
+data class FlatPutStatic(
+    val ownerClass: Identifier,
+    val fieldName: Identifier,
+    val fieldType: JvmType,
+    val fieldDescriptor: Identifier,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(fieldType),
+    )
+}
+
 data class FlatInvokeVirtual(
     val ownerClass: Identifier,
     val methodName: Identifier,
@@ -104,6 +122,52 @@ data class FlatInvokeVirtual(
     override val effect = FlatInstructionEffect(
         stackPops = listOf(JvmType.OBJECT) + methodSignature.parameters.map { it.type },
         stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
+    )
+}
+
+data class FlatInvokeSpecial(
+    val receiverType: JvmType,
+    val ownerClass: Identifier,
+    val methodName: Identifier,
+    val methodSignature: JvmMethodSignature,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(receiverType) + methodSignature.parameters.map { it.type },
+        stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
+    )
+}
+
+data class FlatNew(val type: JvmType.ClassType) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPushes = listOf(type),
+    )
+}
+
+data class FlatDup(val type: JvmType) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(type),
+        stackPushes = listOf(type, type),
+    )
+}
+
+data class FlatGetField(
+    val ownerClass: Identifier,
+    val fieldName: Identifier,
+    val fieldType: JvmType,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.ClassType(ownerClass)),
+        stackPushes = listOf(fieldType),
+    )
+}
+
+data class FlatPutField(
+    val ownerClass: Identifier,
+    val fieldName: Identifier,
+    val fieldType: JvmType,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.ClassType(ownerClass), fieldType),
     )
 }
 
