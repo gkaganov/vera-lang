@@ -36,6 +36,7 @@ sealed interface JvmType {
     data object OBJECT : JvmType
     data object VOID : JvmType
     data class ClassType(val name: Identifier) : JvmType
+    data class Array(val elementType: JvmType) : JvmType
 }
 
 /** The generated built-in `Unit` class. */
@@ -43,6 +44,7 @@ val JvmUnitType: JvmType.ClassType = JvmType.ClassType(Identifier("Unit"))
 
 fun JvmType.render(): String = when (this) {
     is JvmType.ClassType -> name.value
+    is JvmType.Array -> "${elementType.render()}[]"
     else -> toString()
 }
 

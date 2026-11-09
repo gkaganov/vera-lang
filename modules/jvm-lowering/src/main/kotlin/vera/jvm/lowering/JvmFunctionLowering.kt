@@ -98,7 +98,7 @@ private class JvmFunctionLoweringState(
     private lateinit var currentReturnType: JvmType
 
     fun lower(veraFunction: VeraFunctionDeclaration): JvmMethod {
-        currentReturnType = lowerReturnType(veraFunction.returnType)
+        currentReturnType = JvmTypeLowering.lowerReturn(veraFunction.returnType, visibleRecords.keys)
 
         val jvmParameters = veraFunction.parameters
             .map { veraParameter -> JvmParameter(veraParameter.name, lowerType(veraParameter.type)) }
@@ -423,7 +423,7 @@ private class JvmFunctionLoweringState(
             veraFunctionDeclaration.parameters.map { veraParameter ->
                 JvmParameter(veraParameter.name, lowerType(veraParameter.type))
             },
-            lowerReturnType(veraFunctionDeclaration.returnType),
+            JvmTypeLowering.lowerReturn(veraFunctionDeclaration.returnType, visibleRecords.keys),
         )
         return JvmStaticCall(
             className,
@@ -534,7 +534,4 @@ private class JvmFunctionLoweringState(
 
     private fun lowerType(veraType: VeraType): JvmType =
         JvmTypeLowering.lower(veraType, visibleRecords.keys)
-
-    private fun lowerReturnType(veraType: VeraType): JvmType =
-        if (veraType == VeraType.UNKNOWN) JvmUnitType else lowerType(veraType)
 }

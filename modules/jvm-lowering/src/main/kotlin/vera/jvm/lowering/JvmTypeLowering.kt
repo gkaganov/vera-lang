@@ -7,6 +7,9 @@ import vera.shared.model.Identifier
 
 internal object JvmTypeLowering {
 
+    fun lowerReturn(veraType: VeraType, recordNames: Set<Identifier>): JvmType =
+        if (veraType == VeraType.UNKNOWN) JvmUnitType else lower(veraType, recordNames)
+
     fun lower(veraType: VeraType, recordNames: Set<Identifier>): JvmType = when (veraType) {
         VeraType.INT -> JvmType.INT
         VeraType.STRING -> JvmType.STRING

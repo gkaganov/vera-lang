@@ -954,6 +954,47 @@ class VeraCompilerTests {
         assertProgramReturns(source, 1, testInfo)
     }
 
+    @Test
+    fun `zero-parameter Unit main gets a void JVM entry point`() {
+        val source = """
+                    fn main() {
+                        print("entry")
+                    }
+                """.trimIndent()
+        assertJvmMainPrints(source, "entry$EOL")
+    }
+
+    @Test
+    fun `zero-parameter value-returning main gets a void JVM entry point`() {
+        val source = """
+                    fn main(): Int {
+                        print("entry")
+                        return 1
+                    }
+                """.trimIndent()
+        assertJvmMainPrints(source, "entry$EOL")
+    }
+
+    private fun assertJvmMainPrints(source: String, expected: String) {
+        val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
+        val bytecode = compileOrFail(className, source)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+        val entryPoint = classLoader.loadClass(className.value)
+            .getMethod("main", Array<String>::class.java)
+
+        val oldOut = System.out
+        val baos = ByteArrayOutputStream()
+        try {
+            System.setOut(PrintStream(baos))
+            val arguments: Any = emptyArray<String>()
+            entryPoint.invoke(null, arguments)
+        } finally {
+            System.setOut(oldOut)
+        }
+
+        Assertions.assertEquals(expected, baos.toString())
+    }
+
     private fun assertProgramReturns(
         source: String,
         expected: Any,

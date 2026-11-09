@@ -8,6 +8,7 @@ import vera.ast.render
 import vera.jvm.ir.JvmClass
 import vera.jvm.ir.JvmConstructor
 import vera.jvm.ir.JvmExplicitReturnBlock
+import vera.jvm.ir.JvmExpressionStatement
 import vera.jvm.ir.JvmField
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodSignature
@@ -16,6 +17,7 @@ import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmPutStatic
 import vera.jvm.ir.JvmRecordConstruction
 import vera.jvm.ir.JvmReturn
+import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUnitType
 import vera.shared.model.Identifier
@@ -57,9 +59,44 @@ object JvmProgramLowering {
                 jvmMethods += JvmFunctionLowering
                     .lower(mainClassName, functionDeclarations, recordsByName, declaration)
             }
+        lowerEntryPointAdapter(mainClassName, functionDeclarations, recordNames)?.let { adapter ->
+            jvmMethods += adapter
+        }
 
         val jvmClasses = listOf(lowerUnitClass()) + jvmRecordClasses + JvmClass(mainClassName, jvmMethods)
         return JvmProgram(jvmClasses)
+    }
+
+    private fun lowerEntryPointAdapter(
+        mainClassName: Identifier,
+        functionDeclarations: Map<Identifier, VeraFunctionDeclaration>,
+        recordNames: Set<Identifier>,
+    ): JvmMethod? {
+        val entryPoint = functionDeclarations[Identifier("main")] ?: return null
+        if (entryPoint.parameters.isNotEmpty()) return null
+
+        val entryPointSignature = JvmMethodSignature(
+            emptyList(),
+            JvmTypeLowering.lowerReturn(entryPoint.returnType, recordNames),
+        )
+        return JvmMethod(
+            Identifier("main"),
+            listOf(JvmParameter(Identifier("args"), JvmType.Array(JvmType.STRING))),
+            JvmType.VOID,
+            JvmExplicitReturnBlock(
+                listOf(
+                    JvmExpressionStatement(
+                        JvmStaticCall(
+                            mainClassName,
+                            entryPoint.name,
+                            emptyList(),
+                            entryPointSignature,
+                        ),
+                    ),
+                    JvmReturn(null),
+                ),
+            ),
+        )
     }
 
     private fun lowerUnitClass(): JvmClass {

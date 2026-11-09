@@ -254,5 +254,6 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
         JvmType.OBJECT -> CD_Object
         JvmType.VOID -> CD_void
         is JvmType.ClassType -> ClassDesc.of(name.value)
+        is JvmType.Array -> elementType.toClassDesc().arrayType()
     }
 }

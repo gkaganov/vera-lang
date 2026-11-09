@@ -93,6 +93,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
   it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
+- A zero-parameter top-level `main` gets an additional JVM entry point `main(String[])V` that calls
+  the Vera `main` and discards its result. `JvmType.Array` represents the `String[]` parameter.
 - **Operators**: `JvmIntBinaryOperator` and `JvmComparisonOperator` are independent enums.
 - **Flat instruction IR** (`vera.jvm.instruction`): flat instruction lists with explicit
   `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
@@ -171,6 +173,8 @@ When the user says **"finish"**:
   `FlatInvokeSpecial`.
 - `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
   `FlatGetStatic`/`FlatPutStatic`.
+- The JVM entry-point adapter is built in `JvmProgramLowering` as a `JvmStaticCall` to `main`
+  followed by `JvmReturn(null)`.
 - JVM types use standard naming (e.g. `VeraMain`, `VeraApp`).
 
 ### AGENTS.md

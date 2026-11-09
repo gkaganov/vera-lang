@@ -8,7 +8,8 @@
 - Statically typed, JVM-targeting language.
 - Compiles through: source → lexer → parser → AST → structured IR → instruction IR → `.class`.
 - Top-level functions compile to static JVM methods.
-- The compiler receives the generated class name; `main` has no special language meaning.
+- The compiler receives the generated class name. A zero-parameter top-level function named `main` also gets
+  a JVM `main(String[])` entry point.
 
 Implemented:
 
@@ -30,7 +31,7 @@ Not implemented:
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
 - Comments, block scoping, unary operators.
-- User-defined entry-point conventions.
+- Custom entry-point names (only `main` gets a JVM adapter).
 
 ## Program structure
 
@@ -45,6 +46,18 @@ fn main() {
     print(add(1, 2))
 }
 ```
+
+### JVM entry point
+
+If a zero-parameter top-level function named `main` exists, the compiler also emits:
+
+```text
+public static void main(String[] args)
+```
+
+This adapter calls the Vera `main` and discards its result, then returns `void`. It lets the generated
+class be launched with `java <ClassName>`, while the Vera `main` keeps its declared Vera return type
+(including `Unit`). A `main` with parameters does not get an adapter.
 
 ## Functions
 
