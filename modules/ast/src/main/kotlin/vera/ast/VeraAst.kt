@@ -23,7 +23,7 @@ data class VeraMemberAccess(val member: Identifier) : VeraChainedExpressionData
 data class VeraArguments(val expressions: List<VeraPrimaryExpression>) : VeraChainedExpressionData
 
 enum class VeraOperator(val symbol: String) {
-    PIPE("|"),
+    FORWARD_APPLICATION("|>"),
     OR("or"),
     AND("and"),
     EQUALS("=="), NOT_EQUALS("!="),

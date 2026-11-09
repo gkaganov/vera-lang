@@ -59,11 +59,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class InvalidForwardApplication(val issue: JvmForwardApplicationIssue) : JvmLoweringException(
         when (issue) {
             JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME ->
-                "right-hand side of '|' must be a function name"
+                "right-hand side of '|>' must be a function name"
             JvmForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS ->
-                "right-hand side of '|' must not contain member access"
+                "right-hand side of '|>' must not contain member access"
             JvmForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS ->
-                "right-hand side of '|' must contain at most one argument list"
+                "right-hand side of '|>' must contain at most one argument list"
         },
     )
 

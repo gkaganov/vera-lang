@@ -191,9 +191,9 @@ When the user says **"finish"**:
 - CRLF is normalized to a single `EOL` token.
 - Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
   `print`.
-- Operators, lowest to highest: `|`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
+- Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and` and `or` are short-circuiting reserved keywords.
-- `|` is forward application: `value | f` lowers to `f(value)`.
+- `|>` is forward application: `value |> f` lowers to `f(value)`.
 
 ## Known TODOs
 

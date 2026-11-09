@@ -228,7 +228,10 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseExpression(): VeraPrimaryExpression = parseForwardApplication()
 
     private fun parseForwardApplication(): VeraPrimaryExpression =
-        parseBinary(::parseLogicalOr, mapOf(VeraTokenType.PIPE to VeraOperator.PIPE))
+        parseBinary(
+            ::parseLogicalOr,
+            mapOf(VeraTokenType.FORWARD_APPLICATION to VeraOperator.FORWARD_APPLICATION),
+        )
 
     private fun parseLogicalOr(): VeraPrimaryExpression =
         parseBinary(::parseLogicalAnd, mapOf(VeraTokenType.OR to VeraOperator.OR))

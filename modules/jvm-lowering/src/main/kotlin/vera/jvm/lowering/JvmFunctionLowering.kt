@@ -225,7 +225,7 @@ private class JvmFunctionLoweringState(
                 return JvmLogicalOr(jvmLeft, jvmRight)
             }
 
-            VeraOperator.PIPE -> return lowerForwardApplication(veraOperation)
+            VeraOperator.FORWARD_APPLICATION -> return lowerForwardApplication(veraOperation)
             else -> {}
         }
 
@@ -245,7 +245,7 @@ private class JvmFunctionLoweringState(
             VeraOperator.MULTIPLY -> JvmIntBinary(JvmIntBinaryOperator.MUL, jvmLeft, jvmRight)
             VeraOperator.DIVIDE -> JvmIntBinary(JvmIntBinaryOperator.DIV, jvmLeft, jvmRight)
             VeraOperator.PERCENT -> JvmIntBinary(JvmIntBinaryOperator.REM, jvmLeft, jvmRight)
-            VeraOperator.AND, VeraOperator.OR, VeraOperator.PIPE ->
+            VeraOperator.AND, VeraOperator.OR, VeraOperator.FORWARD_APPLICATION ->
                 throw JvmLoweringException.InternalInvariant("unreachable binary operator")
         }
     }

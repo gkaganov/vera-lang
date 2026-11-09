@@ -20,7 +20,7 @@ Implemented:
 - `and` / `or` short-circuiting boolean operators.
 - `if` / `else if` / `else` expressions.
 - `while`.
-- Function calls, `print`, and forward application with `|`.
+- Function calls, `print`, and forward application with `|>`.
 - Top-level `record` declarations with immutable fields, positional construction, and field access.
 
 Not implemented:
@@ -179,17 +179,17 @@ print("hello")
 ### Forward application
 
 ```vera
-2 | add(1)
+2 |> add(1)
 ```
 
-- `value | f(args)` lowers to `f(value, args)`.
-- `value | f` lowers to `f(value)`.
+- `value |> f(args)` lowers to `f(value, args)`.
+- `value |> f` lowers to `f(value)`.
 
 ## Operator precedence
 
 Lowest to highest:
 
-1. `|`
+1. `|>`
 2. `or`
 3. `and`
 4. `==`, `!=`
@@ -292,7 +292,7 @@ fn main() {
         print("ok")
     }
 
-    print(2 | add(1))
+    print(2 |> add(1))
 }
 ```
 

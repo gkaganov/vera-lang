@@ -799,8 +799,8 @@ class VeraCompilerTests {
     fun `forward application passes the left value as the first argument`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        print(2 | double)
-                        print(1 | add(2))
+                        print(2 |> double)
+                        print(1 |> add(2))
                     }
                     fn double(value: Int): Int {
                         return value * 2

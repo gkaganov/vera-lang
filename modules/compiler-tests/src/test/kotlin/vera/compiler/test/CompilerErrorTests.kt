@@ -182,21 +182,21 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "forward application to a non-function",
-                function("print(1 | 2)"),
+                function("print(1 |> 2)"),
                 JvmLoweringException.InvalidForwardApplication::class,
-                "right-hand side of '|' must be a function name",
+                "right-hand side of '|>' must be a function name",
             ),
             CompileErrorCase(
                 "forward application containing member access",
-                function("print(1 | value.name)"),
+                function("print(1 |> value.name)"),
                 JvmLoweringException.InvalidForwardApplication::class,
-                "right-hand side of '|' must not contain member access",
+                "right-hand side of '|>' must not contain member access",
             ),
             CompileErrorCase(
                 "forward application with multiple argument lists",
-                function("print(1 | f()())"),
+                function("print(1 |> f()())"),
                 JvmLoweringException.InvalidForwardApplication::class,
-                "right-hand side of '|' must contain at most one argument list",
+                "right-hand side of '|>' must contain at most one argument list",
             ),
             CompileErrorCase(
                 "calls to unknown functions",

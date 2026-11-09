@@ -45,7 +45,7 @@ enum class VeraTokenType {
     GT,
     LTE,
     GTE,
-    PIPE,
+    FORWARD_APPLICATION,
 
     // Layout
     EOL,

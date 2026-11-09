@@ -117,7 +117,7 @@ private class VeraLexerState(private val source: String) {
             '%' -> VeraTokenType.PERCENT to 1
             '<' -> VeraTokenType.LT to 1
             '>' -> VeraTokenType.GT to 1
-            '|' -> VeraTokenType.PIPE to 1
+            '|' if next == '>' -> VeraTokenType.FORWARD_APPLICATION to 2
             else -> throw VeraLexException.UnexpectedCharacter(char, SourceLocation(startLine, startColumn))
         }
 
