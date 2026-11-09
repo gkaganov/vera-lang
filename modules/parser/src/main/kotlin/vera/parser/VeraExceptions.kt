@@ -11,10 +11,10 @@ sealed class VeraLexException(message: String) : VeraException(message) {
         override val location: SourceLocation,
     ) : VeraLexException("unexpected character '$character' ${location.render()}")
 
-    class UnexpectedStringCharacter(
-        val character: Char,
+    class InvalidStringEscape(
+        val escape: Char,
         override val location: SourceLocation,
-    ) : VeraLexException("unexpected character '$character' in string literal ${location.render()}")
+    ) : VeraLexException("invalid string escape '\\$escape' ${location.render()}")
 
     class UnterminatedString(
         override val location: SourceLocation,

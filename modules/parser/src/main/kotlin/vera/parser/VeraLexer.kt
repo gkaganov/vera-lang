@@ -54,20 +54,48 @@ private class VeraLexerState(private val source: String) {
     private fun lexString() {
         val startLine = line
         val startColumn = column
-        val start = index
+        val startLocation = SourceLocation(startLine, startColumn)
         advance() // opening quote
+
+        val value = StringBuilder()
         while (index < source.length && source[index] != '"') {
             val char = source[index]
-            if (char == '\n' || char == '\r' || !char.isStringChar()) {
-                throw VeraLexException.UnexpectedStringCharacter(char, SourceLocation(startLine, startColumn))
+            when {
+                char == '\n' || char == '\r' -> throw VeraLexException.UnterminatedString(startLocation)
+
+                char == '\\' -> {
+                    advance()
+                    if (index >= source.length || source[index] == '\n' || source[index] == '\r') {
+                        throw VeraLexException.UnterminatedString(startLocation)
+                    }
+                    value.append(lexStringEscape())
+                }
+
+                else -> {
+                    value.append(char)
+                    advance()
+                }
             }
-            advance()
         }
         if (index >= source.length) {
-            throw VeraLexException.UnterminatedString(SourceLocation(startLine, startColumn))
+            throw VeraLexException.UnterminatedString(startLocation)
         }
         advance() // closing quote
-        tokens += VeraToken(VeraTokenType.STRING_LITERAL, source.substring(start, index), startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.STRING_LITERAL, value.toString(), startLine, startColumn)
+    }
+
+    private fun lexStringEscape(): Char {
+        val escapeLocation = SourceLocation(line, column)
+        val decoded = when (source[index]) {
+            'n' -> '\n'
+            't' -> '\t'
+            'r' -> '\r'
+            '"' -> '"'
+            '\\' -> '\\'
+            else -> throw VeraLexException.InvalidStringEscape(source[index], escapeLocation)
+        }
+        advance()
+        return decoded
     }
 
     private fun lexInt() {
@@ -138,8 +166,6 @@ private class VeraLexerState(private val source: String) {
     private fun Char.isIdentifierStart(): Boolean = this == '_' || this in 'a'..'z' || this in 'A'..'Z'
 
     private fun Char.isIdentifierPart(): Boolean = isIdentifierStart() || this in '0'..'9'
-
-    private fun Char.isStringChar(): Boolean = this == ' ' || this == '!' || this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9'
 
     private companion object {
         val keywords: Map<String, VeraTokenType> = mapOf(

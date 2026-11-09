@@ -336,7 +336,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             VeraTokenType.STRING_LITERAL -> {
                 val token = advance()
-                VeraStringLiteral(token.text.removeSurrounding("\""))
+                VeraStringLiteral(token.text)
             }
 
             VeraTokenType.BOOL_LITERAL -> {

@@ -192,6 +192,8 @@ When the user says **"finish"**:
 - Newlines terminate statements.
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.
+- String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
+  and `\r` escapes.
 - Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
   `print`.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.

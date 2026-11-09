@@ -122,6 +122,27 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `strings support punctuation unicode and escapes`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print("Hello, world!")
+                        print("punctuation: (yes) [ok] {braces} #%&*+-=;:'/@~`")
+                        print("quote: \" backslash: \\")
+                        print("line\nbreak")
+                        print("tab\tend")
+                        print("unicode: é 日本 😀")
+                    }
+                """.trimIndent()
+        val expected = "Hello, world!$EOL" +
+            "punctuation: (yes) [ok] {braces} #%&*+-=;:'/@~`$EOL" +
+            "quote: \" backslash: \\$EOL" +
+            "line\nbreak$EOL" +
+            "tab\tend$EOL" +
+            "unicode: é 日本 😀$EOL"
+        assertProgramPrints(source, expected, testInfo)
+    }
+
+    @Test
     fun `var types can be inferred when bound directly`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

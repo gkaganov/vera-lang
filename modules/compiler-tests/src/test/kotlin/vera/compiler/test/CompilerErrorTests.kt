@@ -77,10 +77,16 @@ class CompilerErrorTests {
                 "unexpected character '|'",
             ),
             CompileErrorCase(
-                "unexpected characters in strings",
-                function("print(\"a@b\")"),
-                VeraLexException.UnexpectedStringCharacter::class,
-                "unexpected character '@' in string literal",
+                "invalid string escapes",
+                function("print(\"bad \\q\")"),
+                VeraLexException.InvalidStringEscape::class,
+                "invalid string escape '\\q'",
+            ),
+            CompileErrorCase(
+                "newlines in strings",
+                "fn $TEST_MAIN() { print(\"a\nb\") }",
+                VeraLexException.UnterminatedString::class,
+                "unterminated string literal",
             ),
             CompileErrorCase(
                 "unterminated strings",

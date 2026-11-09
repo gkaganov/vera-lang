@@ -128,7 +128,8 @@ count = count + 1
 
 - `Unit` is a real value: it can be stored in fields and variables, passed, and returned.
   The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
-- String literals accept letters, digits, spaces, and `!` only.
+- String literals may contain any character except an unescaped `"` and raw newlines.
+  Supported escapes: `\"`, `\\`, `\n`, `\t`, `\r`.
 - Other numeric types are not implemented.
 
 ## Expressions
