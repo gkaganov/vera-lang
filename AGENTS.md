@@ -144,6 +144,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 ### Git
 
 - Commit messages describe **what was done** in past tense (e.g. `added operator precedence`).
+- Ask the user to review changes before pushing. Do not push until the user approves.
 
 ### Finishing a Task
 
@@ -151,7 +152,9 @@ When the user says **"finish"**:
 
 1. Review the code and changes for problems, inconsistencies, and missing updates.
 2. Ask about anything needing clarification or a decision.
-3. Once resolved, commit and push.
+3. Once resolved, commit the changes.
+4. Ask the user to review the committed changes.
+5. Push only after the user approves.
 
 ### Naming
 
