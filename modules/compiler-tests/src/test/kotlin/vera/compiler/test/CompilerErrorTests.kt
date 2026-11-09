@@ -71,6 +71,12 @@ class CompilerErrorTests {
                 "unexpected character '@'",
             ),
             CompileErrorCase(
+                "a single pipe is not forward application",
+                function("print(1 | 2)"),
+                VeraLexException.UnexpectedCharacter::class,
+                "unexpected character '|'",
+            ),
+            CompileErrorCase(
                 "unexpected characters in strings",
                 function("print(\"a@b\")"),
                 VeraLexException.UnexpectedStringCharacter::class,

@@ -813,6 +813,75 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `forward application works without surrounding spaces`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(2|>double)
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "4$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application binds looser than arithmetic`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1 + 2 |> double)
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "6$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application chains left to right`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(3 |> add(4) |> double)
+                    }
+                    fn double(value: Int): Int {
+                        return value * 2
+                    }
+                    fn add(left: Int, right: Int): Int {
+                        return left + right
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "14$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application accepts record values`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn sum(point: Point): Int {
+                        return point.x + point.y
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(1, 2) |> sum
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
+    fun `forward application works with builtins`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        2 |> print
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "2$EOL", testInfo)
+    }
+
+    @Test
     fun `records can be constructed and fields read`(testInfo: TestInfo) {
         val source = """
                     record Point {
