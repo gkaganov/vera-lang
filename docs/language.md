@@ -27,7 +27,6 @@ Implemented:
 Not implemented:
 
 - `val` immutability enforcement.
-- Shadowing checks (shadowing is disallowed by design, but not rejected yet).
 - Forward application to member calls and sibling record methods.
 - Record mutation (including `mut fn` methods), traits, classes.
 - Effects, capabilities, services, errors-as-values.
@@ -158,6 +157,8 @@ count = count + 1
 - Rebinding an unknown variable is a compile-time error.
 - `val` parses but is not yet enforced as immutable.
 - Bindings are function-scoped; block scoping is not implemented.
+- Names cannot be redeclared or shadow any name already in scope, including parameters, local
+  bindings, fields, methods, top-level declarations, and built-ins.
 
 ## Types
 

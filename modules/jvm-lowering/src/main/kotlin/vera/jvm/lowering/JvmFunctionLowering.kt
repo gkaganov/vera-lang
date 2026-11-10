@@ -70,6 +70,7 @@ private enum class Builtin(val keyword: Identifier, val jvmBuiltin: JvmBuiltin) 
     companion object {
         private val byKeyword = entries.associateBy { it.keyword }
         fun from(keyword: Identifier): Builtin? = byKeyword[keyword]
+        fun allNames(): Set<Identifier> = byKeyword.keys
     }
 }
 
@@ -80,6 +81,8 @@ private sealed interface PrimaryResolution {
 
 internal object JvmFunctionLowering {
     internal fun isBuiltinName(name: Identifier): Boolean = Builtin.from(name) != null
+
+    internal fun builtinNames(): Set<Identifier> = Builtin.allNames()
 
     fun lower(
         className: Identifier,
@@ -102,8 +105,19 @@ private class JvmFunctionLoweringState(
         JvmLocal(Identifier("<this>"), JvmType.ClassType(record.name))
     }
 
+    private val reservedNames: Set<Identifier> = buildSet {
+        addAll(visibleFunctions.keys)
+        addAll(visibleRecords.keys)
+        addAll(JvmFunctionLowering.builtinNames())
+        receiverRecord?.let { record ->
+            addAll(record.fields.map { field -> field.name })
+            addAll(record.methods.map { method -> method.name })
+        }
+    }
+
     private data class LoweredStatement(val jvmStatement: JvmStatement, val returns: Boolean)
 
+    private val declaredNames = mutableSetOf<Identifier>()
     private val jvmLocals = mutableMapOf<Identifier, JvmLocal>()
     private lateinit var currentReturnType: JvmType
 
@@ -111,7 +125,10 @@ private class JvmFunctionLoweringState(
         currentReturnType = JvmTypeLowering.lowerReturn(veraFunction.returnType, visibleRecords.keys)
 
         val jvmParameters = veraFunction.parameters
-            .map { veraParameter -> JvmParameter(veraParameter.name, lowerType(veraParameter.type)) }
+            .map { veraParameter ->
+                requireFreshName(veraParameter.name)
+                JvmParameter(veraParameter.name, lowerType(veraParameter.type))
+            }
         veraFunction.parameters.forEach { veraParameter ->
             jvmLocals[veraParameter.name] = JvmLocal(veraParameter.name, lowerType(veraParameter.type))
         }
@@ -188,6 +205,7 @@ private class JvmFunctionLoweringState(
     }
 
     private fun lowerBindStatement(veraBindStatement: VeraBindStatement): JvmStatement {
+        requireFreshName(veraBindStatement.name)
         val jvmExpression = lowerExpression(veraBindStatement.expression)
         val jvmExpressionType = jvmExpression.type
         if (veraBindStatement.type != VeraType.UNKNOWN && lowerType(veraBindStatement.type) != jvmExpressionType) {
@@ -411,6 +429,12 @@ private class JvmFunctionLoweringState(
         }
 
         return jvmExpression
+    }
+
+    private fun requireFreshName(name: Identifier) {
+        if (name in reservedNames || !declaredNames.add(name)) {
+            throw JvmLoweringException.ShadowingNotAllowed(name)
+        }
     }
 
     private fun readReceiver(): JvmExpression {

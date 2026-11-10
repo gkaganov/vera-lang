@@ -8,16 +8,6 @@ it is implemented and covered by tests.
 
 ## Near term
 
-### Reject name shadowing everywhere
-
-- Status: decided, not implemented.
-- Area: parser and lowering.
-- Rule: no nested binding may reuse an outer name. Parameters, locals, fields, methods, top-level
-  functions, records, and built-ins must have distinct names in their scope.
-- Acceptance: shadowing declarations are rejected with a named `VeraException`; error tests cover
-  parameter/field, local/field, local/parameter, and method/field conflicts.
-- Notes: current lookups still let parameters and locals take precedence over fields.
-
 ### Forward application to member calls and sibling methods
 
 - Status: decided, not implemented.

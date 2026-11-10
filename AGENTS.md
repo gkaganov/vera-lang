@@ -251,8 +251,7 @@ uncommitted changes:
 - Shadowing is never allowed in Vera. Every name in a scope must be unique, including parameters,
   locals, fields, methods, top-level functions, records, and built-ins. A nested binding may not
   reuse an outer name; declarations must be renamed instead.
-- Enforcement is not implemented yet; current lookups still let parameters/locals take precedence
-  over fields.
+- This rule is enforced during lowering.
 
 ## Non-goals
 

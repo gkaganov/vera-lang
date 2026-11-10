@@ -29,9 +29,13 @@ object JvmProgramLowering {
             .filterIsInstance<VeraRecordDeclaration>()
         val functionDeclarationList = program.declarations
             .filterIsInstance<VeraFunctionDeclaration>()
+        val topLevelNames = mutableSetOf<Identifier>()
         functionDeclarationList.forEach { declaration ->
             if (JvmFunctionLowering.isBuiltinName(declaration.name)) {
                 throw JvmLoweringException.FunctionNameConflictsWithBuiltin(declaration.name)
+            }
+            if (!topLevelNames.add(declaration.name)) {
+                throw JvmLoweringException.DuplicateFunction(declaration.name)
             }
         }
         val functionDeclarations = functionDeclarationList.associateBy { it.name }
@@ -43,6 +47,14 @@ object JvmProgramLowering {
             ?.key
         if (duplicateRecord != null) {
             throw JvmLoweringException.DuplicateRecordType(duplicateRecord)
+        }
+        recordDeclarations.forEach { declaration ->
+            if (JvmFunctionLowering.isBuiltinName(declaration.name)) {
+                throw JvmLoweringException.RecordNameConflictsWithBuiltin(declaration.name)
+            }
+            if (!topLevelNames.add(declaration.name)) {
+                throw JvmLoweringException.TopLevelNameConflict(declaration.name)
+            }
         }
         if (recordDeclarations.any { it.name == mainClassName }) {
             throw JvmLoweringException.RecordNameConflictsWithProgramClass(mainClassName)
@@ -141,10 +153,18 @@ object JvmProgramLowering {
         recordsByName: Map<Identifier, VeraRecordDeclaration>,
     ): JvmClass {
         val recordNames = recordsByName.keys
+        val outerNames = buildSet {
+            addAll(functionDeclarations.keys)
+            addAll(recordsByName.keys)
+            addAll(JvmFunctionLowering.builtinNames())
+        }
         val seenFields = mutableSetOf<Identifier>()
         val jvmFields = record.fields.map { field ->
             if (!seenFields.add(field.name)) {
                 throw JvmLoweringException.DuplicateRecordField(record.name, field.name)
+            }
+            if (field.name in outerNames) {
+                throw JvmLoweringException.ShadowingNotAllowed(field.name)
             }
             if (field.type == VeraType.UNKNOWN) {
                 throw JvmLoweringException.RecordFieldTypeNotAllowed(
@@ -162,6 +182,9 @@ object JvmProgramLowering {
             }
             if (method.name in seenFields) {
                 throw JvmLoweringException.RecordMethodConflictsWithField(record.name, method.name)
+            }
+            if (method.name in outerNames) {
+                throw JvmLoweringException.ShadowingNotAllowed(method.name)
             }
         }
         val jvmMethods = record.methods.map { method ->

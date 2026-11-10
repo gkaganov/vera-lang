@@ -87,6 +87,22 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "print does not support values of type ${actual.render()}",
     )
 
+    class DuplicateFunction(val name: Identifier) : JvmLoweringException(
+        "function ${name.value} is declared more than once",
+    )
+
+    class TopLevelNameConflict(val name: Identifier) : JvmLoweringException(
+        "top-level name ${name.value} is declared more than once",
+    )
+
+    class RecordNameConflictsWithBuiltin(val name: Identifier) : JvmLoweringException(
+        "record ${name.value} conflicts with the built-in function ${name.value}",
+    )
+
+    class ShadowingNotAllowed(val name: Identifier) : JvmLoweringException(
+        "name ${name.value} is already in scope; shadowing is not allowed",
+    )
+
     class DuplicateRecordType(val name: Identifier) : JvmLoweringException(
         "record ${name.value} is declared more than once",
     )
