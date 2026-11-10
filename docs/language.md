@@ -31,7 +31,7 @@ Not implemented:
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
-- Comments, block scoping, unary operators.
+- Comments, block scoping.
 - Custom entry-point names (only `main` gets a JVM adapter).
 
 See [`roadmap.md`](roadmap.md) for planned work and acceptance criteria.
@@ -189,10 +189,12 @@ count = count + 1
 4 * 6
 8 / 2
 7 % 3
+-5
+-value
 ```
 
 - `+`, `-`, `*`, `/`, `%` are `Int`-only.
-- No unary minus yet.
+- Unary `-` negates an `Int`.
 
 ### Comparisons
 
@@ -248,6 +250,8 @@ Lowest to highest:
 5. `<`, `>`, `<=`, `>=`
 6. `+`, `-`
 7. `*`, `/`, `%`
+
+Unary `-` binds tighter than multiplicative operators and is right-associative.
 
 ## Control flow
 

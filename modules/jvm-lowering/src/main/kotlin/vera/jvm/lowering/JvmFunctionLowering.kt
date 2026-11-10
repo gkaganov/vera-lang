@@ -22,6 +22,8 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraUnaryOperation
+import vera.ast.VeraUnaryOperator
 import vera.ast.VeraUnitLiteral
 import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
@@ -42,6 +44,8 @@ import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
+import vera.jvm.ir.JvmIntUnary
+import vera.jvm.ir.JvmIntUnaryOperator
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
@@ -246,6 +250,21 @@ private class JvmFunctionLoweringState(
                     }
                     throw JvmLoweringException.UnexpectedPendingSymbol()
                 }
+            }
+        }
+    }
+
+    private fun lowerUnaryOperation(veraUnaryOperation: VeraUnaryOperation): JvmExpression {
+        val jvmOperand = lowerPrimaryExpression(veraUnaryOperation.operand)
+        return when (veraUnaryOperation.operator) {
+            VeraUnaryOperator.NEGATE -> {
+                if (jvmOperand.type != JvmType.INT) {
+                    throw JvmLoweringException.IntOperandsRequired(
+                        veraUnaryOperation.operator.symbol,
+                        jvmOperand.type,
+                    )
+                }
+                JvmIntUnary(JvmIntUnaryOperator.NEGATE, jvmOperand)
             }
         }
     }
@@ -664,6 +683,8 @@ private class JvmFunctionLoweringState(
             )
 
             is VeraUnitLiteral -> PrimaryResolution.Resolved(JvmUnitLiteral)
+
+            is VeraUnaryOperation -> PrimaryResolution.Resolved(lowerUnaryOperation(veraPrimaryExpression))
 
             is VeraIfExpression -> {
                 val jvmCondition = lowerPrimaryExpression(veraPrimaryExpression.condition)

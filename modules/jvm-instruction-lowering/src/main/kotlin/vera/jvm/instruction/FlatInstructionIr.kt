@@ -2,6 +2,7 @@ package vera.jvm.instruction
 
 import vera.jvm.ir.JvmComparisonOperator
 import vera.jvm.ir.JvmIntBinaryOperator
+import vera.jvm.ir.JvmIntUnaryOperator
 import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
@@ -62,6 +63,13 @@ data class FlatStoreLocal(val local: FlatLocalTable.Local) : FlatInstruction {
 data class FlatLoadConstant(val type: JvmType, val value: Any) : FlatInstruction {
     override val effect = FlatInstructionEffect(
         stackPushes = listOf(type)
+    )
+}
+
+data class FlatIntUnaryOperation(val operator: JvmIntUnaryOperator) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.INT),
+        stackPushes = listOf(JvmType.INT),
     )
 }
 

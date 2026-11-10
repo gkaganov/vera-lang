@@ -27,6 +27,8 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraType
+import vera.ast.VeraUnaryOperation
+import vera.ast.VeraUnaryOperator
 import vera.ast.VeraUnitLiteral
 import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
@@ -279,13 +281,20 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
     private fun parseMultiplicative(): VeraPrimaryExpression =
         parseBinary(
-            ::parseChainedPrimary,
+            ::parseUnary,
             mapOf(
                 VeraTokenType.STAR to VeraOperator.MULTIPLY,
                 VeraTokenType.SLASH to VeraOperator.DIVIDE,
                 VeraTokenType.PERCENT to VeraOperator.PERCENT,
             ),
         )
+
+    private fun parseUnary(): VeraPrimaryExpression {
+        if (match(VeraTokenType.MINUS)) {
+            return VeraUnaryOperation(VeraUnaryOperator.NEGATE, parseUnary())
+        }
+        return parseChainedPrimary()
+    }
 
     private fun parseBinary(
         operand: () -> VeraPrimaryExpression,

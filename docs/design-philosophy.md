@@ -47,7 +47,7 @@
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
 | Services  | Separate abstraction for external interaction                                       | Not implemented                              |
 | Errors    | Errors as values instead of exception-driven control flow                           | Not implemented                              |
-| Other     | Comments, block scoping, unary operators, Java interop, entry points                | Not implemented                              |
+| Other     | Comments, block scoping, additional unary operators, Java interop, entry points     | Not implemented                              |
 
 Open design questions include effect syntax, the exact relationship between services and
 capabilities, and how much of the type system can stay simple.

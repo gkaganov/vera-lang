@@ -74,7 +74,15 @@ data class JvmLocalRead(val local: JvmLocal) : JvmExpression {
 }
 
 enum class JvmIntBinaryOperator { ADD, SUB, MUL, DIV, REM }
+enum class JvmIntUnaryOperator { NEGATE }
 enum class JvmComparisonOperator { EQ, NEQ, LT, GT, LTE, GTE }
+
+data class JvmIntUnary(
+    val operator: JvmIntUnaryOperator,
+    val operand: JvmExpression,
+) : JvmExpression {
+    override val type = JvmType.INT
+}
 
 data class JvmIntBinary(
     val operator: JvmIntBinaryOperator,

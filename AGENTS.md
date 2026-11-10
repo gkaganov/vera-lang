@@ -99,7 +99,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
 - A zero-parameter top-level `main` gets an additional JVM entry point `main(String[])V` that calls
   the Vera `main` and discards its result. `JvmType.Array` represents the `String[]` parameter.
-- **Operators**: `JvmIntBinaryOperator` and `JvmComparisonOperator` are independent enums.
+- **Operators**: `JvmIntUnaryOperator`, `JvmIntBinaryOperator`, and `JvmComparisonOperator` are
+  independent enums.
 - **Flat instruction IR** (`vera.jvm.instruction`): flat instruction lists with explicit
   `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
 - Record construction uses `FlatNew`, `FlatDup`, and `FlatInvokeSpecial`; generated constructors
@@ -238,6 +239,7 @@ uncommitted changes:
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
+  Unary `-` binds tighter than multiplicative operators.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
   first argument.

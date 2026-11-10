@@ -36,7 +36,15 @@ enum class VeraOperator(val symbol: String) {
     MULTIPLY("*"), DIVIDE("/"), PERCENT("%")
 }
 
+enum class VeraUnaryOperator(val symbol: String) {
+    NEGATE("-")
+}
+
 sealed interface VeraPrimaryExpression
+data class VeraUnaryOperation(
+    val operator: VeraUnaryOperator,
+    val operand: VeraPrimaryExpression,
+) : VeraPrimaryExpression
 data class VeraBinaryOperation(
     val left: VeraPrimaryExpression,
     val operator: VeraOperator,

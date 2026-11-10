@@ -10,13 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Unary minus and negative literals
-
-- Status: not implemented.
-- Area: lexer, parser, AST, lowering.
-- Acceptance: negative literals and unary minus on expressions work with the correct precedence;
-  error tests cover invalid operand types.
-
 ### Bool and String equality
 
 - Status: not implemented.

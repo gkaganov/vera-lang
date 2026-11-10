@@ -178,6 +178,21 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `unary minus negates Ints`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(-1)
+                        var value = 5
+                        print(-value)
+                        print(-2 * 3)
+                        print(1 - -2)
+                        print(--4)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "-1${EOL}-5${EOL}-6${EOL}3${EOL}4$EOL", testInfo)
+    }
+
+    @Test
     fun `Ints can be multiplied`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {

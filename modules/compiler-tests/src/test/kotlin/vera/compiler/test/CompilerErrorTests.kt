@@ -187,6 +187,12 @@ class CompilerErrorTests {
                 "operator '+' is only defined for Int operands",
             ),
             CompileErrorCase(
+                "non-Int unary operands",
+                function("print(-\"text\")"),
+                JvmLoweringException.IntOperandsRequired::class,
+                "operator '-' is only defined for Int operands",
+            ),
+            CompileErrorCase(
                 "if branches with different types",
                 function("var value = if True {", "    1", "} else {", "    \"no\"", "}"),
                 JvmLoweringException.IfBranchTypeMismatch::class,

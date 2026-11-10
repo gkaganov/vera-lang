@@ -2,6 +2,7 @@ package vera.jvm.bytecode.emitter
 
 import vera.jvm.ir.JvmComparisonOperator
 import vera.jvm.ir.JvmIntBinaryOperator
+import vera.jvm.ir.JvmIntUnaryOperator
 import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmType
 import vera.jvm.instruction.FlatBindLabel
@@ -13,6 +14,7 @@ import vera.jvm.instruction.FlatIfFalseJump
 import vera.jvm.instruction.FlatInstructionWithDebugInfo
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
+import vera.jvm.instruction.FlatIntUnaryOperation
 import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
 import vera.jvm.instruction.FlatInvokestatic
@@ -107,6 +109,12 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
             )
 
             is FlatLoadConstant -> emitLoadConstant(codeBuilder, instruction)
+
+            is FlatIntUnaryOperation -> {
+                when (instruction.operator) {
+                    JvmIntUnaryOperator.NEGATE -> codeBuilder.ineg()
+                }
+            }
 
             is FlatIntBinaryOperation -> {
                 when (instruction.operator) {

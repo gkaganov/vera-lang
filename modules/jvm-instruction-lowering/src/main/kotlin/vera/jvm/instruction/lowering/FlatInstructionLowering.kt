@@ -15,6 +15,7 @@ import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
+import vera.jvm.ir.JvmIntUnary
 import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
@@ -47,6 +48,7 @@ import vera.jvm.instruction.FlatGetStatic
 import vera.jvm.instruction.FlatIfFalseJump
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
+import vera.jvm.instruction.FlatIntUnaryOperation
 import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
 import vera.jvm.instruction.FlatInvokestatic
@@ -255,6 +257,12 @@ private class FlatInstructionLoweringState {
                     ?: throw FlatInstructionException.UndefinedLocal(jvmExpression.local.name)
                 append(FlatLoadLocal(flatLocal))
                 flatLocal.jvmType
+            }
+
+            is JvmIntUnary -> {
+                lowerExpression(jvmExpression.operand)
+                append(FlatIntUnaryOperation(jvmExpression.operator))
+                JvmType.INT
             }
 
             is JvmIntBinary -> {
