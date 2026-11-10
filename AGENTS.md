@@ -234,6 +234,8 @@ uncommitted changes:
   and `\r` escapes.
 - Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
   `print`.
+- `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
+  expression grouping.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the

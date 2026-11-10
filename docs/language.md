@@ -255,6 +255,7 @@ if condition {
 ```
 
 - Condition must be `Bool`.
+- Parentheses around the condition are optional; `( ... )` is ordinary expression grouping.
 - `else` is optional.
 - `else if` chains select the first matching branch.
 - `else` may appear on the next line, including after blank lines.
@@ -292,6 +293,7 @@ while counter < 3 {
 ```
 
 - Condition must be `Bool`.
+- Parentheses around the condition are optional; `( ... )` is ordinary expression grouping.
 - Body is a block and may contain blank lines.
 - `while` is a statement and produces no value.
 

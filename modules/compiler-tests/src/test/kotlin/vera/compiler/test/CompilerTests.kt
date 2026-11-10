@@ -776,6 +776,24 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `if and while conditions may use grouping parentheses`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var count = 0
+                        var total = 0
+                        while (count < 3) {
+                            if (count == 1) or (count == 2) {
+                                total = total + count
+                            }
+                            count = count + 1
+                        }
+                        return total
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
     fun `logical and evaluates booleans`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
