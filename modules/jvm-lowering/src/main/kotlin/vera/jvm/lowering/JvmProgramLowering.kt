@@ -27,9 +27,14 @@ object JvmProgramLowering {
     fun lower(mainClassName: Identifier, program: VeraProgram): JvmProgram {
         val recordDeclarations = program.declarations
             .filterIsInstance<VeraRecordDeclaration>()
-        val functionDeclarations = program.declarations
+        val functionDeclarationList = program.declarations
             .filterIsInstance<VeraFunctionDeclaration>()
-            .associateBy { it.name }
+        functionDeclarationList.forEach { declaration ->
+            if (JvmFunctionLowering.isBuiltinName(declaration.name)) {
+                throw JvmLoweringException.FunctionNameConflictsWithBuiltin(declaration.name)
+            }
+        }
+        val functionDeclarations = functionDeclarationList.associateBy { it.name }
 
         val duplicateRecord = recordDeclarations
             .groupBy { it.name }
@@ -49,16 +54,14 @@ object JvmProgramLowering {
         val recordsByName = recordDeclarations.associateBy { it.name }
         val recordNames = recordsByName.keys
         val jvmRecordClasses = recordDeclarations.map { declaration ->
-            lowerRecord(declaration, recordNames)
+            lowerRecord(declaration, mainClassName, functionDeclarations, recordsByName)
         }
 
         val jvmMethods = mutableListOf<JvmMethod>()
-        program.declarations
-            .filterIsInstance<VeraFunctionDeclaration>()
-            .forEach { declaration ->
-                jvmMethods += JvmFunctionLowering
-                    .lower(mainClassName, functionDeclarations, recordsByName, declaration)
-            }
+        functionDeclarationList.forEach { declaration ->
+            jvmMethods += JvmFunctionLowering
+                .lower(mainClassName, functionDeclarations, recordsByName, declaration)
+        }
         lowerEntryPointAdapter(mainClassName, functionDeclarations, recordNames)?.let { adapter ->
             jvmMethods += adapter
         }
@@ -133,8 +136,11 @@ object JvmProgramLowering {
 
     private fun lowerRecord(
         record: VeraRecordDeclaration,
-        recordNames: Set<Identifier>,
+        mainClassName: Identifier,
+        functionDeclarations: Map<Identifier, VeraFunctionDeclaration>,
+        recordsByName: Map<Identifier, VeraRecordDeclaration>,
     ): JvmClass {
+        val recordNames = recordsByName.keys
         val seenFields = mutableSetOf<Identifier>()
         val jvmFields = record.fields.map { field ->
             if (!seenFields.add(field.name)) {
@@ -149,12 +155,30 @@ object JvmProgramLowering {
             }
             JvmField(field.name, JvmTypeLowering.lower(field.type, recordNames))
         }
+        val seenMethods = mutableSetOf<Identifier>()
+        record.methods.forEach { method ->
+            if (!seenMethods.add(method.name)) {
+                throw JvmLoweringException.DuplicateRecordMethod(record.name, method.name)
+            }
+            if (method.name in seenFields) {
+                throw JvmLoweringException.RecordMethodConflictsWithField(record.name, method.name)
+            }
+        }
+        val jvmMethods = record.methods.map { method ->
+            JvmFunctionLowering.lower(
+                mainClassName,
+                functionDeclarations,
+                recordsByName,
+                method,
+                receiverRecord = record,
+            )
+        }
         val constructorParameters = jvmFields.map { field ->
             JvmParameter(field.name, field.type)
         }
         return JvmClass(
             name = record.name,
-            methods = emptyList(),
+            methods = jvmMethods,
             fields = jvmFields,
             constructors = listOf(JvmConstructor(constructorParameters)),
         )

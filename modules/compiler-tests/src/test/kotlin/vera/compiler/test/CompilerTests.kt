@@ -1083,6 +1083,261 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `record methods can read fields implicitly`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn sum(): Int {
+                            return x + y
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(1, 2).sum()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
+    fun `record methods accept parameters and return records`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn offset(dx: Int, dy: Int): Point {
+                            return Point(x + dx, y + dy)
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var point = Point(1, 2).offset(3, 4)
+                        return point.x * 10 + point.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 46, testInfo)
+    }
+
+    @Test
+    fun `record methods can call sibling methods`(testInfo: TestInfo) {
+        val source = """
+                    record Counter {
+                        value: Int
+
+                        fn doubled(): Int {
+                            return value * 2
+                        }
+
+                        fn quadrupled(): Int {
+                            return doubled() * 2
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Counter(3).quadrupled()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 12, testInfo)
+    }
+
+    @Test
+    fun `record methods can call top-level functions and print`(testInfo: TestInfo) {
+        val source = """
+                    fn increment(value: Int): Int {
+                        return value + 1
+                    }
+                    record Counter {
+                        value: Int
+
+                        fn printNext() {
+                            print(increment(value))
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        Counter(41).printNext()
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "42$EOL", testInfo)
+    }
+
+    @Test
+    fun `record methods can be called on nested record values`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn sum(): Int {
+                            return x + y
+                        }
+                    }
+                    record Line {
+                        start: Point
+                        end: Point
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var line = Line(Point(1, 2), Point(3, 4))
+                        return line.start.sum() + line.end.sum()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 10, testInfo)
+    }
+
+    @Test
+    fun `record methods can call methods on field values`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+
+                        fn value(): Int {
+                            return x
+                        }
+                    }
+                    record Box {
+                        point: Point
+
+                        fn value(): Int {
+                            return point.value()
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Box(Point(9)).value()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 9, testInfo)
+    }
+
+    @Test
+    fun `record methods can be called on constructor results`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn withX(newX: Int): Point {
+                            return Point(newX, y)
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(1, 2).withX(7).x
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 7, testInfo)
+    }
+
+    @Test
+    fun `record methods can use if expressions`(testInfo: TestInfo) {
+        val source = """
+                    record Number {
+                        value: Int
+
+                        fn sign(): Int {
+                            return if value < 0 {
+                                0
+                            } else {
+                                1
+                            }
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Number(5).sign()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `record methods support string parameters and returns`(testInfo: TestInfo) {
+        val source = """
+                    record Label {
+                        text: String
+
+                        fn value(): String {
+                            return text
+                        }
+
+                        fn echo(message: String): String {
+                            return message
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        print(Label("hello").value())
+                        print(Label("unused").echo("world"))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "hello${EOL}world${EOL}", testInfo)
+    }
+
+    @Test
+    fun `record methods support bool parameters and returns`(testInfo: TestInfo) {
+        val source = """
+                    record Flag {
+                        value: Bool
+
+                        fn select(useValue: Bool): Bool {
+                            return if useValue {
+                                value
+                            } else {
+                                False
+                            }
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return if Flag(True).select(True) and Flag(False).select(True) {
+                            0
+                        } else {
+                            1
+                        }
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `record methods on field values accept arguments`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn offset(dx: Int, dy: Int): Point {
+                            return Point(x + dx, y + dy)
+                        }
+                    }
+                    record Box {
+                        point: Point
+
+                        fn shifted(dx: Int, dy: Int): Int {
+                            var moved = point.offset(dx, dy)
+                            return moved.x * 10 + moved.y
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Box(Point(1, 2)).shifted(3, 4)
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 46, testInfo)
+    }
+
+    @Test
+    fun `record methods accept record parameters`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+
+                        fn total(other: Point): Int {
+                            return x + y + other.x + other.y
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Point(1, 2).total(Point(3, 4))
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 10, testInfo)
+    }
+
+    @Test
     fun `Unit values can be stored in records and read back`(testInfo: TestInfo) {
         val source = """
                     record Signal {

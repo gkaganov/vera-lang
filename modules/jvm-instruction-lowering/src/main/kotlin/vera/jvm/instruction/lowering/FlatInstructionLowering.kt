@@ -15,6 +15,7 @@ import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
+import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
@@ -139,8 +140,13 @@ private class FlatInstructionLoweringState {
             jvmMethod.name,
             jvmMethod.parameters,
             jvmMethod.returnType,
+            jvmMethod.receiver?.type,
         )
 
+        val jvmReceiver = jvmMethod.receiver
+        if (jvmReceiver != null) {
+            flatLocalSlots[jvmReceiver] = flatBuilder.receiverLocal()
+        }
         jvmMethod.parameters.forEachIndexed { index, jvmParameter ->
             val local = flatBuilder.parameterLocal(index)
             flatLocalSlots[JvmLocal(jvmParameter.name, jvmParameter.type)] = local
@@ -314,6 +320,22 @@ private class FlatInstructionLoweringState {
                         jvmExpression.ownerClass,
                         jvmExpression.methodName,
                         jvmExpression.signature,
+                    ),
+                )
+                jvmExpression.signature.returnType
+            }
+
+            is JvmInstanceCall -> {
+                lowerExpression(jvmExpression.receiver)
+                jvmExpression.arguments.forEach { jvmArgument ->
+                    lowerExpression(jvmArgument)
+                }
+                append(
+                    FlatInvokeVirtual(
+                        jvmExpression.ownerClass,
+                        jvmExpression.methodName,
+                        jvmExpression.signature,
+                        receiverType = jvmExpression.receiver.type,
                     ),
                 )
                 jvmExpression.signature.returnType

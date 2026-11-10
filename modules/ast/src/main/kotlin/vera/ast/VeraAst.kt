@@ -6,7 +6,11 @@ data class VeraProgram(val declarations: List<VeraDeclaration>)
 
 sealed interface VeraDeclaration
 data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val body: VeraExplicitReturnBlock) : VeraDeclaration
-data class VeraRecordDeclaration(val name: Identifier, val fields: List<VeraRecordField>) : VeraDeclaration
+data class VeraRecordDeclaration(
+    val name: Identifier,
+    val fields: List<VeraRecordField>,
+    val methods: List<VeraFunctionDeclaration> = emptyList(),
+) : VeraDeclaration
 data class VeraRecordField(val name: Identifier, val type: VeraType)
 
 sealed interface VeraStatement

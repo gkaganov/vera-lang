@@ -21,17 +21,37 @@ Implemented:
 - `if` / `else if` / `else` expressions.
 - `while`.
 - Function calls, `print`, and forward application with `|>`.
-- Top-level `record` declarations with immutable fields, positional construction, and field access.
+- Top-level `record` declarations with immutable fields, positional construction, field access,
+  and read-only instance methods.
 
 Not implemented:
 
 - `val` immutability enforcement.
-- Record mutation, record methods, traits, classes, inheritance.
+- Shadowing checks (shadowing is disallowed by design, but not rejected yet).
+- Forward application to member calls and sibling record methods.
+- Record mutation (including `mut fn` methods), traits, classes, inheritance.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
 - Comments, block scoping, unary operators.
 - Custom entry-point names (only `main` gets a JVM adapter).
+
+## Keywords
+
+Reserved words cannot be used as identifiers:
+
+| Category | Keywords |
+|----------|----------|
+| Declarations | `fn`, `record`, `var`, `val` |
+| Control flow | `if`, `else`, `while`, `return` |
+| Operators | `and`, `or` |
+| Types | `Int`, `String`, `Bool`, `Unit` |
+| Boolean literals | `True`, `False` |
+
+- `val` is reserved, but immutability is not enforced yet.
+- `print` is a built-in function, not a keyword. Top-level functions cannot reuse built-in
+  names, so `fn print(...)` is rejected.
+- `else if` is not a separate keyword; it is an `else` block containing an `if` expression.
 
 ## Program structure
 
@@ -80,25 +100,42 @@ fn name(parameter: Type, other: Type): ReturnType {
 record Point {
     x: Int
     y: Int
+
+    fn sum(): Int {
+        return x + y
+    }
 }
 
 fn main() {
     var point = Point(1, 2)
     print(point.x)
-    print(point.y)
+    print(point.sum())
 }
 ```
 
 - `record` declarations are top-level.
 - Fields are declared one per line as `name: Type`.
+- Methods are declared with `fn` inside the record body, before or after fields.
+- Methods are instance methods. They can read the record's fields and call sibling methods by
+  name, without an explicit `this`/`self` expression.
+- Shadowing is not allowed: parameters, locals, fields, methods, top-level functions, records, and
+  built-ins must have distinct names in their scope.
+- Bare names resolve to parameters/locals, fields, sibling methods, then top-level functions and
+  built-ins.
+- Methods have typed parameters and an optional return type; an omitted return type means `Unit`.
+- Methods can call top-level functions, built-ins, and other record methods.
+- Methods are called after `.` and must include an argument list: `point.sum()`.
+- Method overloading is not supported.
+- A record cannot have both a field and a method with the same name.
 - Field types may be `Int`, `String`, `Bool`, `Unit`, or another record type.
 - Records are immutable; fields are read-only from Vera source.
 - The compiler generates a positional constructor in field declaration order.
 - Field access uses `.` and can be chained: `line.start.x`.
 - Record types can be used in parameter, return, and local type annotations.
-- Records compile to their own JVM classes with final fields and a generated constructor.
-- Methods, inheritance, mutation, equality, default values, and printing whole records are not
-  implemented.
+- Records compile to their own JVM classes with final fields, a generated constructor, and public
+  instance methods.
+- Mutation (including `mut fn`), inheritance, equality, default values, and printing whole records
+  are not implemented.
 
 ## Variables and rebinding
 
@@ -181,10 +218,15 @@ print("hello")
 
 ```vera
 2 |> add(1)
+data |> processor.runtime.process() |> print()
 ```
 
 - `value |> f(args)` lowers to `f(value, args)`.
 - `value |> f` lowers to `f(value)`.
+- The right side may be a bare callable (function, built-in, record constructor, sibling record
+  method) or a member call chain; the forwarded value becomes the first argument.
+- Chained `|>` feeds each result into the next call.
+- Forwarding into member calls and sibling record methods is not implemented yet.
 
 ## Operator precedence
 

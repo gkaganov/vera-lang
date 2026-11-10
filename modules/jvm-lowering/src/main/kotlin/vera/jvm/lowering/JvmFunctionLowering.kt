@@ -39,6 +39,7 @@ import vera.jvm.ir.JvmExpressionStatement
 import vera.jvm.ir.JvmGetField
 import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
+import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmLocal
@@ -78,19 +79,28 @@ private sealed interface PrimaryResolution {
 }
 
 internal object JvmFunctionLowering {
+    internal fun isBuiltinName(name: Identifier): Boolean = Builtin.from(name) != null
+
     fun lower(
         className: Identifier,
         visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
         visibleRecords: Map<Identifier, VeraRecordDeclaration>,
         veraFunction: VeraFunctionDeclaration,
-    ): JvmMethod = JvmFunctionLoweringState(className, visibleFunctions, visibleRecords).lower(veraFunction)
+        receiverRecord: VeraRecordDeclaration? = null,
+    ): JvmMethod = JvmFunctionLoweringState(className, visibleFunctions, visibleRecords, receiverRecord)
+        .lower(veraFunction)
 }
 
 private class JvmFunctionLoweringState(
     private val className: Identifier,
     private val visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
     private val visibleRecords: Map<Identifier, VeraRecordDeclaration>,
+    private val receiverRecord: VeraRecordDeclaration?,
 ) {
+
+    private val receiverLocal: JvmLocal? = receiverRecord?.let { record ->
+        JvmLocal(Identifier("<this>"), JvmType.ClassType(record.name))
+    }
 
     private data class LoweredStatement(val jvmStatement: JvmStatement, val returns: Boolean)
 
@@ -122,6 +132,7 @@ private class JvmFunctionLoweringState(
             jvmParameters,
             currentReturnType,
             JvmExplicitReturnBlock(jvmStatements),
+            receiver = receiverLocal,
         )
     }
 
@@ -200,6 +211,10 @@ private class JvmFunctionLoweringState(
                 is PrimaryResolution.Pending -> {
                     if (visibleRecords.containsKey(resolution.identifier)) {
                         throw JvmLoweringException.RecordTypeUsedAsValue(resolution.identifier)
+                    }
+                    val receiver = receiverRecord
+                    if (receiver != null && receiver.methods.any { it.name == resolution.identifier }) {
+                        throw JvmLoweringException.RecordMethodUsedAsValue(receiver.name, resolution.identifier)
                     }
                     throw JvmLoweringException.UnexpectedPendingSymbol()
                 }
@@ -327,15 +342,22 @@ private class JvmFunctionLoweringState(
                     if (visibleRecords.containsKey(veraName)) {
                         throw JvmLoweringException.RecordTypeUsedAsValue(veraName)
                     }
+                    val receiver = receiverRecord
+                    if (receiver != null && receiver.methods.any { it.name == veraName }) {
+                        throw JvmLoweringException.RecordMethodUsedAsValue(receiver.name, veraName)
+                    }
                     throw JvmLoweringException.UnexpectedPendingSymbol()
                 }
 
                 val jvmArguments = lowerArguments(firstData)
                 val veraRecord = visibleRecords[veraName]
-                jvmExpression = if (veraRecord != null) {
-                    lowerRecordConstruction(veraRecord, jvmArguments)
-                } else {
-                    lowerFunctionCall(veraName, jvmArguments)
+                val receiver = receiverRecord
+                val receiverMethod = receiver?.methods?.firstOrNull { it.name == veraName }
+                jvmExpression = when {
+                    veraRecord != null -> lowerRecordConstruction(veraRecord, jvmArguments)
+                    receiver != null && receiverMethod != null ->
+                        lowerInstanceMethodCall(readReceiver(), receiver, receiverMethod, jvmArguments)
+                    else -> lowerFunctionCall(veraName, jvmArguments)
                 }
                 dataIndex = 1
             }
@@ -344,32 +366,97 @@ private class JvmFunctionLoweringState(
         while (dataIndex < veraChainedExpression.data.size) {
             when (val chainedData = veraChainedExpression.data[dataIndex]) {
                 is VeraMemberAccess -> {
-                    jvmExpression = lowerMemberAccess(jvmExpression, chainedData.member)
+                    val ownerType = jvmExpression.type as? JvmType.ClassType
+                        ?: throw JvmLoweringException.MemberAccessRequiresRecord(jvmExpression.type)
+                    val veraRecord = visibleRecords[ownerType.name]
+                        ?: throw JvmLoweringException.UnknownRecordType(ownerType.name)
+                    val member = chainedData.member
+                    val nextData = veraChainedExpression.data.getOrNull(dataIndex + 1)
+                    val veraField = veraRecord.fields.firstOrNull { it.name == member }
+                    if (veraField != null) {
+                        if (nextData is VeraArguments) {
+                            throw JvmLoweringException.ValueCallNotSupported()
+                        }
+                        jvmExpression = JvmGetField(
+                            receiver = jvmExpression,
+                            ownerClass = ownerType.name,
+                            fieldName = member,
+                            fieldType = lowerType(veraField.type),
+                        )
+                        dataIndex++
+                    } else {
+                        val veraMethod = veraRecord.methods.firstOrNull { it.name == member }
+                        if (veraMethod == null) {
+                            if (nextData is VeraArguments) {
+                                throw JvmLoweringException.UnknownRecordMethod(ownerType.name, member)
+                            }
+                            throw JvmLoweringException.UnknownRecordField(ownerType.name, member)
+                        }
+                        if (nextData is VeraArguments) {
+                            jvmExpression = lowerInstanceMethodCall(
+                                jvmExpression,
+                                veraRecord,
+                                veraMethod,
+                                lowerArguments(nextData),
+                            )
+                            dataIndex += 2
+                        } else {
+                            throw JvmLoweringException.RecordMethodUsedAsValue(ownerType.name, member)
+                        }
+                    }
                 }
 
                 is VeraArguments -> throw JvmLoweringException.ValueCallNotSupported()
             }
-            dataIndex++
         }
 
         return jvmExpression
     }
 
-    private fun lowerMemberAccess(
+    private fun readReceiver(): JvmExpression {
+        val jvmReceiver = receiverLocal
+            ?: throw JvmLoweringException.InternalInvariant("method call without a receiver")
+        return JvmLocalRead(jvmReceiver)
+    }
+
+    private fun lowerInstanceMethodCall(
         jvmReceiver: JvmExpression,
-        member: Identifier,
+        veraRecord: VeraRecordDeclaration,
+        veraMethod: VeraFunctionDeclaration,
+        jvmArguments: List<JvmExpression>,
     ): JvmExpression {
-        val ownerType = jvmReceiver.type as? JvmType.ClassType
-            ?: throw JvmLoweringException.MemberAccessRequiresRecord(jvmReceiver.type)
-        val veraRecord = visibleRecords[ownerType.name]
-            ?: throw JvmLoweringException.UnknownRecordType(ownerType.name)
-        val veraField = veraRecord.fields.firstOrNull { it.name == member }
-            ?: throw JvmLoweringException.UnknownRecordField(ownerType.name, member)
-        return JvmGetField(
+        val jvmParameters = veraMethod.parameters.map { veraParameter ->
+            JvmParameter(veraParameter.name, lowerType(veraParameter.type))
+        }
+        if (jvmArguments.size != jvmParameters.size) {
+            throw JvmLoweringException.MethodArityMismatch(
+                veraRecord.name,
+                veraMethod.name,
+                jvmParameters.size,
+                jvmArguments.size,
+            )
+        }
+        jvmArguments.forEachIndexed { index, jvmArgument ->
+            val expectedType = jvmParameters[index].type
+            if (jvmArgument.type != expectedType) {
+                throw JvmLoweringException.MethodArgumentTypeMismatch(
+                    veraRecord.name,
+                    veraMethod.name,
+                    veraMethod.parameters[index].name,
+                    expectedType,
+                    jvmArgument.type,
+                )
+            }
+        }
+        return JvmInstanceCall(
             receiver = jvmReceiver,
-            ownerClass = ownerType.name,
-            fieldName = member,
-            fieldType = lowerType(veraField.type),
+            ownerClass = veraRecord.name,
+            methodName = veraMethod.name,
+            arguments = jvmArguments,
+            signature = JvmMethodSignature(
+                jvmParameters,
+                JvmTypeLowering.lowerReturn(veraMethod.returnType, visibleRecords.keys),
+            ),
         )
     }
 
@@ -521,8 +608,7 @@ private class JvmFunctionLoweringState(
                 if (jvmLocal != null) {
                     PrimaryResolution.Resolved(JvmLocalRead(jvmLocal))
                 } else {
-                    // not a local -> builtin/function name
-                    PrimaryResolution.Pending(veraIdentifier)
+                    resolveReceiverField(veraIdentifier) ?: PrimaryResolution.Pending(veraIdentifier)
                 }
             }
 
@@ -530,6 +616,20 @@ private class JvmFunctionLoweringState(
 
             is VeraChainedExpression -> PrimaryResolution.Resolved(lowerChainedExpression(veraPrimaryExpression))
         }
+    }
+
+    private fun resolveReceiverField(identifier: Identifier): PrimaryResolution.Resolved? {
+        val jvmReceiver = receiverLocal ?: return null
+        val record = receiverRecord ?: return null
+        val veraField = record.fields.firstOrNull { it.name == identifier } ?: return null
+        return PrimaryResolution.Resolved(
+            JvmGetField(
+                receiver = JvmLocalRead(jvmReceiver),
+                ownerClass = record.name,
+                fieldName = identifier,
+                fieldType = lowerType(veraField.type),
+            ),
+        )
     }
 
     private fun lowerType(veraType: VeraType): JvmType =

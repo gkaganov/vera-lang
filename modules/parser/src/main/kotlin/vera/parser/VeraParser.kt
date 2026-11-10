@@ -90,15 +90,20 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         expect(VeraTokenType.LBRACE)
         skipEols()
         val fields = mutableListOf<VeraRecordField>()
+        val methods = mutableListOf<VeraFunctionDeclaration>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
-            val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
-            expect(VeraTokenType.COLON)
-            fields += VeraRecordField(Identifier(fieldName.text), parseTypeRef())
+            if (at(VeraTokenType.FN)) {
+                methods += parseFunctionDeclaration()
+            } else {
+                val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
+                expect(VeraTokenType.COLON)
+                fields += VeraRecordField(Identifier(fieldName.text), parseTypeRef())
+            }
             parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraRecordDeclaration(Identifier(name.text), fields)
+        return VeraRecordDeclaration(Identifier(name.text), fields, methods)
     }
 
     private fun parseParameter(): VeraParameter {

@@ -41,7 +41,7 @@
 |-----------|-------------------------------------------------------------------------------------|----------------------------------------------|
 | Variables | `val` immutable, `var` mutable; rebind with `=`                                     | `var` and rebinding work; `val` not enforced |
 | Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and record types                  |
-| Records   | Data-oriented structured values                                                     | Fields and read access work; updates do not  |
+| Records   | Data-oriented structured values                                                     | Fields, read access, and read-only methods work; updates do not |
 | Traits    | Shared behavior and composition without inheritance                                 | Not implemented                              |
 | Functions | Pure by default; side effects declared as capabilities                              | `fn` exists; effects do not                  |
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
@@ -54,8 +54,8 @@ capabilities, and how much of the type system can stay simple.
 
 ## Value-object direction (proposed)
 
-Status: partially implemented. Record declarations, construction, and field access work. Mutation
-methods and collection semantics are still proposed.
+Status: partially implemented. Record declarations, construction, field access, and read-only
+instance methods work. Mutation methods and collection semantics are still proposed.
 
 - Objects are value records, not reference-identity classes.
 - Values are immutable from the outside; there is no shared mutable state.

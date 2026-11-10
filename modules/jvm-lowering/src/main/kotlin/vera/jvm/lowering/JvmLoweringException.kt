@@ -71,6 +71,10 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "function ${name.value} not found.",
     )
 
+    class FunctionNameConflictsWithBuiltin(val name: Identifier) : JvmLoweringException(
+        "function ${name.value} conflicts with the built-in function ${name.value}",
+    )
+
     class BuiltinArityMismatch(
         val builtin: JvmBuiltin,
         val expected: Int,
@@ -130,7 +134,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val expected: Int,
         val actual: Int,
     ) : JvmLoweringException(
-        "record ${record.value} constructor requires $expected arguments, got $actual",
+        "record ${record.value} constructor requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
     )
 
     class RecordConstructorArgumentTypeMismatch(
@@ -140,6 +144,53 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val actual: JvmType,
     ) : JvmLoweringException(
         "record ${record.value} field ${field.value} requires ${expected.render()}, got ${actual.render()}",
+    )
+
+    class DuplicateRecordMethod(
+        val record: Identifier,
+        val method: Identifier,
+    ) : JvmLoweringException(
+        "record ${record.value} has duplicate method ${method.value}",
+    )
+
+    class RecordMethodConflictsWithField(
+        val record: Identifier,
+        val name: Identifier,
+    ) : JvmLoweringException(
+        "record ${record.value} has both a field and a method named ${name.value}",
+    )
+
+    class UnknownRecordMethod(
+        val record: Identifier,
+        val method: Identifier,
+    ) : JvmLoweringException(
+        "record ${record.value} has no method ${method.value}",
+    )
+
+    class MethodArityMismatch(
+        val record: Identifier,
+        val method: Identifier,
+        val expected: Int,
+        val actual: Int,
+    ) : JvmLoweringException(
+        "record ${record.value} method ${method.value} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
+    )
+
+    class MethodArgumentTypeMismatch(
+        val record: Identifier,
+        val method: Identifier,
+        val parameter: Identifier,
+        val expected: JvmType,
+        val actual: JvmType,
+    ) : JvmLoweringException(
+        "record ${record.value} method ${method.value} parameter ${parameter.value} requires ${expected.render()}, got ${actual.render()}",
+    )
+
+    class RecordMethodUsedAsValue(
+        val record: Identifier,
+        val method: Identifier,
+    ) : JvmLoweringException(
+        "record ${record.value} method ${method.value} must be called",
     )
 
     class RecordTypeUsedAsValue(val name: Identifier) : JvmLoweringException(

@@ -118,9 +118,10 @@ data class FlatInvokeVirtual(
     val ownerClass: Identifier,
     val methodName: Identifier,
     val methodSignature: JvmMethodSignature,
+    val receiverType: JvmType = JvmType.OBJECT,
 ) : FlatInstruction {
     override val effect = FlatInstructionEffect(
-        stackPops = listOf(JvmType.OBJECT) + methodSignature.parameters.map { it.type },
+        stackPops = listOf(receiverType) + methodSignature.parameters.map { it.type },
         stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
     )
 }

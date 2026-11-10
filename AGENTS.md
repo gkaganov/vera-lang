@@ -79,7 +79,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 
 - `JvmProgramLowering.lower(mainClassName, program)` is the public entry point.
 - First pass collects record and function declarations by name; records lower to their own
-  classes, then functions lower to static methods on the program class.
+  classes (including instance methods), then functions lower to static methods on the program
+  class.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
 - The flat instruction layer verifies stack discipline and resolves labels/jumps.
 - The emitter must not interpret structured expressions or control flow.
@@ -89,7 +90,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmField`, `JvmConstructor`,
   `JvmMethod`, `JvmExpression`, `JvmStatement`, and block kinds `JvmExplicitReturnBlock`,
   `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`.
-- Record construction is `JvmRecordConstruction`; field reads are `JvmGetField`.
+- Record construction is `JvmRecordConstruction`; field reads are `JvmGetField`; record method
+  calls are `JvmInstanceCall` with an explicit receiver expression. `JvmMethod.receiver` is the
+  optional instance receiver local; `null` means a static method.
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
   it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
@@ -100,6 +103,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
 - Record construction uses `FlatNew`, `FlatDup`, and `FlatInvokeSpecial`; generated constructors
   initialize fields with `FlatPutField`.
+- Record method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
+  verification.
 - `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
   statements.
 - `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
@@ -141,20 +146,50 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - Test names are descriptive backticked Kotlin names.
 - Error tests live in `CompilerErrorTests`; see [`docs/testing.md`](docs/testing.md).
 
+### Workflow Keywords
+
+- `review` — walk through all uncommitted changes, step by step.
+- `push` — review the work, commit, and push after approval.
+- `note` — record the accompanying instruction or decision in `AGENTS.md` or a file referenced from it.
+
+`review` and `push` only apply when sent on their own; the same words inside a sentence are ordinary
+text. `note` may be followed by the content to record.
+
 ### Git
 
 - Commit messages describe **what was done** in past tense (e.g. `added operator precedence`).
 - Ask the user to review changes before pushing. Do not push until the user approves.
 
-### Finishing a Task
+### Pushing Changes
 
-When the user says **"finish"**:
+When the user sends **`push` on its own**:
 
-1. Review the code and changes for problems, inconsistencies, and missing updates.
-2. Ask about anything needing clarification or a decision.
-3. Once resolved, commit the changes.
-4. Ask the user to review the committed changes.
-5. Push only after the user approves.
+1. Ask about anything needing clarification or a decision.
+2. Once resolved, commit the changes.
+3. Ask the user to review the committed changes.
+4. Push only after the user approves.
+
+### Reviewing Changes
+
+When the user sends **`review` on its own**, perform a guided, step-by-step review of all
+uncommitted changes:
+
+1. Inspect `git status` and the diffs, including staged, unstaged, untracked, and deleted files.
+   Include every change, no matter how small.
+2. Run the tests if they have not run recently; report the result.
+3. Before the first step, show an overview of all planned steps with a total count. Order them for
+   comprehension, for example: data model → parser → structured IR → lowering → flat IR → emitter →
+   tests → docs. Group tiny related changes; split large files into focused hunks. Each step must be
+   small enough to follow easily.
+4. For each step, show the full relevant diff or hunk explicitly in the response, alongside an
+   explanation of what changed and why. The diff and the explanation are equally important; do not
+   omit any change, no matter how small.
+5. After each step, state what the next step is explicitly (for example `Next: step 5/11`), then ask
+   whether the user has any questions.
+6. Pause and wait for the user's reply before continuing. Answer questions, but do not resume until
+   the user explicitly says to continue (for example `go on` or `next`).
+7. End with a concise summary of the whole change set and stop. Do not commit or push; those happen
+   only after the user says **`push`**.
 
 ### Naming
 
@@ -172,8 +207,8 @@ When the user says **"finish"**:
   operand checks; use `append(...)` for one flat instruction.
 - Reserve `emit*` for actual bytecode generation.
 - Record types are `VeraRecordDeclaration`/`VeraRecordField`, `JvmField`/`JvmConstructor`/
-  `JvmRecordConstruction`/`JvmGetField`, and `FlatNew`/`FlatGetField`/`FlatPutField`/
-  `FlatInvokeSpecial`.
+  `JvmRecordConstruction`/`JvmGetField`/`JvmInstanceCall`, and `FlatNew`/`FlatGetField`/
+  `FlatPutField`/`FlatInvokeSpecial`/`FlatInvokeVirtual`.
 - `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
   `FlatGetStatic`/`FlatPutStatic`.
 - The JVM entry-point adapter is built in `JvmProgramLowering` as a `JvmStaticCall` to `main`
@@ -198,11 +233,26 @@ When the user says **"finish"**:
   `print`.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
 - `and` and `or` are short-circuiting reserved keywords.
-- `|>` is forward application: `value |> f` lowers to `f(value)`.
+- `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
+  first argument.
+- The right side of `|>` may be a bare callable (function, built-in, record constructor, sibling
+  record method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
+- Forward application to member calls and sibling methods is not implemented yet.
+- `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
+
+## Name Resolution
+
+- Shadowing is never allowed in Vera. Every name in a scope must be unique, including parameters,
+  locals, fields, methods, top-level functions, records, and built-ins. A nested binding may not
+  reuse an outer name; declarations must be renamed instead.
+- Enforcement is not implemented yet; current lookups still let parameters/locals take precedence
+  over fields.
 
 ## Known TODOs
 
-- Record methods, record mutation, and persistent collections are not implemented.
+- Record mutation and persistent collections are not implemented.
+- Name shadowing is disallowed by design but not rejected yet.
+- Forward application to member calls and sibling record methods is not implemented yet.
 
 ## Run / Debug
 

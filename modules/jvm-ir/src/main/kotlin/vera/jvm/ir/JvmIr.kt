@@ -20,6 +20,7 @@ data class JvmMethod(
     val parameters: List<JvmParameter>,
     val returnType: JvmType,
     val body: JvmExplicitReturnBlock,
+    val receiver: JvmLocal? = null,
 )
 
 data class JvmMethodSignature(val parameters: List<JvmParameter>, val returnType: JvmType)
@@ -123,6 +124,16 @@ data class JvmGetField(
 }
 
 data class JvmStaticCall(
+    val ownerClass: Identifier,
+    val methodName: Identifier,
+    val arguments: List<JvmExpression>,
+    val signature: JvmMethodSignature,
+) : JvmExpression {
+    override val type = signature.returnType
+}
+
+data class JvmInstanceCall(
+    val receiver: JvmExpression,
     val ownerClass: Identifier,
     val methodName: Identifier,
     val arguments: List<JvmExpression>,
