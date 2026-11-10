@@ -149,25 +149,28 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 ### Workflow Keywords
 
 - `review` — walk through all uncommitted changes, step by step.
-- `push` — review the work, commit, and push after approval.
+- `push` — commit and push everything; ask only if a question or decision is needed.
 - `note` — record the accompanying instruction or decision in `AGENTS.md` or a file referenced from it.
 
 `review` and `push` only apply when sent on their own; the same words inside a sentence are ordinary
-text. `note` may be followed by the content to record.
+text. `note` may be followed by the content to record. Reviewing changes belongs to `review`, not
+`push`.
 
 ### Git
 
 - Commit messages describe **what was done** in past tense (e.g. `added operator precedence`).
-- Ask the user to review changes before pushing. Do not push until the user approves.
+- Review happens in the `review` step. `push` commits and pushes all changes and asks only when a
+  question or decision is needed.
 
 ### Pushing Changes
 
 When the user sends **`push` on its own**:
 
-1. Ask about anything needing clarification or a decision.
-2. Once resolved, commit the changes.
-3. Ask the user to review the committed changes.
-4. Push only after the user approves.
+1. Ask only if something needs clarification or a decision.
+2. Commit all changes.
+3. Push everything.
+
+Do not run a review or wait for review approval; that belongs to `review`.
 
 ### Reviewing Changes
 
