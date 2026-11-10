@@ -690,6 +690,32 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `Bool equality compares values`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(True == True)
+                        print(True == False)
+                        print(True != False)
+                        print(False != False)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+    }
+
+    @Test
+    fun `String equality compares contents`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print("hello" == "hello")
+                        print("hello" == "world")
+                        print("hello" != "world")
+                        print("hello" != "hello")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+    }
+
+    @Test
     fun `Ints can be compared with less-than`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

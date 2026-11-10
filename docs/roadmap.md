@@ -10,12 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Bool and String equality
-
-- Status: not implemented.
-- Area: lowering and emitter.
-- Acceptance: decide the equality matrix; `==` and `!=` support `Bool` and `String`, with tests.
-
 ### Loop control
 
 - Status: not implemented.

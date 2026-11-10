@@ -48,6 +48,10 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "operator '$operator' is only defined for Int operands, got ${actual.render()}",
     )
 
+    class EqualityOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
+        "operator '$operator' is only defined for Int, Bool, and String operands, got ${actual.render()}",
+    )
+
     class IfBranchTypeMismatch(
         val thenType: JvmType,
         val elseType: JvmType,

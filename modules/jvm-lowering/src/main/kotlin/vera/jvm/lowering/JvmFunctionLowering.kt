@@ -293,11 +293,20 @@ private class JvmFunctionLoweringState(
 
         val jvmLeft = lowerPrimaryExpression(veraOperation.left)
         val jvmRight = lowerPrimaryExpression(veraOperation.right)
+        if (veraOperation.operator == VeraOperator.EQUALS || veraOperation.operator == VeraOperator.NOT_EQUALS) {
+            validateEqualityOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
+            val jvmOperator = if (veraOperation.operator == VeraOperator.EQUALS) {
+                JvmComparisonOperator.EQ
+            } else {
+                JvmComparisonOperator.NEQ
+            }
+            return JvmComparison(jvmOperator, jvmLeft, jvmRight)
+        }
         validateIntOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
 
         return when (veraOperation.operator) {
-            VeraOperator.EQUALS -> JvmComparison(JvmComparisonOperator.EQ, jvmLeft, jvmRight)
-            VeraOperator.NOT_EQUALS -> JvmComparison(JvmComparisonOperator.NEQ, jvmLeft, jvmRight)
+            VeraOperator.EQUALS, VeraOperator.NOT_EQUALS ->
+                throw JvmLoweringException.InternalInvariant("unreachable equality operator")
             VeraOperator.LESS -> JvmComparison(JvmComparisonOperator.LT, jvmLeft, jvmRight)
             VeraOperator.GREATER -> JvmComparison(JvmComparisonOperator.GT, jvmLeft, jvmRight)
             VeraOperator.LESS_EQ -> JvmComparison(JvmComparisonOperator.LTE, jvmLeft, jvmRight)
@@ -332,6 +341,19 @@ private class JvmFunctionLoweringState(
     private fun requireBoolOperand(jvmType: JvmType, veraOperator: VeraOperator) {
         if (jvmType != JvmType.BOOL) {
             throw JvmLoweringException.BoolOperandsRequired(veraOperator.symbol, jvmType)
+        }
+    }
+
+    private fun validateEqualityOperands(
+        veraOperator: VeraOperator,
+        jvmLeftType: JvmType,
+        jvmRightType: JvmType,
+    ) {
+        if (jvmLeftType != jvmRightType) {
+            throw JvmLoweringException.OperandTypesDiffer(veraOperator.symbol, jvmLeftType, jvmRightType)
+        }
+        if (jvmLeftType != JvmType.INT && jvmLeftType != JvmType.BOOL && jvmLeftType != JvmType.STRING) {
+            throw JvmLoweringException.EqualityOperandsRequired(veraOperator.symbol, jvmLeftType)
         }
     }
 

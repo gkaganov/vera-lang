@@ -89,6 +89,24 @@ data class FlatIntComparisonJump(
     )
 }
 
+data class FlatBoolEqualityJump(
+    val negated: Boolean,
+    val label: FlatLabel,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.BOOL, JvmType.BOOL),
+    )
+}
+
+data class FlatStringEqualityJump(
+    val negated: Boolean,
+    val label: FlatLabel,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.STRING, JvmType.STRING),
+    )
+}
+
 data class FlatInvokestatic(
     val ownerClass: Identifier,
     val methodName: Identifier,

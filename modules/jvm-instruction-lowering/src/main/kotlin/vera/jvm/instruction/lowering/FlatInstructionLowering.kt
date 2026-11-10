@@ -40,6 +40,7 @@ import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.instruction.FlatBindLabel
+import vera.jvm.instruction.FlatBoolEqualityJump
 import vera.jvm.instruction.FlatCreateLabel
 import vera.jvm.instruction.FlatDup
 import vera.jvm.instruction.FlatField
@@ -69,6 +70,7 @@ import vera.jvm.instruction.FlatPutField
 import vera.jvm.instruction.FlatPutStatic
 import vera.jvm.instruction.FlatReturn
 import vera.jvm.instruction.FlatStoreLocal
+import vera.jvm.instruction.FlatStringEqualityJump
 import vera.shared.model.Identifier
 
 object FlatInstructionLowering {
@@ -273,9 +275,10 @@ private class FlatInstructionLoweringState {
             }
 
             is JvmComparison -> {
+                val operandType = jvmExpression.left.type
                 lowerExpression(jvmExpression.left)
                 lowerExpression(jvmExpression.right)
-                lowerComparison(jvmExpression.operator)
+                lowerComparison(operandType, jvmExpression.operator)
                 JvmType.BOOL
             }
 
@@ -358,14 +361,21 @@ private class FlatInstructionLoweringState {
         }
     }
 
-    private fun lowerComparison(jvmOperator: JvmComparisonOperator) {
+    private fun lowerComparison(operandType: JvmType, jvmOperator: JvmComparisonOperator) {
         val flatResultLocal = flatBuilder.allocateLocal(JvmType.BOOL)
         val flatTrueLabel = FlatLabel()
         val flatEndLabel = FlatLabel()
 
         createLabel(flatTrueLabel)
         createLabel(flatEndLabel)
-        jumpIfIntComparison(jvmOperator, flatTrueLabel)
+        when (operandType) {
+            JvmType.INT -> jumpIfIntComparison(jvmOperator, flatTrueLabel)
+            JvmType.BOOL -> jumpIfBoolEquality(jvmOperator, flatTrueLabel)
+            JvmType.STRING -> jumpIfStringEquality(jvmOperator, flatTrueLabel)
+            else -> throw FlatInstructionException.InternalInvariant(
+                "unsupported comparison operand type $operandType",
+            )
+        }
         append(FlatLoadConstant(JvmType.BOOL, false))
         append(FlatStoreLocal(flatResultLocal))
         jump(flatEndLabel)
@@ -542,4 +552,18 @@ private class FlatInstructionLoweringState {
 
     private fun jumpIfIntComparison(jvmOperator: JvmComparisonOperator, flatLabel: FlatLabel) =
         append(FlatIntComparisonJump(jvmOperator, flatLabel))
+
+    private fun jumpIfBoolEquality(jvmOperator: JvmComparisonOperator, flatLabel: FlatLabel) =
+        append(FlatBoolEqualityJump(equalityIsNegated(jvmOperator), flatLabel))
+
+    private fun jumpIfStringEquality(jvmOperator: JvmComparisonOperator, flatLabel: FlatLabel) =
+        append(FlatStringEqualityJump(equalityIsNegated(jvmOperator), flatLabel))
+
+    private fun equalityIsNegated(jvmOperator: JvmComparisonOperator): Boolean = when (jvmOperator) {
+        JvmComparisonOperator.EQ -> false
+        JvmComparisonOperator.NEQ -> true
+        else -> throw FlatInstructionException.InternalInvariant(
+            "operator $jvmOperator is not an equality operator",
+        )
+    }
 }

@@ -6,6 +6,7 @@ import vera.jvm.ir.JvmIntUnaryOperator
 import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmType
 import vera.jvm.instruction.FlatBindLabel
+import vera.jvm.instruction.FlatBoolEqualityJump
 import vera.jvm.instruction.FlatCreateLabel
 import vera.jvm.instruction.FlatDup
 import vera.jvm.instruction.FlatGetField
@@ -29,6 +30,7 @@ import vera.jvm.instruction.FlatPutField
 import vera.jvm.instruction.FlatPutStatic
 import vera.jvm.instruction.FlatReturn
 import vera.jvm.instruction.FlatStoreLocal
+import vera.jvm.instruction.FlatStringEqualityJump
 import vera.shared.model.Identifier
 import java.lang.classfile.ClassFile
 import java.lang.classfile.ClassFile.ACC_FINAL
@@ -136,6 +138,31 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                     JvmComparisonOperator.GT -> codeBuilder.if_icmpgt(label)
                     JvmComparisonOperator.LTE -> codeBuilder.if_icmple(label)
                     JvmComparisonOperator.GTE -> codeBuilder.if_icmpge(label)
+                }
+            }
+
+            is FlatBoolEqualityJump -> {
+                val label = labels[instruction.label]
+                    ?: throw BytecodeEmitException.UnboundLabel(instruction.label)
+                if (instruction.negated) {
+                    codeBuilder.if_icmpne(label)
+                } else {
+                    codeBuilder.if_icmpeq(label)
+                }
+            }
+
+            is FlatStringEqualityJump -> {
+                val label = labels[instruction.label]
+                    ?: throw BytecodeEmitException.UnboundLabel(instruction.label)
+                codeBuilder.invokevirtual(
+                    CD_String,
+                    "equals",
+                    MethodTypeDesc.of(CD_boolean, CD_Object),
+                )
+                if (instruction.negated) {
+                    codeBuilder.ifeq(label)
+                } else {
+                    codeBuilder.ifne(label)
                 }
             }
 

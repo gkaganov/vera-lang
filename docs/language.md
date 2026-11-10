@@ -205,9 +205,13 @@ a < b
 a > b
 a <= b
 a >= b
+"hello" == "hello"
+True != False
 ```
 
-- Comparisons are `Int`-only and produce `Bool`.
+- `==` and `!=` compare `Int`, `Bool`, and `String` values and produce `Bool`.
+- `String` equality compares contents, not reference identity.
+- `<`, `>`, `<=`, and `>=` are `Int`-only and produce `Bool`.
 
 ### Boolean logic
 

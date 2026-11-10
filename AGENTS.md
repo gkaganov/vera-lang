@@ -240,6 +240,8 @@ uncommitted changes:
   expression grouping.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
   Unary `-` binds tighter than multiplicative operators.
+- `==` and `!=` support `Int`, `Bool`, and `String`; `String` equality compares contents. Ordering
+  operators are `Int`-only.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
   first argument.

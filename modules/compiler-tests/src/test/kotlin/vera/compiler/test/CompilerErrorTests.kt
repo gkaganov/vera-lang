@@ -193,6 +193,24 @@ class CompilerErrorTests {
                 "operator '-' is only defined for Int operands",
             ),
             CompileErrorCase(
+                "equality operands with different types",
+                function("print(1 == True)"),
+                JvmLoweringException.OperandTypesDiffer::class,
+                "operator '==' requires both operands to have the same type",
+            ),
+            CompileErrorCase(
+                "equality on unsupported types",
+                function("print(Unit == Unit)"),
+                JvmLoweringException.EqualityOperandsRequired::class,
+                "operator '==' is only defined for Int, Bool, and String operands, got Unit",
+            ),
+            CompileErrorCase(
+                "ordering Bool operands",
+                function("print(True < False)"),
+                JvmLoweringException.IntOperandsRequired::class,
+                "operator '<' is only defined for Int operands, got BOOL",
+            ),
+            CompileErrorCase(
                 "if branches with different types",
                 function("var value = if True {", "    1", "} else {", "    \"no\"", "}"),
                 JvmLoweringException.IfBranchTypeMismatch::class,
