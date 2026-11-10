@@ -29,12 +29,18 @@ Not implemented:
 - `val` immutability enforcement.
 - Shadowing checks (shadowing is disallowed by design, but not rejected yet).
 - Forward application to member calls and sibling record methods.
-- Record mutation (including `mut fn` methods), traits, classes, inheritance.
+- Record mutation (including `mut fn` methods), traits, classes.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
 - Comments, block scoping, unary operators.
 - Custom entry-point names (only `main` gets a JVM adapter).
+
+See [`roadmap.md`](roadmap.md) for planned work and acceptance criteria.
+
+## Non-goals
+
+- Inheritance. Vera uses records, traits, and composition instead of class hierarchies.
 
 ## Keywords
 
@@ -134,8 +140,8 @@ fn main() {
 - Record types can be used in parameter, return, and local type annotations.
 - Records compile to their own JVM classes with final fields, a generated constructor, and public
   instance methods.
-- Mutation (including `mut fn`), inheritance, equality, default values, and printing whole records
-  are not implemented.
+- Mutation (including `mut fn`), equality, default values, and printing whole records are not
+  implemented.
 
 ## Variables and rebinding
 

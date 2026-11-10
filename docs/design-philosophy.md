@@ -70,7 +70,8 @@ instance methods work. Mutation methods and collection semantics are still propo
   disallowed initially.
 - Collections are persistent immutable values. Copy-on-write and structural sharing are
   implementation techniques, not observable semantics.
-- No reference identity, inheritance, null, or cyclic construction initially.
+- No reference identity, null, or cyclic construction initially.
+- Inheritance is a non-goal, not a later feature. Composition uses records and traits instead.
 - No ownership, borrowing, lifetimes, or move semantics.
 - A mutating method must not let its mutable receiver escape. The returned version is frozen or
   rebuilt as immutable.

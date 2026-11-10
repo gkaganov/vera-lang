@@ -6,6 +6,7 @@ parser, a 2-phase IR lowering pipeline, and generates JVM bytecode via the Java 
 ## Documentation
 
 - [`docs/language.md`](docs/language.md) — current language guide
+- [`docs/roadmap.md`](docs/roadmap.md) — planned work and acceptance criteria
 - [`docs/design-philosophy.md`](docs/design-philosophy.md) — long-term vision and principles
 - [`docs/testing.md`](docs/testing.md) — test structure and workflow
 
@@ -253,11 +254,14 @@ uncommitted changes:
 - Enforcement is not implemented yet; current lookups still let parameters/locals take precedence
   over fields.
 
+## Non-goals
+
+- Inheritance is not supported and will not be added. Vera uses records, traits, and composition
+  instead of class hierarchies.
+
 ## Known TODOs
 
-- Record mutation and persistent collections are not implemented.
-- Name shadowing is disallowed by design but not rejected yet.
-- Forward application to member calls and sibling record methods is not implemented yet.
+See [`docs/roadmap.md`](docs/roadmap.md) for planned work and acceptance criteria.
 
 ## Run / Debug
 
