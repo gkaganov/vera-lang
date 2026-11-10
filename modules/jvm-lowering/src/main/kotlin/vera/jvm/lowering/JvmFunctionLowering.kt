@@ -284,44 +284,20 @@ private class JvmFunctionLoweringState(
     }
 
     private fun lowerForwardApplication(veraOperation: VeraBinaryOperation): JvmExpression {
-        val (veraFunctionName, veraArguments) = when (val veraRight = veraOperation.right) {
-            is VeraIdentifierAsExpression -> veraRight.identifier to emptyList()
-            is VeraChainedExpression -> {
-                val veraBase = veraRight.primaryExpression
-                if (veraBase !is VeraIdentifierAsExpression) {
-                    throw JvmLoweringException.InvalidForwardApplication(
-                        JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
-                    )
-                }
-                val veraArgumentLists = mutableListOf<VeraArguments>()
-                veraRight.data.forEach { veraChainedData ->
-                    when (veraChainedData) {
-                        is VeraArguments -> veraArgumentLists += veraChainedData
-                        is VeraMemberAccess -> throw JvmLoweringException.InvalidForwardApplication(
-                            JvmForwardApplicationIssue.RIGHT_SIDE_CONTAINS_MEMBER_ACCESS,
-                        )
-                    }
-                }
-                if (veraArgumentLists.size > 1) {
-                    throw JvmLoweringException.InvalidForwardApplication(
-                        JvmForwardApplicationIssue.MULTIPLE_ARGUMENT_LISTS,
-                    )
-                }
-                veraBase.identifier to (veraArgumentLists.firstOrNull()?.expressions ?: emptyList())
+        return when (val veraRight = veraOperation.right) {
+            is VeraIdentifierAsExpression -> {
+                val jvmArguments = listOf(lowerPrimaryExpression(veraOperation.left))
+                lowerNamedCall(veraRight.identifier, jvmArguments)
+            }
+
+            is VeraChainedExpression -> lowerChainedExpression(veraRight) {
+                lowerPrimaryExpression(veraOperation.left)
             }
 
             else -> throw JvmLoweringException.InvalidForwardApplication(
-                JvmForwardApplicationIssue.RIGHT_SIDE_NOT_FUNCTION_NAME,
+                JvmForwardApplicationIssue.RIGHT_SIDE_NOT_CALLABLE,
             )
         }
-
-        val jvmArguments = mutableListOf<JvmExpression>()
-        jvmArguments += lowerPrimaryExpression(veraOperation.left)
-        for (veraArgument in veraArguments) {
-            jvmArguments += lowerPrimaryExpression(veraArgument)
-        }
-
-        return lowerFunctionCall(veraFunctionName, jvmArguments)
     }
 
     private fun requireBoolOperand(jvmType: JvmType, veraOperator: VeraOperator) {
@@ -343,7 +319,30 @@ private class JvmFunctionLoweringState(
         }
     }
 
-    private fun lowerChainedExpression(veraChainedExpression: VeraChainedExpression): JvmExpression {
+    private fun lowerChainedExpression(
+        veraChainedExpression: VeraChainedExpression,
+        forwardedArgument: (() -> JvmExpression)? = null,
+    ): JvmExpression {
+        val forwardedArgumentIndex = if (forwardedArgument == null) {
+            -1
+        } else {
+            if (veraChainedExpression.data.lastOrNull() !is VeraArguments) {
+                throw JvmLoweringException.InvalidForwardApplication(
+                    JvmForwardApplicationIssue.RIGHT_SIDE_NOT_CALLABLE,
+                )
+            }
+            var previousWasArguments = false
+            veraChainedExpression.data.forEach { chainedData ->
+                val isArguments = chainedData is VeraArguments
+                if (isArguments && previousWasArguments) {
+                    throw JvmLoweringException.InvalidForwardApplication(
+                        JvmForwardApplicationIssue.RIGHT_SIDE_CALLS_CALL_RESULT,
+                    )
+                }
+                previousWasArguments = isArguments
+            }
+            veraChainedExpression.data.lastIndex
+        }
         var jvmExpression: JvmExpression
         var dataIndex: Int
 
@@ -367,16 +366,11 @@ private class JvmFunctionLoweringState(
                     throw JvmLoweringException.UnexpectedPendingSymbol()
                 }
 
-                val jvmArguments = lowerArguments(firstData)
-                val veraRecord = visibleRecords[veraName]
-                val receiver = receiverRecord
-                val receiverMethod = receiver?.methods?.firstOrNull { it.name == veraName }
-                jvmExpression = when {
-                    veraRecord != null -> lowerRecordConstruction(veraRecord, jvmArguments)
-                    receiver != null && receiverMethod != null ->
-                        lowerInstanceMethodCall(readReceiver(), receiver, receiverMethod, jvmArguments)
-                    else -> lowerFunctionCall(veraName, jvmArguments)
-                }
+                val jvmArguments = lowerForwardedArguments(
+                    forwardedArgument,
+                    forwardedArgumentIndex == 0,
+                ) { lowerArguments(firstData) }
+                jvmExpression = lowerNamedCall(veraName, jvmArguments)
                 dataIndex = 1
             }
         }
@@ -411,11 +405,15 @@ private class JvmFunctionLoweringState(
                             throw JvmLoweringException.UnknownRecordField(ownerType.name, member)
                         }
                         if (nextData is VeraArguments) {
+                            val jvmArguments = lowerForwardedArguments(
+                                forwardedArgument,
+                                forwardedArgumentIndex == dataIndex + 1,
+                            ) { lowerArguments(nextData) }
                             jvmExpression = lowerInstanceMethodCall(
                                 jvmExpression,
                                 veraRecord,
                                 veraMethod,
-                                lowerArguments(nextData),
+                                jvmArguments,
                             )
                             dataIndex += 2
                         } else {
@@ -429,6 +427,34 @@ private class JvmFunctionLoweringState(
         }
 
         return jvmExpression
+    }
+
+    private fun lowerForwardedArguments(
+        forwardedArgument: (() -> JvmExpression)?,
+        shouldInject: Boolean,
+        lowerExplicitArguments: () -> List<JvmExpression>,
+    ): List<JvmExpression> {
+        if (!shouldInject) {
+            return lowerExplicitArguments()
+        }
+        val forward = forwardedArgument
+            ?: throw JvmLoweringException.InternalInvariant("missing forwarded argument")
+        return listOf(forward()) + lowerExplicitArguments()
+    }
+
+    private fun lowerNamedCall(
+        veraName: Identifier,
+        jvmArguments: List<JvmExpression>,
+    ): JvmExpression {
+        val veraRecord = visibleRecords[veraName]
+        val receiver = receiverRecord
+        val receiverMethod = receiver?.methods?.firstOrNull { it.name == veraName }
+        return when {
+            veraRecord != null -> lowerRecordConstruction(veraRecord, jvmArguments)
+            receiver != null && receiverMethod != null ->
+                lowerInstanceMethodCall(readReceiver(), receiver, receiverMethod, jvmArguments)
+            else -> lowerFunctionCall(veraName, jvmArguments)
+        }
     }
 
     private fun requireFreshName(name: Identifier) {

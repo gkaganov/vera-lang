@@ -6,19 +6,6 @@ guide describes current capability, not upcoming work.
 Use one entry per item, with its status, affected area, and acceptance criteria. Remove an item once
 it is implemented and covered by tests.
 
-## Near term
-
-### Forward application to member calls and sibling methods
-
-- Status: decided, not implemented.
-- Area: lowering.
-- Rule: the right side of `|>` may be a bare callable (function, built-in, record constructor,
-  sibling record method) or a member call chain; the forwarded value becomes the first argument.
-- Acceptance: `data |> processor.runtime.process() |> print()` works and lowers like
-  `print(processor.runtime.process(data))`; sibling methods work as RHS targets; integration tests
-  cover both.
-- Notes: shared named-call resolution should be used by both chained calls and forward application.
-
 ## Feature work
 
 ### Record mutation

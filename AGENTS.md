@@ -243,7 +243,6 @@ uncommitted changes:
   first argument.
 - The right side of `|>` may be a bare callable (function, built-in, record constructor, sibling
   record method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
-- Forward application to member calls and sibling methods is not implemented yet.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
 
 ## Name Resolution

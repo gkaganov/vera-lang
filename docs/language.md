@@ -27,7 +27,6 @@ Implemented:
 Not implemented:
 
 - `val` immutability enforcement.
-- Forward application to member calls and sibling record methods.
 - Record mutation (including `mut fn` methods), traits, classes.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
@@ -233,7 +232,6 @@ data |> processor.runtime.process() |> print()
 - The right side may be a bare callable (function, built-in, record constructor, sibling record
   method) or a member call chain; the forwarded value becomes the first argument.
 - Chained `|>` feeds each result into the next call.
-- Forwarding into member calls and sibling record methods is not implemented yet.
 
 ## Operator precedence
 

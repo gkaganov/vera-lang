@@ -1001,6 +1001,102 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `forward application calls methods on member chains`(testInfo: TestInfo) {
+        val source = """
+                    record Runtime {
+                        base: Int
+
+                        fn process(input: Int): Int {
+                            return input + base
+                        }
+                    }
+                    record Processor {
+                        runtime: Runtime
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var processor = Processor(Runtime(10))
+                        return 5 |> processor.runtime.process()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 15, testInfo)
+    }
+
+    @Test
+    fun `forward application passes the left value before explicit method arguments`(testInfo: TestInfo) {
+        val source = """
+                    record Calculator {
+                        offset: Int
+
+                        fn add(value: Int, extra: Int): Int {
+                            return value + extra + offset
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var calculator = Calculator(100)
+                        return 1 |> calculator.add(20)
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 121, testInfo)
+    }
+
+    @Test
+    fun `forward application chains member calls`(testInfo: TestInfo) {
+        val source = """
+                    record Runtime {
+                        base: Int
+
+                        fn process(input: Int): Int {
+                            return input + base
+                        }
+                    }
+                    record Processor {
+                        runtime: Runtime
+                    }
+                    fn $TEST_MAIN() {
+                        var processor = Processor(Runtime(10))
+                        1 |> processor.runtime.process() |> print()
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "11$EOL", testInfo)
+    }
+
+    @Test
+    fun `forward application calls sibling record methods`(testInfo: TestInfo) {
+        val source = """
+                    record Counter {
+                        value: Int
+
+                        fn add(amount: Int): Int {
+                            return value + amount
+                        }
+
+                        fn viaForward(amount: Int): Int {
+                            return amount |> add
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return Counter(10).viaForward(5)
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 15, testInfo)
+    }
+
+    @Test
+    fun `forward application accepts record constructors on the right`(testInfo: TestInfo) {
+        val source = """
+                    record Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var point = 2 |> Point(1)
+                        return point.x * 10 + point.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 21, testInfo)
+    }
+
+    @Test
     fun `records can be constructed and fields read`(testInfo: TestInfo) {
         val source = """
                     record Point {
