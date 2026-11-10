@@ -10,13 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Validate function calls and returns
-
-- Status: not implemented.
-- Area: lowering.
-- Acceptance: top-level function calls validate arity and argument types; return expressions are
-  checked against declared function and record-method return types; error tests cover both.
-
 ### Unary minus and negative literals
 
 - Status: not implemented.

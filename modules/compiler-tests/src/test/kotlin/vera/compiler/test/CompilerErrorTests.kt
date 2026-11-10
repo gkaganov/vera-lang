@@ -223,6 +223,38 @@ class CompilerErrorTests {
                 "function missing not found.",
             ),
             CompileErrorCase(
+                "function calls with the wrong arity",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    "fn testMain(): Int {\n    return add(1)\n}",
+                JvmLoweringException.FunctionArityMismatch::class,
+                "function add requires 2 arguments, got 1",
+            ),
+            CompileErrorCase(
+                "function arguments with the wrong type",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    "fn testMain(): Int {\n    return add(1, \"wrong\")\n}",
+                JvmLoweringException.FunctionArgumentTypeMismatch::class,
+                "function add parameter right requires INT, got STRING",
+            ),
+            CompileErrorCase(
+                "function return values with the wrong type",
+                "fn testMain(): Int {\n    return \"wrong\"\n}",
+                JvmLoweringException.ReturnTypeMismatch::class,
+                "return requires INT, got STRING",
+            ),
+            CompileErrorCase(
+                "Unit functions returning a value",
+                "fn testMain() {\n    return 1\n}",
+                JvmLoweringException.ReturnTypeMismatch::class,
+                "return requires Unit, got INT",
+            ),
+            CompileErrorCase(
+                "non-Unit functions without a return statement",
+                "fn testMain(): Int {\n}",
+                JvmLoweringException.MissingReturnStatement::class,
+                "missing return statement for type INT",
+            ),
+            CompileErrorCase(
                 "top-level functions conflicting with builtins",
                 "fn print() { }",
                 JvmLoweringException.FunctionNameConflictsWithBuiltin::class,
@@ -341,6 +373,18 @@ class CompilerErrorTests {
                 ) + function("print(Point(1).add(\"wrong\"))"),
                 JvmLoweringException.MethodArgumentTypeMismatch::class,
                 "record Point method add parameter other requires INT, got STRING",
+            ),
+            CompileErrorCase(
+                "record method return values with the wrong type",
+                record(
+                    "Point",
+                    "x: Int",
+                    "fn value(): Int {",
+                    "    return \"wrong\"",
+                    "}",
+                ),
+                JvmLoweringException.ReturnTypeMismatch::class,
+                "return requires INT, got STRING",
             ),
             CompileErrorCase(
                 "duplicate record methods",

@@ -141,6 +141,9 @@ private class JvmFunctionLoweringState(
             explicitReturnOnAllBranches = explicitReturnOnAllBranches || loweredStatement.returns
         }
         if (!explicitReturnOnAllBranches) {
+            if (currentReturnType != JvmUnitType) {
+                throw JvmLoweringException.MissingReturnStatement(currentReturnType)
+            }
             jvmStatements += JvmReturn(null)
         }
 
@@ -166,8 +169,15 @@ private class JvmFunctionLoweringState(
             is VeraReturnStatement -> {
                 val jvmReturnExpression = veraStatement.expression
                     ?.let { veraExpression -> lowerExpression(veraExpression) }
-                if (jvmReturnExpression == null && currentReturnType != JvmUnitType) {
-                    throw JvmLoweringException.MissingReturnValue(currentReturnType)
+                if (jvmReturnExpression == null) {
+                    if (currentReturnType != JvmUnitType) {
+                        throw JvmLoweringException.MissingReturnValue(currentReturnType)
+                    }
+                } else if (jvmReturnExpression.type != currentReturnType) {
+                    throw JvmLoweringException.ReturnTypeMismatch(
+                        currentReturnType,
+                        jvmReturnExpression.type,
+                    )
                 }
                 LoweredStatement(JvmReturn(jvmReturnExpression), true)
             }
@@ -556,10 +566,29 @@ private class JvmFunctionLoweringState(
 
         val veraFunctionDeclaration = visibleFunctions[veraFunctionName]
             ?: throw JvmLoweringException.UnknownFunction(veraFunctionName)
+        val jvmParameters = veraFunctionDeclaration.parameters.map { veraParameter ->
+            JvmParameter(veraParameter.name, lowerType(veraParameter.type))
+        }
+        if (jvmArguments.size != jvmParameters.size) {
+            throw JvmLoweringException.FunctionArityMismatch(
+                veraFunctionName,
+                jvmParameters.size,
+                jvmArguments.size,
+            )
+        }
+        jvmArguments.forEachIndexed { index, jvmArgument ->
+            val expectedType = jvmParameters[index].type
+            if (jvmArgument.type != expectedType) {
+                throw JvmLoweringException.FunctionArgumentTypeMismatch(
+                    veraFunctionName,
+                    veraFunctionDeclaration.parameters[index].name,
+                    expectedType,
+                    jvmArgument.type,
+                )
+            }
+        }
         val jvmSignature = JvmMethodSignature(
-            veraFunctionDeclaration.parameters.map { veraParameter ->
-                JvmParameter(veraParameter.name, lowerType(veraParameter.type))
-            },
+            jvmParameters,
             JvmTypeLowering.lowerReturn(veraFunctionDeclaration.returnType, visibleRecords.keys),
         )
         return JvmStaticCall(

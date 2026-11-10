@@ -1481,6 +1481,20 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `Unit can be returned explicitly`(testInfo: TestInfo) {
+        val source = """
+                    fn explicitUnit(): Unit {
+                        return Unit
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var unit = explicitUnit()
+                        return 1
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
     fun `if without else produces Unit`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {

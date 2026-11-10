@@ -72,6 +72,34 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "function ${name.value} conflicts with the built-in function ${name.value}",
     )
 
+    class FunctionArityMismatch(
+        val function: Identifier,
+        val expected: Int,
+        val actual: Int,
+    ) : JvmLoweringException(
+        "function ${function.value} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
+    )
+
+    class FunctionArgumentTypeMismatch(
+        val function: Identifier,
+        val parameter: Identifier,
+        val expected: JvmType,
+        val actual: JvmType,
+    ) : JvmLoweringException(
+        "function ${function.value} parameter ${parameter.value} requires ${expected.render()}, got ${actual.render()}",
+    )
+
+    class ReturnTypeMismatch(
+        val expected: JvmType,
+        val actual: JvmType,
+    ) : JvmLoweringException(
+        "return requires ${expected.render()}, got ${actual.render()}",
+    )
+
+    class MissingReturnStatement(val expected: JvmType) : JvmLoweringException(
+        "missing return statement for type ${expected.render()}",
+    )
+
     class BuiltinArityMismatch(
         val builtin: JvmBuiltin,
         val expected: Int,

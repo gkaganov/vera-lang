@@ -93,8 +93,11 @@ fn name(parameter: Type, other: Type): ReturnType {
 
 - Parameters require a name and type.
 - Return type is optional; omitted return type means `Unit`.
+- Calls check the argument count and types against the callee's parameters.
+- A return expression must match the declared return type.
 - `return` without an expression returns from a `Unit` function.
-- A function without a top-level `return` gets an implicit final `return`.
+- A function without a top-level `return` gets an implicit final `return`; this requires a `Unit`
+  return type.
 - Returns nested inside `if` or `while` do not suppress that implicit return.
 - Functions can only be declared at top level.
 
@@ -128,6 +131,7 @@ fn main() {
   built-ins.
 - Methods have typed parameters and an optional return type; an omitted return type means `Unit`.
 - Methods can call top-level functions, built-ins, and other record methods.
+- Method calls check argument count and types; method returns must match the declared return type.
 - Methods are called after `.` and must include an argument list: `point.sum()`.
 - Method overloading is not supported.
 - A record cannot have both a field and a method with the same name.
