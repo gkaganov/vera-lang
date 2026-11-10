@@ -230,6 +230,10 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         }
     }
 
+    // Precedence is encoded by this recursive-descent ladder: each parse function handles one
+    // precedence level and delegates tighter-binding operands to the next function. `parseBinary`
+    // consumes repeated operators at its level, making them left-associative. The ordering lives
+    // in the call chain rather than in a separate precedence table.
     private fun parseExpression(): VeraPrimaryExpression = parseForwardApplication()
 
     private fun parseForwardApplication(): VeraPrimaryExpression =
