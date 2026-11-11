@@ -32,6 +32,14 @@ sealed class FlatInstructionException(message: String) : VeraException(message) 
         "print requires exactly $expected argument, got $actual",
     )
 
+    class BreakOutsideLoop : FlatInstructionException(
+        "break is only allowed inside a loop",
+    )
+
+    class ContinueOutsideLoop : FlatInstructionException(
+        "continue is only allowed inside a loop",
+    )
+
     class InternalInvariant(val detail: String) : FlatInstructionException(
         "internal instruction error: $detail",
     )

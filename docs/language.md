@@ -47,7 +47,7 @@ Reserved words cannot be used as identifiers:
 | Category | Keywords |
 |----------|----------|
 | Declarations | `fn`, `record`, `var`, `val` |
-| Control flow | `if`, `else`, `while`, `return` |
+| Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
 | Boolean literals | `True`, `False` |
@@ -312,6 +312,9 @@ while counter < 3 {
 - Condition must be `Bool`.
 - Parentheses around the condition are optional; `( ... )` is ordinary expression grouping.
 - Body is a block and may contain blank lines.
+- `break` exits the innermost `while`.
+- `continue` jumps to the next condition check of the innermost `while`.
+- `break` and `continue` are only valid inside a loop.
 - `while` is a statement and produces no value.
 
 ## Built-in `print`

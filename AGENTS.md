@@ -235,9 +235,10 @@ uncommitted changes:
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
   and `\r` escapes.
 - Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
-  `print`.
+  `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
+- `break` and `continue` target the innermost `while`; using either outside a loop is rejected.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
   Unary `-` binds tighter than multiplicative operators.
 - `==` and `!=` support `Int`, `Bool`, and `String`; `String` equality compares contents. Ordering

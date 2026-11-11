@@ -5,8 +5,10 @@ import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBlock
 import vera.ast.VeraBoolLiteral
+import vera.ast.VeraBreakStatement
 import vera.ast.VeraChainedExpression
 import vera.ast.VeraChainedExpressionData
+import vera.ast.VeraContinueStatement
 import vera.ast.VeraDeclaration
 import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
@@ -178,6 +180,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND -> parseRebindStatement()
             at(VeraTokenType.RETURN) -> parseReturnStatement()
             at(VeraTokenType.WHILE) -> parseWhileStatement()
+            at(VeraTokenType.BREAK) -> parseBreakStatement()
+            at(VeraTokenType.CONTINUE) -> parseContinueStatement()
             else -> VeraExpression(parseExpression())
         }
         parseStatementTerminator()
@@ -219,6 +223,16 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val condition = parseExpression()
         val body = parseBlock()
         return VeraWhileStatement(condition, VeraUnitReturnBlock(body))
+    }
+
+    private fun parseBreakStatement(): VeraBreakStatement {
+        expect(VeraTokenType.BREAK)
+        return VeraBreakStatement
+    }
+
+    private fun parseContinueStatement(): VeraContinueStatement {
+        expect(VeraTokenType.CONTINUE)
+        return VeraContinueStatement
     }
 
     private fun parseStatementTerminator() {

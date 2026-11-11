@@ -211,3 +211,5 @@ data class JvmPutStatic(
 ) : JvmStatement
 
 data class JvmWhile(val condition: JvmExpression, val body: JvmUnitReturnBlock) : JvmStatement
+data object JvmBreak : JvmStatement
+data object JvmContinue : JvmStatement

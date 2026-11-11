@@ -39,6 +39,8 @@ import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmBoolLiteral
+import vera.jvm.ir.JvmBreak
+import vera.jvm.ir.JvmContinue
 import vera.jvm.instruction.FlatBindLabel
 import vera.jvm.instruction.FlatBoolEqualityJump
 import vera.jvm.instruction.FlatCreateLabel
@@ -81,7 +83,10 @@ object FlatInstructionLowering {
 
 private class FlatInstructionLoweringState {
 
+    private data class LoopContext(val breakLabel: FlatLabel, val continueLabel: FlatLabel)
+
     private val flatLocalSlots = mutableMapOf<JvmLocal, FlatLocalTable.Local>()
+    private val loopContexts = mutableListOf<LoopContext>()
     private lateinit var flatBuilder: FlatMethodBuilder
     private var currentReturnType: JvmType = JvmType.VOID
 
@@ -109,6 +114,7 @@ private class FlatInstructionLoweringState {
 
     private fun lowerConstructor(jvmClass: JvmClass, jvmConstructor: JvmConstructor): FlatMethod {
         flatLocalSlots.clear()
+        loopContexts.clear()
         currentReturnType = JvmType.VOID
         val receiverType = JvmType.ClassType(jvmClass.name)
         flatBuilder = FlatMethodBuilder(
@@ -139,6 +145,7 @@ private class FlatInstructionLoweringState {
 
     private fun lowerMethod(jvmMethod: JvmMethod): FlatMethod {
         flatLocalSlots.clear()
+        loopContexts.clear()
         currentReturnType = jvmMethod.returnType
         flatBuilder = FlatMethodBuilder(
             jvmMethod.name,
@@ -213,6 +220,18 @@ private class FlatInstructionLoweringState {
             is JvmWhile -> {
                 lowerWhile(jvmStatement)
             }
+
+            JvmBreak -> {
+                val loopContext = loopContexts.lastOrNull()
+                    ?: throw FlatInstructionException.BreakOutsideLoop()
+                jump(loopContext.breakLabel)
+            }
+
+            JvmContinue -> {
+                val loopContext = loopContexts.lastOrNull()
+                    ?: throw FlatInstructionException.ContinueOutsideLoop()
+                jump(loopContext.continueLabel)
+            }
         }
     }
 
@@ -225,8 +244,13 @@ private class FlatInstructionLoweringState {
         bindLabel(flatConditionLabel)
         lowerExpression(jvmWhile.condition)
         jumpIfFalse(flatEndLabel)
-        jvmWhile.body.statements.forEach { jvmStatement ->
-            lowerStatement(jvmStatement)
+        loopContexts += LoopContext(flatEndLabel, flatConditionLabel)
+        try {
+            jvmWhile.body.statements.forEach { jvmStatement ->
+                lowerStatement(jvmStatement)
+            }
+        } finally {
+            loopContexts.removeLast()
         }
         jump(flatConditionLabel)
         bindLabel(flatEndLabel)

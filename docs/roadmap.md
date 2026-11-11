@@ -10,12 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Loop control
-
-- Status: not implemented.
-- Area: parser, AST, lowering.
-- Acceptance: `break` and `continue` work inside `while`; using them outside a loop is rejected.
-
 ### Record equality and printing
 
 - Status: not implemented.

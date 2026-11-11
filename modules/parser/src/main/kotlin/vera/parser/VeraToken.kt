@@ -7,6 +7,8 @@ enum class VeraTokenType {
     IF,
     ELSE,
     WHILE,
+    BREAK,
+    CONTINUE,
     VAR,
     VAL,
     RETURN,

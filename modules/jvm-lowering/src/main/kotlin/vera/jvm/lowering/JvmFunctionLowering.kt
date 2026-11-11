@@ -5,7 +5,9 @@ import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBlock
 import vera.ast.VeraBoolLiteral
+import vera.ast.VeraBreakStatement
 import vera.ast.VeraChainedExpression
+import vera.ast.VeraContinueStatement
 import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
 import vera.ast.VeraFunctionDeclaration
@@ -31,10 +33,12 @@ import vera.ast.render
 import vera.jvm.ir.JvmComparisonOperator
 import vera.jvm.ir.JvmIntBinaryOperator
 import vera.jvm.ir.JvmBlock
+import vera.jvm.ir.JvmBreak
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.ir.JvmComparison
+import vera.jvm.ir.JvmContinue
 import vera.jvm.ir.JvmExplicitReturnBlock
 import vera.jvm.ir.JvmExpression
 import vera.jvm.ir.JvmExpressionStatement
@@ -189,6 +193,10 @@ private class JvmFunctionLoweringState(
             is VeraWhileStatement -> LoweredStatement(lowerWhileStatement(veraStatement), false)
 
             is VeraRebindStatement -> LoweredStatement(lowerRebindStatement(veraStatement), false)
+
+            VeraBreakStatement -> LoweredStatement(JvmBreak, false)
+
+            VeraContinueStatement -> LoweredStatement(JvmContinue, false)
         }
     }
 

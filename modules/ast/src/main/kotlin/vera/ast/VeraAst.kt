@@ -19,6 +19,8 @@ data class VeraRebindStatement(val name: Identifier, val expression: VeraExpress
 data class VeraReturnStatement(val expression: VeraExpression?) : VeraStatement
 data class VeraWhileStatement(val condition: VeraPrimaryExpression, val body: VeraUnitReturnBlock) : VeraStatement
 data class VeraExpression(val expression: VeraPrimaryExpression) : VeraStatement
+data object VeraBreakStatement : VeraStatement
+data object VeraContinueStatement : VeraStatement
 
 data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, val data: List<VeraChainedExpressionData> = emptyList()) : VeraPrimaryExpression
 

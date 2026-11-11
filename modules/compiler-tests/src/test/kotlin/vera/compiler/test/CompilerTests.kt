@@ -630,6 +630,65 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `break exits the innermost while loop`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var count = 0
+                        while True {
+                            count = count + 1
+                            if count == 3 {
+                                break
+                            }
+                        }
+                        return count
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 3, testInfo)
+    }
+
+    @Test
+    fun `continue skips the rest of the loop body`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var count = 0
+                        var total = 0
+                        while count < 5 {
+                            count = count + 1
+                            if count == 3 {
+                                continue
+                            }
+                            total = total + count
+                        }
+                        return total
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 12, testInfo)
+    }
+
+    @Test
+    fun `break only exits the innermost loop`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var outer = 0
+                        var total = 0
+                        while outer < 3 {
+                            outer = outer + 1
+                            var inner = 0
+                            while True {
+                                inner = inner + 1
+                                if inner == 2 {
+                                    break
+                                }
+                            }
+                            total = total + inner
+                        }
+                        return total
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 6, testInfo)
+    }
+
+    @Test
     fun `variables can be rebound with equals`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {

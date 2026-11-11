@@ -145,6 +145,18 @@ class CompilerErrorTests {
                 "conditions must result in a bool",
             ),
             CompileErrorCase(
+                "break outside loops",
+                function("break"),
+                FlatInstructionException.BreakOutsideLoop::class,
+                "break is only allowed inside a loop",
+            ),
+            CompileErrorCase(
+                "continue outside loops",
+                function("continue"),
+                FlatInstructionException.ContinueOutsideLoop::class,
+                "continue is only allowed inside a loop",
+            ),
+            CompileErrorCase(
                 "rebinding unknown variables",
                 function("missing = 1"),
                 JvmLoweringException.UnknownVariable::class,

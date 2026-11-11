@@ -174,6 +174,8 @@ private class VeraLexerState(private val source: String) {
             "if" to VeraTokenType.IF,
             "else" to VeraTokenType.ELSE,
             "while" to VeraTokenType.WHILE,
+            "break" to VeraTokenType.BREAK,
+            "continue" to VeraTokenType.CONTINUE,
             "var" to VeraTokenType.VAR,
             "val" to VeraTokenType.VAL,
             "return" to VeraTokenType.RETURN,
