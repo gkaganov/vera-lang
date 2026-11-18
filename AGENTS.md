@@ -153,10 +153,21 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - `review` — walk through all uncommitted changes, step by step.
 - `push` — commit and push everything; ask only if a question or decision is needed.
 - `note` — record the accompanying instruction or decision in `AGENTS.md` or a file referenced from it.
+- `next` — pick the next feature to build from [`docs/roadmap.md`](docs/roadmap.md).
 
-`review` and `push` only apply when sent on their own; the same words inside a sentence are ordinary
-text. `note` may be followed by the content to record. Reviewing changes belongs to `review`, not
+`review`, `push`, and `next` only apply when sent on their own; the same words inside a sentence are
+ordinary text. `note` may be followed by the content to record. Reviewing changes belongs to `review`, not
 `push`.
+
+### Choosing the Next Feature
+
+When the user sends **`next` on its own**:
+
+1. Read [`docs/roadmap.md`](docs/roadmap.md) and choose the next feature to build: prefer items under
+   *Important basic features*, in listed order, unless the user asks for something else or an item is
+   explicitly blocked or undecided.
+2. Report the chosen item with its area and acceptance criteria, and say why it is next.
+3. Ask whether to start implementing; wait for confirmation.
 
 ### Git
 
