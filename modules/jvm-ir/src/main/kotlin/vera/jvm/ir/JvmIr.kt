@@ -114,12 +114,12 @@ data class JvmLogicalOr(
     override val type = JvmType.BOOL
 }
 
-data class JvmRecordConstruction(
-    val recordName: Identifier,
+data class JvmObjectConstruction(
+    val className: Identifier,
     val arguments: List<JvmExpression>,
     val signature: JvmMethodSignature,
 ) : JvmExpression {
-    override val type = JvmType.ClassType(recordName)
+    override val type = JvmType.ClassType(className)
 }
 
 data class JvmGetField(

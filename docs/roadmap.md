@@ -10,12 +10,12 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Record equality and printing
+### Object equality and printing
 
 - Status: not implemented.
 - Area: lowering, emitter.
-- Acceptance: decide structural equality semantics; records can be compared and printed; tests
-  cover nested records.
+- Acceptance: decide structural equality semantics; objects can be compared and printed; tests
+  cover nested objects.
 
 ### `val` immutability enforcement
 
@@ -23,12 +23,12 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Area: parser and lowering.
 - Acceptance: rebinding a `val` is rejected; `var` and rebinding continue to work.
 
-### Record mutation
+### Object mutation
 
 - Status: not started.
 - Area: parser, AST, structured IR, lowering, flat IR, emitter.
 - Includes: `mut fn` methods, field assignment, and value/reference semantics.
-- Acceptance: mutation works through record methods and is rejected for immutable records and
+- Acceptance: mutation works through object methods and is rejected for immutable objects and
   fields where appropriate.
 
 ### Comments and block scoping
@@ -47,13 +47,13 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 
 ### Open language decisions
 
-- Overloading: decide whether top-level functions and record methods support overloading, then
+- Overloading: decide whether top-level functions and object methods support overloading, then
   document and test the result.
 - Update blocks: `x = { ... }` is currently rejected by the parser; either implement it as part of
-  record mutation or remove the reserved syntax.
+  object mutation or remove the reserved syntax.
 - Recursion: recursive top-level functions and methods appear to work; add integration tests and
   document them explicitly.
-- Default record field values: decide whether fields may omit constructor arguments by declaring a
+- Default class field values: decide whether fields may omit constructor arguments by declaring a
   default, or keep positional construction mandatory.
 
 ## Long-term ideas and advanced features
@@ -63,7 +63,6 @@ Larger design work and features that are not required for a usable basic languag
 - Persistent collections.
 - String concatenation and other string operations.
 - Traits.
-- Classes.
 - Effects, capabilities, services, and errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, and numeric conversions.
@@ -71,5 +70,5 @@ Larger design work and features that are not required for a usable basic languag
 
 ## Non-goals
 
-- Inheritance. Vera uses records, traits, and composition instead of class hierarchies. This is
+- Inheritance. Vera uses classes, traits, and composition instead of inheritance hierarchies. This is
   not planned for any future version.

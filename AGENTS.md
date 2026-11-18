@@ -79,7 +79,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 ### Lowering
 
 - `JvmProgramLowering.lower(mainClassName, program)` is the public entry point.
-- First pass collects record and function declarations by name; records lower to their own
+- First pass collects class and function declarations by name; classes lower to their own JVM
   classes (including instance methods), then functions lower to static methods on the program
   class.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
@@ -91,7 +91,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmField`, `JvmConstructor`,
   `JvmMethod`, `JvmExpression`, `JvmStatement`, and block kinds `JvmExplicitReturnBlock`,
   `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`.
-- Record construction is `JvmRecordConstruction`; field reads are `JvmGetField`; record method
+- Object construction is `JvmObjectConstruction`; field reads are `JvmGetField`; object method
   calls are `JvmInstanceCall` with an explicit receiver expression. `JvmMethod.receiver` is the
   optional instance receiver local; `null` means a static method.
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
@@ -103,9 +103,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   independent enums.
 - **Flat instruction IR** (`vera.jvm.instruction`): flat instruction lists with explicit
   `FlatInstructionEffect`, `FlatLabel` control flow, and `FlatInstructionWithDebugInfo`.
-- Record construction uses `FlatNew`, `FlatDup`, and `FlatInvokeSpecial`; generated constructors
+- Object construction uses `FlatNew`, `FlatDup`, and `FlatInvokeSpecial`; generated constructors
   initialize fields with `FlatPutField`.
-- Record method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
+- Object method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
   verification.
 - `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
   statements.
@@ -209,6 +209,8 @@ uncommitted changes:
 
 ### Naming
 
+- Vera calls its user-defined types **classes** and their values **objects**. Use `class` in
+  source and `Class`/`Object` in type names (`VeraClassDeclaration`, `JvmObjectConstruction`).
 - Source/AST types use `Vera*` (`VeraProgram`, `VeraExpression`, `VeraToken`, ...).
 - Structured IR types use `Jvm*` in `vera.jvm.ir` (`JvmProgram`, `JvmReturn`, ...).
 - Flat instruction IR types use `Flat*` in `vera.jvm.instruction` (`FlatProgram`, `FlatLoadLocal`,
@@ -222,8 +224,8 @@ uncommitted changes:
 - Use `lower*` for AST-to-IR and structured-to-instruction lowering; use `validate*`/`require*` for
   operand checks; use `append(...)` for one flat instruction.
 - Reserve `emit*` for actual bytecode generation.
-- Record types are `VeraRecordDeclaration`/`VeraRecordField`, `JvmField`/`JvmConstructor`/
-  `JvmRecordConstruction`/`JvmGetField`/`JvmInstanceCall`, and `FlatNew`/`FlatGetField`/
+- Class and object types are `VeraClassDeclaration`/`VeraField`, `JvmField`/`JvmConstructor`/
+  `JvmObjectConstruction`/`JvmGetField`/`JvmInstanceCall`, and `FlatNew`/`FlatGetField`/
   `FlatPutField`/`FlatInvokeSpecial`/`FlatInvokeVirtual`.
 - `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
   `FlatGetStatic`/`FlatPutStatic`.
@@ -245,7 +247,7 @@ uncommitted changes:
 - CRLF is normalized to a single `EOL` token.
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
   and `\r` escapes.
-- Constructs: `fn`, `record`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
+- Constructs: `fn`, `class`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
   `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
@@ -257,21 +259,21 @@ uncommitted changes:
 - `and` and `or` are short-circuiting reserved keywords.
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
   first argument.
-- The right side of `|>` may be a bare callable (function, built-in, record constructor, sibling
-  record method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
+- The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling
+  object method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
 
 ## Name Resolution
 
 - Shadowing is never allowed in Vera. Every name in a scope must be unique, including parameters,
-  locals, fields, methods, top-level functions, records, and built-ins. A nested binding may not
+  locals, fields, methods, top-level functions, classes, and built-ins. A nested binding may not
   reuse an outer name; declarations must be renamed instead.
 - This rule is enforced during lowering.
 
 ## Non-goals
 
-- Inheritance is not supported and will not be added. Vera uses records, traits, and composition
-  instead of class hierarchies.
+- Inheritance is not supported and will not be added. Vera uses classes, traits, and composition
+  instead of inheritance hierarchies.
 
 ## Known TODOs
 

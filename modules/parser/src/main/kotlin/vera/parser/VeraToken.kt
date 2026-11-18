@@ -3,7 +3,7 @@ package vera.parser
 enum class VeraTokenType {
     // Keywords
     FN,
-    RECORD,
+    CLASS,
     IF,
     ELSE,
     WHILE,

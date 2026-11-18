@@ -170,7 +170,7 @@ private class VeraLexerState(private val source: String) {
     private companion object {
         val keywords: Map<String, VeraTokenType> = mapOf(
             "fn" to VeraTokenType.FN,
-            "record" to VeraTokenType.RECORD,
+            "class" to VeraTokenType.CLASS,
             "if" to VeraTokenType.IF,
             "else" to VeraTokenType.ELSE,
             "while" to VeraTokenType.WHILE,

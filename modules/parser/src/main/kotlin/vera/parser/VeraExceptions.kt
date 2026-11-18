@@ -27,7 +27,7 @@ sealed class VeraParseException(message: String) : VeraException(message) {
     class ExpectedDeclaration(
         val found: VeraToken,
         override val location: SourceLocation,
-    ) : VeraParseException("expected a function or record declaration ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected a function or class declaration ${location.render()} (found '${found.text}')")
 
     class ExpectedToken(
         val expected: String,

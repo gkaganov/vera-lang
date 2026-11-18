@@ -56,8 +56,8 @@ class CompilerErrorTests {
             appendLine("}")
         }
 
-        private fun record(name: String, vararg lines: String): String = buildString {
-            appendLine("record $name {")
+        private fun classDeclaration(name: String, vararg lines: String): String = buildString {
+            appendLine("class $name {")
             lines.forEach { appendLine("    $it") }
             appendLine("}")
         }
@@ -102,7 +102,7 @@ class CompilerErrorTests {
                 "non-function declarations",
                 "var value = 1",
                 VeraParseException.ExpectedDeclaration::class,
-                "expected a function or record declaration",
+                "expected a function or class declaration",
             ),
             CompileErrorCase(
                 "missing tokens",
@@ -305,18 +305,18 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "invalid type names",
                 "fn $TEST_MAIN(): Nope { }",
-                JvmLoweringException.UnknownRecordType::class,
-                "record type Nope is not defined",
+                JvmLoweringException.UnknownClassType::class,
+                "class type Nope is not defined",
             ),
             CompileErrorCase(
-                "member access on non-record values",
+                "member access on non-object values",
                 function("var x = 1", "print(x.foo)"),
-                JvmLoweringException.MemberAccessRequiresRecord::class,
-                "member access requires a record value",
+                JvmLoweringException.MemberAccessRequiresObject::class,
+                "member access requires an object",
             ),
             CompileErrorCase(
-                "printing records",
-                record("Point", "x: Int") + function("print(Point(1))"),
+                "printing objects",
+                classDeclaration("Point", "x: Int") + function("print(Point(1))"),
                 JvmLoweringException.PrintArgumentTypeNotSupported::class,
                 "print does not support values of type Point",
             ),
@@ -327,68 +327,68 @@ class CompilerErrorTests {
                 "print does not support values of type Unit",
             ),
             CompileErrorCase(
-                "duplicate record fields",
-                record("Point", "x: Int", "x: String"),
-                JvmLoweringException.DuplicateRecordField::class,
-                "record Point has duplicate field x",
+                "duplicate class fields",
+                classDeclaration("Point", "x: Int", "x: String"),
+                JvmLoweringException.DuplicateClassField::class,
+                "class Point has duplicate field x",
             ),
             CompileErrorCase(
-                "unknown record field types",
-                record("Point", "x: Missing"),
-                JvmLoweringException.UnknownRecordType::class,
-                "record type Missing is not defined",
+                "unknown class field types",
+                classDeclaration("Point", "x: Missing"),
+                JvmLoweringException.UnknownClassType::class,
+                "class type Missing is not defined",
             ),
             CompileErrorCase(
-                "duplicate record types",
-                record("Point", "x: Int") + record("Point", "y: Int"),
-                JvmLoweringException.DuplicateRecordType::class,
-                "record Point is declared more than once",
+                "duplicate class types",
+                classDeclaration("Point", "x: Int") + classDeclaration("Point", "y: Int"),
+                JvmLoweringException.DuplicateClassType::class,
+                "class Point is declared more than once",
             ),
             CompileErrorCase(
-                "record names conflicting with the program class",
-                record("ErrorTest", "x: Int"),
-                JvmLoweringException.RecordNameConflictsWithProgramClass::class,
-                "record ErrorTest conflicts with the generated program class",
+                "class names conflicting with the program class",
+                classDeclaration("ErrorTest", "x: Int"),
+                JvmLoweringException.ClassNameConflictsWithProgramClass::class,
+                "class ErrorTest conflicts with the generated program class",
             ),
             CompileErrorCase(
-                "record constructors with the wrong arity",
-                record("Point", "x: Int") + function("var point = Point()"),
-                JvmLoweringException.RecordConstructorArityMismatch::class,
-                "record Point constructor requires 1 argument, got 0",
+                "class constructors with the wrong arity",
+                classDeclaration("Point", "x: Int") + function("var point = Point()"),
+                JvmLoweringException.ClassConstructorArityMismatch::class,
+                "class Point constructor requires 1 argument, got 0",
             ),
             CompileErrorCase(
-                "record constructor arguments with the wrong type",
-                record("Point", "x: Int") + function("var point = Point(\"wrong\")"),
-                JvmLoweringException.RecordConstructorArgumentTypeMismatch::class,
-                "record Point field x requires INT, got STRING",
+                "class constructor arguments with the wrong type",
+                classDeclaration("Point", "x: Int") + function("var point = Point(\"wrong\")"),
+                JvmLoweringException.ClassConstructorArgumentTypeMismatch::class,
+                "class Point field x requires INT, got STRING",
             ),
             CompileErrorCase(
-                "unknown record fields",
-                record("Point", "x: Int") + function("print(Point(1).y)"),
-                JvmLoweringException.UnknownRecordField::class,
-                "record Point has no field y",
+                "unknown class fields",
+                classDeclaration("Point", "x: Int") + function("print(Point(1).y)"),
+                JvmLoweringException.UnknownClassField::class,
+                "class Point has no field y",
             ),
             CompileErrorCase(
-                "record types used as values",
-                record("Point", "x: Int") + function("var point = Point"),
-                JvmLoweringException.RecordTypeUsedAsValue::class,
-                "record type Point cannot be used as a value",
+                "class types used as values",
+                classDeclaration("Point", "x: Int") + function("var point = Point"),
+                JvmLoweringException.ClassTypeUsedAsValue::class,
+                "class type Point cannot be used as a value",
             ),
             CompileErrorCase(
-                "calling record fields",
-                record("Point", "x: Int") + function("print(Point(1).x())"),
+                "calling class fields",
+                classDeclaration("Point", "x: Int") + function("print(Point(1).x())"),
                 JvmLoweringException.ValueCallNotSupported::class,
                 "calling a value is not supported yet",
             ),
             CompileErrorCase(
-                "unknown record methods",
-                record("Point", "x: Int") + function("print(Point(1).missing())"),
-                JvmLoweringException.UnknownRecordMethod::class,
-                "record Point has no method missing",
+                "unknown class methods",
+                classDeclaration("Point", "x: Int") + function("print(Point(1).missing())"),
+                JvmLoweringException.UnknownClassMethod::class,
+                "class Point has no method missing",
             ),
             CompileErrorCase(
-                "record methods called with the wrong arity",
-                record(
+                "class methods called with the wrong arity",
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn add(other: Int): Int {",
@@ -396,11 +396,11 @@ class CompilerErrorTests {
                     "}",
                 ) + function("print(Point(1).add())"),
                 JvmLoweringException.MethodArityMismatch::class,
-                "record Point method add requires 1 argument, got 0",
+                "class Point method add requires 1 argument, got 0",
             ),
             CompileErrorCase(
-                "record method arguments with the wrong type",
-                record(
+                "class method arguments with the wrong type",
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn add(other: Int): Int {",
@@ -408,11 +408,11 @@ class CompilerErrorTests {
                     "}",
                 ) + function("print(Point(1).add(\"wrong\"))"),
                 JvmLoweringException.MethodArgumentTypeMismatch::class,
-                "record Point method add parameter other requires INT, got STRING",
+                "class Point method add parameter other requires INT, got STRING",
             ),
             CompileErrorCase(
-                "record method return values with the wrong type",
-                record(
+                "class method return values with the wrong type",
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn value(): Int {",
@@ -423,8 +423,8 @@ class CompilerErrorTests {
                 "return requires INT, got STRING",
             ),
             CompileErrorCase(
-                "duplicate record methods",
-                record(
+                "duplicate class methods",
+                classDeclaration(
                     "Point",
                     "fn value(): Int {",
                     "    return 1",
@@ -433,36 +433,36 @@ class CompilerErrorTests {
                     "    return 2",
                     "}",
                 ),
-                JvmLoweringException.DuplicateRecordMethod::class,
-                "record Point has duplicate method value",
+                JvmLoweringException.DuplicateClassMethod::class,
+                "class Point has duplicate method value",
             ),
             CompileErrorCase(
-                "record methods conflicting with fields",
-                record(
+                "class methods conflicting with fields",
+                classDeclaration(
                     "Point",
                     "value: Int",
                     "fn value(): Int {",
                     "    return value",
                     "}",
                 ),
-                JvmLoweringException.RecordMethodConflictsWithField::class,
-                "record Point has both a field and a method named value",
+                JvmLoweringException.ClassMethodConflictsWithField::class,
+                "class Point has both a field and a method named value",
             ),
             CompileErrorCase(
-                "record methods used as values through member access",
-                record(
+                "class methods used as values through member access",
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn value(): Int {",
                     "    return x",
                     "}",
                 ) + function("print(Point(1).value)"),
-                JvmLoweringException.RecordMethodUsedAsValue::class,
-                "record Point method value must be called",
+                JvmLoweringException.ClassMethodUsedAsValue::class,
+                "class Point method value must be called",
             ),
             CompileErrorCase(
-                "record methods used as bare values",
-                record(
+                "class methods used as bare values",
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn value(): Int {",
@@ -472,8 +472,8 @@ class CompilerErrorTests {
                     "    return value",
                     "}",
                 ),
-                JvmLoweringException.RecordMethodUsedAsValue::class,
-                "record Point method value must be called",
+                JvmLoweringException.ClassMethodUsedAsValue::class,
+                "class Point method value must be called",
             ),
             CompileErrorCase(
                 "duplicate parameters",
@@ -483,7 +483,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "parameters shadowing fields",
-                record(
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn compute(x: Int): Int {",
@@ -495,7 +495,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "locals shadowing fields",
-                record(
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn compute(): Int {",
@@ -508,7 +508,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "locals in nested blocks shadowing fields",
-                record(
+                classDeclaration(
                     "Point",
                     "x: Int",
                     "fn compute(): Int {",
@@ -540,28 +540,28 @@ class CompilerErrorTests {
                 "name helper is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
-                "record fields shadowing builtins",
-                record("Point", "print: Int"),
+                "class fields shadowing builtins",
+                classDeclaration("Point", "print: Int"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name print is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
-                "record methods shadowing top-level functions",
-                "fn helper() { }\n" + record("Point", "fn helper() { }"),
+                "class methods shadowing top-level functions",
+                "fn helper() { }\n" + classDeclaration("Point", "fn helper() { }"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name helper is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
-                "record methods shadowing record names",
-                record("Point", "fn Point() { }"),
+                "class methods shadowing class names",
+                classDeclaration("Point", "fn Point() { }"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name Point is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
-                "records conflicting with builtins",
-                "record print { }",
-                JvmLoweringException.RecordNameConflictsWithBuiltin::class,
-                "record print conflicts with the built-in function print",
+                "classes conflicting with builtins",
+                "class print { }",
+                JvmLoweringException.ClassNameConflictsWithBuiltin::class,
+                "class print conflicts with the built-in function print",
             ),
             CompileErrorCase(
                 "duplicate top-level functions",
@@ -570,8 +570,8 @@ class CompilerErrorTests {
                 "function helper is declared more than once",
             ),
             CompileErrorCase(
-                "top-level functions conflicting with records",
-                "record Conflict { }\nfn Conflict() { }",
+                "top-level functions conflicting with objects",
+                "class Conflict { }\nfn Conflict() { }",
                 JvmLoweringException.TopLevelNameConflict::class,
                 "top-level name Conflict is declared more than once",
             ),

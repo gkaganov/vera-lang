@@ -8,10 +8,12 @@ import vera.ast.VeraBoolLiteral
 import vera.ast.VeraBreakStatement
 import vera.ast.VeraChainedExpression
 import vera.ast.VeraChainedExpressionData
+import vera.ast.VeraClassDeclaration
 import vera.ast.VeraContinueStatement
 import vera.ast.VeraDeclaration
 import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
+import vera.ast.VeraField
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
@@ -23,8 +25,6 @@ import vera.ast.VeraParameter
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraProgram
 import vera.ast.VeraRebindStatement
-import vera.ast.VeraRecordDeclaration
-import vera.ast.VeraRecordField
 import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
@@ -58,7 +58,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseDeclaration(): VeraDeclaration {
         return when {
             at(VeraTokenType.FN) -> parseFunctionDeclaration()
-            at(VeraTokenType.RECORD) -> parseRecordDeclaration()
+            at(VeraTokenType.CLASS) -> parseClassDeclaration()
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedDeclaration(token, token.location())
@@ -88,12 +88,12 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         )
     }
 
-    private fun parseRecordDeclaration(): VeraRecordDeclaration {
-        expect(VeraTokenType.RECORD)
-        val name = expect(VeraTokenType.IDENTIFIER, "record name")
+    private fun parseClassDeclaration(): VeraClassDeclaration {
+        expect(VeraTokenType.CLASS)
+        val name = expect(VeraTokenType.IDENTIFIER, "class name")
         expect(VeraTokenType.LBRACE)
         skipEols()
-        val fields = mutableListOf<VeraRecordField>()
+        val fields = mutableListOf<VeraField>()
         val methods = mutableListOf<VeraFunctionDeclaration>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
             if (at(VeraTokenType.FN)) {
@@ -101,13 +101,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             } else {
                 val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
                 expect(VeraTokenType.COLON)
-                fields += VeraRecordField(Identifier(fieldName.text), parseTypeRef())
+                fields += VeraField(Identifier(fieldName.text), parseTypeRef())
             }
             parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraRecordDeclaration(Identifier(name.text), fields, methods)
+        return VeraClassDeclaration(Identifier(name.text), fields, methods)
     }
 
     private fun parseParameter(): VeraParameter {
@@ -140,7 +140,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             VeraTokenType.IDENTIFIER -> {
                 val token = advance()
-                VeraType.Record(Identifier(token.text))
+                VeraType.ClassType(Identifier(token.text))
             }
 
             else -> {

@@ -6,12 +6,12 @@ data class VeraProgram(val declarations: List<VeraDeclaration>)
 
 sealed interface VeraDeclaration
 data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val body: VeraExplicitReturnBlock) : VeraDeclaration
-data class VeraRecordDeclaration(
+data class VeraClassDeclaration(
     val name: Identifier,
-    val fields: List<VeraRecordField>,
+    val fields: List<VeraField>,
     val methods: List<VeraFunctionDeclaration> = emptyList(),
 ) : VeraDeclaration
-data class VeraRecordField(val name: Identifier, val type: VeraType)
+data class VeraField(val name: Identifier, val type: VeraType)
 
 sealed interface VeraStatement
 data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
@@ -89,10 +89,10 @@ sealed interface VeraType {
     data object BOOL : VeraType
     data object UNIT : VeraType
     data object UNKNOWN : VeraType
-    data class Record(val name: Identifier) : VeraType
+    data class ClassType(val name: Identifier) : VeraType
 }
 
 fun VeraType.render(): String = when (this) {
-    is VeraType.Record -> name.value
+    is VeraType.ClassType -> name.value
     else -> toString()
 }

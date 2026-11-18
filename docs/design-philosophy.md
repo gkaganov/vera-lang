@@ -27,7 +27,7 @@
 - **Explicitness** — prefer clear rules over implicit conversions, hidden dependencies, or magic.
 - **Functional foundations** — support immutability, composition, and explicit effects without
   ceremony.
-- **Composition over inheritance** — records, traits, and composition instead of class hierarchies.
+- **Composition over inheritance** — classes, traits, and composition instead of inheritance hierarchies.
 - **JVM as a first-class target** — keep JVM type distinctions and execution constraints meaningful.
 - **Correctness through architecture** — make invalid intermediate states hard to construct; verify
   before emission.
@@ -40,8 +40,8 @@
 | Area      | Direction                                                                           | Status                                       |
 |-----------|-------------------------------------------------------------------------------------|----------------------------------------------|
 | Variables | `val` immutable, `var` mutable; rebind with `=`                                     | `var` and rebinding work; `val` not enforced |
-| Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and record types                  |
-| Records   | Data-oriented structured values                                                     | Fields, read access, and read-only methods work; updates do not |
+| Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and class types                   |
+| Classes   | Data-oriented structured objects                                                    | Fields, read access, and read-only methods work; updates do not |
 | Traits    | Shared behavior and composition without inheritance                                 | Not implemented                              |
 | Functions | Pure by default; side effects declared as capabilities                              | `fn` exists; effects do not                  |
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
@@ -54,12 +54,12 @@ capabilities, and how much of the type system can stay simple.
 
 ## Value-object direction (proposed)
 
-Status: partially implemented. Record declarations, construction, field access, and read-only
+Status: partially implemented. Class declarations, object construction, field access, and read-only
 instance methods work. Mutation methods and collection semantics are still proposed.
 
-- Objects are value records, not reference-identity classes.
+- Objects have value semantics, not reference identity.
 - Values are immutable from the outside; there is no shared mutable state.
-- Fields are read-only outside their record.
+- Fields are read-only outside their class.
 - A `mut fn` method operates on a private mutable copy of its receiver.
 - A method returns a new immutable version, never a shared mutable view.
 - The previous version remains valid and unchanged.
@@ -71,7 +71,7 @@ instance methods work. Mutation methods and collection semantics are still propo
 - Collections are persistent immutable values. Copy-on-write and structural sharing are
   implementation techniques, not observable semantics.
 - No reference identity, null, or cyclic construction initially.
-- Inheritance is a non-goal, not a later feature. Composition uses records and traits instead.
+- Inheritance is a non-goal, not a later feature. Composition uses classes and traits instead.
 - No ownership, borrowing, lifetimes, or move semantics.
 - A mutating method must not let its mutable receiver escape. The returned version is frozen or
   rebuilt as immutable.

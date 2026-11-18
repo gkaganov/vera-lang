@@ -1041,9 +1041,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `forward application accepts record values`(testInfo: TestInfo) {
+    fun `forward application accepts object values`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1086,7 +1086,7 @@ class VeraCompilerTests {
     @Test
     fun `forward application accepts field access on the left`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1103,14 +1103,14 @@ class VeraCompilerTests {
     @Test
     fun `forward application calls methods on member chains`(testInfo: TestInfo) {
         val source = """
-                    record Runtime {
+                    class Runtime {
                         base: Int
 
                         fn process(input: Int): Int {
                             return input + base
                         }
                     }
-                    record Processor {
+                    class Processor {
                         runtime: Runtime
                     }
                     fn $TEST_MAIN(): Int {
@@ -1124,7 +1124,7 @@ class VeraCompilerTests {
     @Test
     fun `forward application passes the left value before explicit method arguments`(testInfo: TestInfo) {
         val source = """
-                    record Calculator {
+                    class Calculator {
                         offset: Int
 
                         fn add(value: Int, extra: Int): Int {
@@ -1142,14 +1142,14 @@ class VeraCompilerTests {
     @Test
     fun `forward application chains member calls`(testInfo: TestInfo) {
         val source = """
-                    record Runtime {
+                    class Runtime {
                         base: Int
 
                         fn process(input: Int): Int {
                             return input + base
                         }
                     }
-                    record Processor {
+                    class Processor {
                         runtime: Runtime
                     }
                     fn $TEST_MAIN() {
@@ -1161,9 +1161,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `forward application calls sibling record methods`(testInfo: TestInfo) {
+    fun `forward application calls sibling class methods`(testInfo: TestInfo) {
         val source = """
-                    record Counter {
+                    class Counter {
                         value: Int
 
                         fn add(amount: Int): Int {
@@ -1182,9 +1182,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `forward application accepts record constructors on the right`(testInfo: TestInfo) {
+    fun `forward application accepts class constructors on the right`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1197,9 +1197,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `records can be constructed and fields read`(testInfo: TestInfo) {
+    fun `objects can be constructed and fields read`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1212,13 +1212,13 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record fields can hold records and chained field access works`(testInfo: TestInfo) {
+    fun `class fields can hold objects and chained field access works`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
-                    record Line {
+                    class Line {
                         start: Point
                         end: Point
                     }
@@ -1231,9 +1231,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `records can be passed to and returned from functions`(testInfo: TestInfo) {
+    fun `objects can be passed to and returned from functions`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1249,9 +1249,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record fields can hold String and Bool values`(testInfo: TestInfo) {
+    fun `class fields can hold String and Bool values`(testInfo: TestInfo) {
         val source = """
-                    record Message {
+                    class Message {
                         text: String
                         active: Bool
                     }
@@ -1267,7 +1267,7 @@ class VeraCompilerTests {
     @Test
     fun `field access can follow a constructor call`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1279,9 +1279,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record types work in local annotations and field access follows function calls`(testInfo: TestInfo) {
+    fun `class types work in local annotations and field access follows function calls`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
                     }
@@ -1297,9 +1297,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can read fields implicitly`(testInfo: TestInfo) {
+    fun `class methods can read fields implicitly`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1315,9 +1315,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods accept parameters and return records`(testInfo: TestInfo) {
+    fun `class methods accept parameters and return objects`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1334,9 +1334,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can call sibling methods`(testInfo: TestInfo) {
+    fun `class methods can call sibling methods`(testInfo: TestInfo) {
         val source = """
-                    record Counter {
+                    class Counter {
                         value: Int
 
                         fn doubled(): Int {
@@ -1355,12 +1355,12 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can call top-level functions and print`(testInfo: TestInfo) {
+    fun `class methods can call top-level functions and print`(testInfo: TestInfo) {
         val source = """
                     fn increment(value: Int): Int {
                         return value + 1
                     }
-                    record Counter {
+                    class Counter {
                         value: Int
 
                         fn printNext() {
@@ -1375,9 +1375,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can be called on nested record values`(testInfo: TestInfo) {
+    fun `class methods can be called on nested object values`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1385,7 +1385,7 @@ class VeraCompilerTests {
                             return x + y
                         }
                     }
-                    record Line {
+                    class Line {
                         start: Point
                         end: Point
                     }
@@ -1398,16 +1398,16 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can call methods on field values`(testInfo: TestInfo) {
+    fun `class methods can call methods on field values`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
 
                         fn value(): Int {
                             return x
                         }
                     }
-                    record Box {
+                    class Box {
                         point: Point
 
                         fn value(): Int {
@@ -1422,9 +1422,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can be called on constructor results`(testInfo: TestInfo) {
+    fun `class methods can be called on constructor results`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1440,9 +1440,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods can use if expressions`(testInfo: TestInfo) {
+    fun `class methods can use if expressions`(testInfo: TestInfo) {
         val source = """
-                    record Number {
+                    class Number {
                         value: Int
 
                         fn sign(): Int {
@@ -1461,9 +1461,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods support string parameters and returns`(testInfo: TestInfo) {
+    fun `class methods support string parameters and returns`(testInfo: TestInfo) {
         val source = """
-                    record Label {
+                    class Label {
                         text: String
 
                         fn value(): String {
@@ -1483,9 +1483,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods support bool parameters and returns`(testInfo: TestInfo) {
+    fun `class methods support bool parameters and returns`(testInfo: TestInfo) {
         val source = """
-                    record Flag {
+                    class Flag {
                         value: Bool
 
                         fn select(useValue: Bool): Bool {
@@ -1508,9 +1508,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods on field values accept arguments`(testInfo: TestInfo) {
+    fun `class methods on field values accept arguments`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1518,7 +1518,7 @@ class VeraCompilerTests {
                             return Point(x + dx, y + dy)
                         }
                     }
-                    record Box {
+                    class Box {
                         point: Point
 
                         fn shifted(dx: Int, dy: Int): Int {
@@ -1534,9 +1534,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `record methods accept record parameters`(testInfo: TestInfo) {
+    fun `class methods accept object parameters`(testInfo: TestInfo) {
         val source = """
-                    record Point {
+                    class Point {
                         x: Int
                         y: Int
 
@@ -1552,9 +1552,9 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `Unit values can be stored in records and read back`(testInfo: TestInfo) {
+    fun `Unit values can be stored in objects and read back`(testInfo: TestInfo) {
         val source = """
-                    record Signal {
+                    class Signal {
                         flag: Unit
                     }
                     fn $TEST_MAIN(): Int {

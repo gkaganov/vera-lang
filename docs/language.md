@@ -21,13 +21,13 @@ Implemented:
 - `if` / `else if` / `else` expressions.
 - `while`.
 - Function calls, `print`, and forward application with `|>`.
-- Top-level `record` declarations with immutable fields, positional construction, field access,
+- Top-level `class` declarations with immutable fields, positional construction, field access,
   and read-only instance methods.
 
 Not implemented:
 
 - `val` immutability enforcement.
-- Record mutation (including `mut fn` methods), traits, classes.
+- Object mutation (including `mut fn` methods) and traits.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
@@ -38,7 +38,7 @@ See [`roadmap.md`](roadmap.md) for planned work and acceptance criteria.
 
 ## Non-goals
 
-- Inheritance. Vera uses records, traits, and composition instead of class hierarchies.
+- Inheritance. Vera uses classes, traits, and composition instead of inheritance hierarchies.
 
 ## Keywords
 
@@ -46,7 +46,7 @@ Reserved words cannot be used as identifiers:
 
 | Category | Keywords |
 |----------|----------|
-| Declarations | `fn`, `record`, `var`, `val` |
+| Declarations | `fn`, `class`, `var`, `val` |
 | Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
@@ -59,7 +59,7 @@ Reserved words cannot be used as identifiers:
 
 ## Program structure
 
-A program is a sequence of top-level function and record declarations.
+A program is a sequence of top-level function and class declarations.
 
 ```vera
 fn add(a: Int, b: Int): Int {
@@ -101,10 +101,10 @@ fn name(parameter: Type, other: Type): ReturnType {
 - Returns nested inside `if` or `while` do not suppress that implicit return.
 - Functions can only be declared at top level.
 
-## Records
+## Classes and objects
 
 ```vera
-record Point {
+class Point {
     x: Int
     y: Int
 
@@ -120,29 +120,29 @@ fn main() {
 }
 ```
 
-- `record` declarations are top-level.
+- `class` declarations are top-level.
 - Fields are declared one per line as `name: Type`.
-- Methods are declared with `fn` inside the record body, before or after fields.
-- Methods are instance methods. They can read the record's fields and call sibling methods by
+- Methods are declared with `fn` inside the class body, before or after fields.
+- Methods are instance methods. They can read the class's fields and call sibling methods by
   name, without an explicit `this`/`self` expression.
-- Shadowing is not allowed: parameters, locals, fields, methods, top-level functions, records, and
+- Shadowing is not allowed: parameters, locals, fields, methods, top-level functions, classes, and
   built-ins must have distinct names in their scope.
 - Bare names resolve to parameters/locals, fields, sibling methods, then top-level functions and
   built-ins.
 - Methods have typed parameters and an optional return type; an omitted return type means `Unit`.
-- Methods can call top-level functions, built-ins, and other record methods.
+- Methods can call top-level functions, built-ins, and other class methods.
 - Method calls check argument count and types; method returns must match the declared return type.
 - Methods are called after `.` and must include an argument list: `point.sum()`.
 - Method overloading is not supported.
-- A record cannot have both a field and a method with the same name.
-- Field types may be `Int`, `String`, `Bool`, `Unit`, or another record type.
-- Records are immutable; fields are read-only from Vera source.
+- A class cannot have both a field and a method with the same name.
+- Field types may be `Int`, `String`, `Bool`, `Unit`, or another class type.
+- Objects are immutable; fields are read-only from Vera source.
 - The compiler generates a positional constructor in field declaration order.
 - Field access uses `.` and can be chained: `line.start.x`.
-- Record types can be used in parameter, return, and local type annotations.
-- Records compile to their own JVM classes with final fields, a generated constructor, and public
+- Class types can be used in parameter, return, and local type annotations.
+- Each class compiles to its own JVM class with final fields, a generated constructor, and public
   instance methods.
-- Mutation (including `mut fn`), equality, default values, and printing whole records are not
+- Mutation (including `mut fn`), equality, default values, and printing whole objects are not
   implemented.
 
 ## Variables and rebinding
@@ -165,13 +165,13 @@ count = count + 1
 
 ## Types
 
-| Type     | Meaning                      | Examples               |
-|----------|------------------------------|------------------------|
-| `Int`    | 32-bit signed integer        | `0`, `42`              |
-| `String` | Text                         | `"hello"`              |
-| `Bool`   | Boolean                      | `True`, `False`        |
-| `Unit`   | Exactly one value            | `Unit`                 |
-| Record   | User-defined immutable value | `Point`                |
+| Type     | Meaning                       | Examples               |
+|----------|-------------------------------|------------------------|
+| `Int`    | 32-bit signed integer         | `0`, `42`              |
+| `String` | Text                          | `"hello"`              |
+| `Bool`   | Boolean                       | `True`, `False`        |
+| `Unit`   | Exactly one value             | `Unit`                 |
+| Class    | User-defined immutable object | `Point`                |
 
 - `Unit` is a real value: it can be stored in fields and variables, passed, and returned.
   The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
@@ -239,7 +239,7 @@ data |> processor.runtime.process() |> print()
 
 - `value |> f(args)` lowers to `f(value, args)`.
 - `value |> f` lowers to `f(value)`.
-- The right side may be a bare callable (function, built-in, record constructor, sibling record
+- The right side may be a bare callable (function, built-in, class constructor, sibling object
   method) or a member call chain; the forwarded value becomes the first argument.
 - Chained `|>` feeds each result into the next call.
 
@@ -334,7 +334,7 @@ print(True)
 - Semicolons are not used.
 - Blank lines are ignored.
 - Blank lines are allowed at block boundaries and before `else`.
-- Record fields are also newline-terminated.
+- Class fields are also newline-terminated.
 - CRLF line endings are supported.
 - Comments are not implemented.
 

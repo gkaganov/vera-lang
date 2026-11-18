@@ -27,7 +27,7 @@ import vera.jvm.ir.JvmPutStatic
 import vera.jvm.ir.JvmParameter
 import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmRebind
-import vera.jvm.ir.JvmRecordConstruction
+import vera.jvm.ir.JvmObjectConstruction
 import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStaticCall
@@ -316,8 +316,8 @@ private class FlatInstructionLoweringState {
                 JvmType.BOOL
             }
 
-            is JvmRecordConstruction -> {
-                val classType = JvmType.ClassType(jvmExpression.recordName)
+            is JvmObjectConstruction -> {
+                val classType = JvmType.ClassType(jvmExpression.className)
                 append(FlatNew(classType))
                 append(FlatDup(classType))
                 jvmExpression.arguments.forEach { jvmArgument ->
@@ -326,7 +326,7 @@ private class FlatInstructionLoweringState {
                 append(
                     FlatInvokeSpecial(
                         receiverType = classType,
-                        ownerClass = jvmExpression.recordName,
+                        ownerClass = jvmExpression.className,
                         methodName = Identifier("<init>"),
                         methodSignature = jvmExpression.signature,
                     ),

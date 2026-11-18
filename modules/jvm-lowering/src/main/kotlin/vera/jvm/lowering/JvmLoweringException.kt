@@ -124,122 +124,122 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "top-level name ${name.value} is declared more than once",
     )
 
-    class RecordNameConflictsWithBuiltin(val name: Identifier) : JvmLoweringException(
-        "record ${name.value} conflicts with the built-in function ${name.value}",
+    class ClassNameConflictsWithBuiltin(val name: Identifier) : JvmLoweringException(
+        "class ${name.value} conflicts with the built-in function ${name.value}",
     )
 
     class ShadowingNotAllowed(val name: Identifier) : JvmLoweringException(
         "name ${name.value} is already in scope; shadowing is not allowed",
     )
 
-    class DuplicateRecordType(val name: Identifier) : JvmLoweringException(
-        "record ${name.value} is declared more than once",
+    class DuplicateClassType(val name: Identifier) : JvmLoweringException(
+        "class ${name.value} is declared more than once",
     )
 
-    class RecordNameConflictsWithProgramClass(val name: Identifier) : JvmLoweringException(
-        "record ${name.value} conflicts with the generated program class",
+    class ClassNameConflictsWithProgramClass(val name: Identifier) : JvmLoweringException(
+        "class ${name.value} conflicts with the generated program class",
     )
 
     class ProgramClassConflictsWithUnit(val name: Identifier) : JvmLoweringException(
         "program class ${name.value} conflicts with the built-in Unit class",
     )
 
-    class DuplicateRecordField(
-        val record: Identifier,
+    class DuplicateClassField(
+        val className: Identifier,
         val field: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} has duplicate field ${field.value}",
+        "class ${className.value} has duplicate field ${field.value}",
     )
 
-    class RecordFieldTypeNotAllowed(
-        val record: Identifier,
+    class ClassFieldTypeNotAllowed(
+        val className: Identifier,
         val field: Identifier,
         val type: String,
     ) : JvmLoweringException(
-        "record field ${record.value}.${field.value} cannot have type $type",
+        "class field ${className.value}.${field.value} cannot have type $type",
     )
 
-    class UnknownRecordType(val name: Identifier) : JvmLoweringException(
-        "record type ${name.value} is not defined",
+    class UnknownClassType(val name: Identifier) : JvmLoweringException(
+        "class type ${name.value} is not defined",
     )
 
-    class UnknownRecordField(
-        val record: Identifier,
+    class UnknownClassField(
+        val className: Identifier,
         val field: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} has no field ${field.value}",
+        "class ${className.value} has no field ${field.value}",
     )
 
-    class MemberAccessRequiresRecord(val actual: JvmType) : JvmLoweringException(
-        "member access requires a record value, got ${actual.render()}",
+    class MemberAccessRequiresObject(val actual: JvmType) : JvmLoweringException(
+        "member access requires an object, got ${actual.render()}",
     )
 
-    class RecordConstructorArityMismatch(
-        val record: Identifier,
+    class ClassConstructorArityMismatch(
+        val className: Identifier,
         val expected: Int,
         val actual: Int,
     ) : JvmLoweringException(
-        "record ${record.value} constructor requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
+        "class ${className.value} constructor requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
     )
 
-    class RecordConstructorArgumentTypeMismatch(
-        val record: Identifier,
+    class ClassConstructorArgumentTypeMismatch(
+        val className: Identifier,
         val field: Identifier,
         val expected: JvmType,
         val actual: JvmType,
     ) : JvmLoweringException(
-        "record ${record.value} field ${field.value} requires ${expected.render()}, got ${actual.render()}",
+        "class ${className.value} field ${field.value} requires ${expected.render()}, got ${actual.render()}",
     )
 
-    class DuplicateRecordMethod(
-        val record: Identifier,
+    class DuplicateClassMethod(
+        val className: Identifier,
         val method: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} has duplicate method ${method.value}",
+        "class ${className.value} has duplicate method ${method.value}",
     )
 
-    class RecordMethodConflictsWithField(
-        val record: Identifier,
+    class ClassMethodConflictsWithField(
+        val className: Identifier,
         val name: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} has both a field and a method named ${name.value}",
+        "class ${className.value} has both a field and a method named ${name.value}",
     )
 
-    class UnknownRecordMethod(
-        val record: Identifier,
+    class UnknownClassMethod(
+        val className: Identifier,
         val method: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} has no method ${method.value}",
+        "class ${className.value} has no method ${method.value}",
     )
 
     class MethodArityMismatch(
-        val record: Identifier,
+        val className: Identifier,
         val method: Identifier,
         val expected: Int,
         val actual: Int,
     ) : JvmLoweringException(
-        "record ${record.value} method ${method.value} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
+        "class ${className.value} method ${method.value} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
     )
 
     class MethodArgumentTypeMismatch(
-        val record: Identifier,
+        val className: Identifier,
         val method: Identifier,
         val parameter: Identifier,
         val expected: JvmType,
         val actual: JvmType,
     ) : JvmLoweringException(
-        "record ${record.value} method ${method.value} parameter ${parameter.value} requires ${expected.render()}, got ${actual.render()}",
+        "class ${className.value} method ${method.value} parameter ${parameter.value} requires ${expected.render()}, got ${actual.render()}",
     )
 
-    class RecordMethodUsedAsValue(
-        val record: Identifier,
+    class ClassMethodUsedAsValue(
+        val className: Identifier,
         val method: Identifier,
     ) : JvmLoweringException(
-        "record ${record.value} method ${method.value} must be called",
+        "class ${className.value} method ${method.value} must be called",
     )
 
-    class RecordTypeUsedAsValue(val name: Identifier) : JvmLoweringException(
-        "record type ${name.value} cannot be used as a value",
+    class ClassTypeUsedAsValue(val name: Identifier) : JvmLoweringException(
+        "class type ${name.value} cannot be used as a value",
     )
 
     class MissingReturnValue(val actual: JvmType) : JvmLoweringException(
