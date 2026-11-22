@@ -40,6 +40,14 @@ sealed class FlatInstructionException(message: String) : VeraException(message) 
         "continue is only allowed inside a loop",
     )
 
+    class LoopJumpStackMismatch(
+        val jump: String,
+        val expected: Int,
+        val actual: Int,
+    ) : FlatInstructionException(
+        "$jump must leave the operand stack at depth $expected, but it has depth $actual",
+    )
+
     class InternalInvariant(val detail: String) : FlatInstructionException(
         "internal instruction error: $detail",
     )

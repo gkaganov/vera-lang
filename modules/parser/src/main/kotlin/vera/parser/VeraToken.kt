@@ -4,6 +4,8 @@ enum class VeraTokenType {
     // Keywords
     FN,
     CLASS,
+    TRAIT,
+    HAS,
     IF,
     ELSE,
     WHILE,

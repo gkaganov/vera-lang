@@ -10,13 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Object equality and printing
-
-- Status: not implemented.
-- Area: lowering, emitter.
-- Acceptance: decide structural equality semantics; objects can be compared and printed; tests
-  cover nested objects.
-
 ### `val` immutability enforcement
 
 - Status: not started.
@@ -31,12 +24,11 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Acceptance: mutation works through object methods and is rejected for immutable objects and
   fields where appropriate.
 
-### Comments and block scoping
+### Comments
 
 - Status: not implemented.
-- Area: lexer, parser, lowering.
-- Acceptance: comments are skipped; block-scoped bindings no longer leak; the no-shadowing rule
-  still applies.
+- Area: lexer.
+- Acceptance: comments are skipped and covered by tests.
 
 ### Numeric edge-case semantics
 
@@ -55,6 +47,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   document them explicitly.
 - Default class field values: decide whether fields may omit constructor arguments by declaring a
   default, or keep positional construction mandatory.
+- Trait representation: keep traits as compile-time contracts or map them to JVM interfaces once
+  trait-typed values and dynamic dispatch exist.
 
 ## Long-term ideas and advanced features
 
@@ -62,7 +56,10 @@ Larger design work and features that are not required for a usable basic languag
 
 - Persistent collections.
 - String concatenation and other string operations.
-- Traits.
+- Trait default method bodies and trait-typed values with dynamic dispatch.
+- A universal `Any` top type with `java.lang.Object`-like behavior. Deferred: it requires boxing
+  for primitives, `instanceof`/`checkcast`, `invokeinterface`, and a heterogeneous `equals`.
+  `Any` is deliberately not a root trait yet, so `Eq` and `Display` stay opt-in.
 - Effects, capabilities, services, and errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, and numeric conversions.

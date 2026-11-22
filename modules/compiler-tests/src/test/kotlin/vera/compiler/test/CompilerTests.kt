@@ -689,6 +689,111 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `break works inside an if that forms a whole statement`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var counter = 0
+                        var last = 0
+                        while True {
+                            counter = counter + 1
+                            var value = if counter == 3 {
+                                break
+                                0
+                            } else {
+                                counter * 10
+                            }
+                            last = value
+                        }
+                        return last
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 20, testInfo)
+    }
+
+    @Test
+    fun `break works in a loop nested inside an expression`(testInfo: TestInfo) {
+        val source = """
+                    fn add(a: Int, b: Int): Int {
+                        return a + b
+                    }
+                    fn $TEST_MAIN(): Int {
+                        return add(1, if True {
+                            var count = 0
+                            while True {
+                                count = count + 1
+                                if count == 4 {
+                                    break
+                                }
+                            }
+                            count
+                        } else {
+                            0
+                        })
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 5, testInfo)
+    }
+
+    @Test
+    fun `sibling blocks can reuse local names`(testInfo: TestInfo) {
+        val source = """
+                    fn pick(flag: Bool): Int {
+                        return if flag {
+                            var value = 1
+                            value
+                        } else {
+                            var value = 2
+                            value
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        print(pick(True))
+                        print(pick(False))
+                        var round = 0
+                        while round < 2 {
+                            var doubled = round * 2
+                            print(doubled)
+                            round = round + 1
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1${EOL}2${EOL}0${EOL}2$EOL", testInfo)
+    }
+
+    @Test
+    fun `returning from both if branches ends a function`(testInfo: TestInfo) {
+        val source = """
+                    fn sign(value: Int): Int {
+                        if value > 0 {
+                            return 1
+                        } else if value < 0 {
+                            return -1
+                        } else {
+                            return 0
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        print(sign(5))
+                        print(sign(-5))
+                        print(sign(0))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "1$EOL-1${EOL}0$EOL", testInfo)
+    }
+
+    @Test
+    fun `the smallest Int literal can be written`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(-2147483648)
+                        print(-2147483648 + 1)
+                        print(-(5))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "-2147483648$EOL-2147483647$EOL-5$EOL", testInfo)
+    }
+
+    @Test
     fun `variables can be rebound with equals`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
@@ -1161,6 +1266,34 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `forward application evaluates the left value before a member chain`(testInfo: TestInfo) {
+        val source = """
+                    class Box {
+                        base: Int
+                        fn plus(a: Int, b: Int): Int {
+                            return a + b + base
+                        }
+                    }
+                    fn left(): Int {
+                        print("left")
+                        return 1
+                    }
+                    fn box(): Box {
+                        print("box")
+                        return Box(10)
+                    }
+                    fn two(): Int {
+                        print("two")
+                        return 2
+                    }
+                    fn $TEST_MAIN() {
+                        print(left() |> box().plus(two()))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "left${EOL}box${EOL}two${EOL}13$EOL", testInfo)
+    }
+
+    @Test
     fun `forward application calls sibling class methods`(testInfo: TestInfo) {
         val source = """
                     class Counter {
@@ -1618,6 +1751,337 @@ class VeraCompilerTests {
                     }
                 """.trimIndent()
         assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `trait methods must be implemented and can be called`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Square has Shape {
+                        side: Int
+                        fn area(): Int {
+                            return side * side
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var square = Square(3)
+                        return square.area()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 9, testInfo)
+    }
+
+    @Test
+    fun `traits can be declared on one line`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape { fn area(): Int }
+                    trait Marker {}
+                    class Square has Shape, Marker {
+                        side: Int
+                        fn area(): Int {
+                            return side * side
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var square = Square(4)
+                        return square.area()
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 16, testInfo)
+    }
+
+    @Test
+    fun `trait methods with omitted return types match Unit methods`(testInfo: TestInfo) {
+        val source = """
+                    trait Greeter {
+                        fn greet()
+                    }
+                    class Host has Greeter {
+                        name: String
+                        fn greet() {
+                            print(name)
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        var host = Host("vera")
+                        host.greet()
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "vera$EOL", testInfo)
+    }
+
+    @Test
+    fun `trait methods match by parameter type not name`(testInfo: TestInfo) {
+        val source = """
+                    trait Scaled {
+                        fn scale(by: Int): Int
+                    }
+                    class Counter has Scaled {
+                        value: Int
+                        fn scale(amount: Int): Int {
+                            return value * amount
+                        }
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var counter = Counter(2)
+                        return counter.scale(3)
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 6, testInfo)
+    }
+
+    @Test
+    fun `classes can implement multiple traits`(testInfo: TestInfo) {
+        val source = """
+                    trait Named {
+                        fn name(): String
+                    }
+                    trait Valued {
+                        fn value(): Int
+                    }
+                    class Entry has Named, Valued {
+                        label: String
+                        amount: Int
+                        fn name(): String {
+                            return label
+                        }
+                        fn value(): Int {
+                            return amount
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        var entry = Entry("item", 7)
+                        print(entry.name())
+                        print(entry.value())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "item${EOL}7$EOL", testInfo)
+    }
+
+    @Test
+    fun `objects with Eq compare structurally`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Eq {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN() {
+                        print(Point(1, 2) == Point(1, 2))
+                        print(Point(1, 2) == Point(1, 3))
+                        print(Point(1, 2) != Point(1, 3))
+                        print(Point(1, 2) != Point(1, 2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+    }
+
+    @Test
+    fun `nested objects with Eq compare structurally`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Eq {
+                        x: Int
+                        y: Int
+                    }
+                    class Line has Eq {
+                        start: Point
+                        end: Point
+                    }
+                    fn $TEST_MAIN() {
+                        print(Line(Point(1, 2), Point(3, 4)) == Line(Point(1, 2), Point(3, 4)))
+                        print(Line(Point(1, 2), Point(3, 4)) == Line(Point(1, 2), Point(3, 5)))
+                        print(Line(Point(1, 2), Point(3, 4)) != Line(Point(0, 2), Point(3, 4)))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
+    }
+
+    @Test
+    fun `Eq compares String and Bool fields by value`(testInfo: TestInfo) {
+        val source = """
+                    class Label has Eq {
+                        text: String
+                        active: Bool
+                    }
+                    fn $TEST_MAIN() {
+                        print(Label("same", True) == Label("same", True))
+                        print(Label("same", True) == Label("other", True))
+                        print(Label("same", True) != Label("same", False))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
+    }
+
+    @Test
+    fun `objects with Eq and no fields are equal`(testInfo: TestInfo) {
+        val source = """
+                    class Empty has Eq {
+                    }
+                    fn $TEST_MAIN() {
+                        print(Empty() == Empty())
+                        print(Empty() != Empty())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false$EOL", testInfo)
+    }
+
+    @Test
+    fun `Unit equality always holds`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(Unit == Unit)
+                        print(Unit != Unit)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false$EOL", testInfo)
+    }
+
+    @Test
+    fun `Unit equality evaluates both operands in order`(testInfo: TestInfo) {
+        val source = """
+                    fn first() {
+                        print("first")
+                    }
+                    fn second() {
+                        print("second")
+                    }
+                    fn $TEST_MAIN() {
+                        print(first() == second())
+                        print(first() != second())
+                    }
+                """.trimIndent()
+        assertProgramPrints(
+            source,
+            "first${EOL}second${EOL}true${EOL}first${EOL}second${EOL}false$EOL",
+            testInfo,
+        )
+    }
+
+    @Test
+    fun `Display prints objects with their fields`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Display {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN() {
+                        print(Point(1, 2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Point(x: 1, y: 2)$EOL", testInfo)
+    }
+
+    @Test
+    fun `Display objects can be forwarded to print`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Display {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN() {
+                        Point(1, 2) |> print
+                        Point(3, 4) |> print()
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}Point(x: 3, y: 4)$EOL", testInfo)
+    }
+
+    @Test
+    fun `Display prints nested objects recursively`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Display {
+                        x: Int
+                        y: Int
+                    }
+                    class Line has Display {
+                        start: Point
+                        end: Point
+                    }
+                    fn $TEST_MAIN() {
+                        print(Line(Point(1, 2), Point(3, 4)))
+                    }
+                """.trimIndent()
+        assertProgramPrints(
+            source,
+            "Line(start: Point(x: 1, y: 2), end: Point(x: 3, y: 4))$EOL",
+            testInfo,
+        )
+    }
+
+    @Test
+    fun `Display prints String Bool and Unit fields`(testInfo: TestInfo) {
+        val source = """
+                    class Message has Display {
+                        text: String
+                        active: Bool
+                    }
+                    class Signal has Display {
+                        flag: Unit
+                    }
+                    fn $TEST_MAIN() {
+                        print(Message("hello", True))
+                        print(Signal(Unit))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Message(text: hello, active: true)${EOL}Signal(flag: Unit)$EOL", testInfo)
+    }
+
+    @Test
+    fun `Unit can be printed`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(Unit)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Unit$EOL", testInfo)
+    }
+
+    @Test
+    fun `Unit-returning calls can be printed`(testInfo: TestInfo) {
+        val source = """
+                    fn doNothing() {
+                    }
+                    fn $TEST_MAIN() {
+                        print(doNothing())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Unit$EOL", testInfo)
+    }
+
+    @Test
+    fun `object equality works on variables`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Eq {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var first = Point(1, 2)
+                        var second = Point(1, 2)
+                        if first == second {
+                            return 1
+                        }
+                        return 0
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `Eq and Display can be combined`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Eq, Display {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN() {
+                        print(Point(1, 2))
+                        print(Point(1, 2) == Point(1, 2))
+                        print(Point(1, 2) != Point(2, 2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}true${EOL}true$EOL", testInfo)
     }
 
     @Test

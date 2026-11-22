@@ -161,6 +161,18 @@ data class JvmBuiltinCall(
     }
 }
 
+/**
+ * Evaluates [value] into the compiler-generated [local], then evaluates [body], which may read it.
+ * Used to keep source evaluation order when a value must be computed before its use site.
+ */
+data class JvmLet(
+    val local: JvmLocal,
+    val value: JvmExpression,
+    val body: JvmExpression,
+) : JvmExpression {
+    override val type = body.type
+}
+
 sealed interface JvmBlock {
     val statements: List<JvmStatement>
     val type: JvmType

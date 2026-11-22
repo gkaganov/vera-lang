@@ -242,6 +242,80 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class type ${name.value} cannot be used as a value",
     )
 
+    class ObjectEqualityRequiresTrait(val className: Identifier) : JvmLoweringException(
+        "class ${className.value} does not have the Eq trait, so its objects cannot be compared",
+    )
+
+    class PrintRequiresDisplayTrait(val className: Identifier) : JvmLoweringException(
+        "class ${className.value} does not have the Display trait, so its objects cannot be printed",
+    )
+
+    class ClassFieldRequiresTrait(
+        val className: Identifier,
+        val field: Identifier,
+        val fieldType: Identifier,
+        val trait: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} field ${field.value} has type ${fieldType.value}, which does not have the ${trait.value} trait",
+    )
+
+    class ClassMethodConflictsWithGeneratedMethod(
+        val className: Identifier,
+        val method: Identifier,
+        val trait: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} method ${method.value} conflicts with the generated method for trait ${trait.value}",
+    )
+
+    class DuplicateTrait(val name: Identifier) : JvmLoweringException(
+        "trait ${name.value} is declared more than once",
+    )
+
+    /** A function, class, or trait reuses a built-in trait name such as `Eq` or `Display`. */
+    class NameConflictsWithBuiltinTrait(val name: Identifier) : JvmLoweringException(
+        "name ${name.value} is reserved for a built-in trait",
+    )
+
+    class DuplicateTraitMethod(
+        val trait: Identifier,
+        val method: Identifier,
+    ) : JvmLoweringException(
+        "trait ${trait.value} has duplicate method ${method.value}",
+    )
+
+    class UnknownTrait(val name: Identifier) : JvmLoweringException(
+        "trait ${name.value} is not defined",
+    )
+
+    class DuplicateTraitImplementation(
+        val className: Identifier,
+        val trait: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} has trait ${trait.value} more than once",
+    )
+
+    class MissingTraitMethod(
+        val className: Identifier,
+        val trait: Identifier,
+        val method: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} has trait ${trait.value} but no method ${method.value}",
+    )
+
+    class TraitMethodSignatureMismatch(
+        val className: Identifier,
+        val trait: Identifier,
+        val method: Identifier,
+        val expectedParameters: List<JvmType>,
+        val expectedReturn: JvmType,
+        val actualParameters: List<JvmType>,
+        val actualReturn: JvmType,
+    ) : JvmLoweringException(
+        "class ${className.value} method ${method.value} does not match trait ${trait.value}: " +
+            "expected ${renderSignature(expectedParameters, expectedReturn)}, " +
+            "got ${renderSignature(actualParameters, actualReturn)}",
+    )
+
     class MissingReturnValue(val actual: JvmType) : JvmLoweringException(
         "return without an expression requires a Unit function, but this function returns ${actual.render()}",
     )
@@ -250,11 +324,23 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "calling a value is not supported yet",
     )
 
-    class UnexpectedPendingSymbol : JvmLoweringException(
-        "unexpected pending symbol in primary expression",
+    class BreakOutsideLoop : JvmLoweringException(
+        "break is only allowed inside a loop",
+    )
+
+    class ContinueOutsideLoop : JvmLoweringException(
+        "continue is only allowed inside a loop",
+    )
+
+    /** `break` or `continue` inside an expression whose evaluation is still in progress. */
+    class LoopJumpInsideExpression(val keyword: String) : JvmLoweringException(
+        "$keyword cannot be used inside a nested expression; use it in a statement or in an if that forms a whole statement",
     )
 
     class InternalInvariant(val detail: String) : JvmLoweringException(
         "internal compiler error: $detail",
     )
 }
+
+private fun renderSignature(parameters: List<JvmType>, returnType: JvmType): String =
+    "(${parameters.joinToString(", ") { it.render() }}) -> ${returnType.render()}"

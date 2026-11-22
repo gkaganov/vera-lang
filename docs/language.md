@@ -23,15 +23,19 @@ Implemented:
 - Function calls, `print`, and forward application with `|>`.
 - Top-level `class` declarations with immutable fields, positional construction, field access,
   and read-only instance methods.
+- Top-level `trait` declarations and `class ... has ...` clauses.
+- Structural object equality through the built-in `Eq` trait.
+- Object printing through the built-in `Display` trait.
 
 Not implemented:
 
 - `val` immutability enforcement.
-- Object mutation (including `mut fn` methods) and traits.
+- Object mutation (including `mut fn` methods).
+- Trait default method bodies and trait-typed values.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
-- Comments, block scoping.
+- Comments.
 - Custom entry-point names (only `main` gets a JVM adapter).
 
 See [`roadmap.md`](roadmap.md) for planned work and acceptance criteria.
@@ -46,7 +50,7 @@ Reserved words cannot be used as identifiers:
 
 | Category | Keywords |
 |----------|----------|
-| Declarations | `fn`, `class`, `var`, `val` |
+| Declarations | `fn`, `class`, `trait`, `has`, `var`, `val` |
 | Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
@@ -59,7 +63,7 @@ Reserved words cannot be used as identifiers:
 
 ## Program structure
 
-A program is a sequence of top-level function and class declarations.
+A program is a sequence of top-level function, class, and trait declarations.
 
 ```vera
 fn add(a: Int, b: Int): Int {
@@ -96,9 +100,11 @@ fn name(parameter: Type, other: Type): ReturnType {
 - Calls check the argument count and types against the callee's parameters.
 - A return expression must match the declared return type.
 - `return` without an expression returns from a `Unit` function.
-- A function without a top-level `return` gets an implicit final `return`; this requires a `Unit`
+- A function that does not always return gets an implicit final `return`; this requires a `Unit`
   return type.
-- Returns nested inside `if` or `while` do not suppress that implicit return.
+- A function always returns when a top-level statement is a `return`, or an `if` with an `else`
+  whose branches all always return (including `else if` chains). Returns inside `while` do not
+  count.
 - Functions can only be declared at top level.
 
 ## Classes and objects
@@ -125,8 +131,8 @@ fn main() {
 - Methods are declared with `fn` inside the class body, before or after fields.
 - Methods are instance methods. They can read the class's fields and call sibling methods by
   name, without an explicit `this`/`self` expression.
-- Shadowing is not allowed: parameters, locals, fields, methods, top-level functions, classes, and
-  built-ins must have distinct names in their scope.
+- Shadowing is not allowed: parameters, locals, fields, methods, top-level functions, classes,
+  traits, and built-ins must have distinct names in their scope.
 - Bare names resolve to parameters/locals, fields, sibling methods, then top-level functions and
   built-ins.
 - Methods have typed parameters and an optional return type; an omitted return type means `Unit`.
@@ -142,8 +148,45 @@ fn main() {
 - Class types can be used in parameter, return, and local type annotations.
 - Each class compiles to its own JVM class with final fields, a generated constructor, and public
   instance methods.
-- Mutation (including `mut fn`), equality, default values, and printing whole objects are not
-  implemented.
+- A class can declare traits after `has`, for example `class Point has Eq, Display { ... }`.
+- Mutation (including `mut fn`) and default field values are not implemented.
+
+## Traits
+
+```vera
+trait Shape {
+    fn area(): Int
+}
+
+class Square has Shape {
+    side: Int
+
+    fn area(): Int {
+        return side * side
+    }
+}
+```
+
+- `trait` declarations are top-level and contain method signatures only: `fn name(params): Type`.
+  Signatures are newline-terminated, except that the last one may share a line with the closing
+  brace: `trait Shape { fn area(): Int }`.
+- A class opts into traits with `has` after its name: `class Square has Shape`.
+- An implementing class must define every trait method with the same parameter types and return
+  type; parameter names may differ.
+- Traits are compile-time contracts: they produce no bytecode, are not types, and cannot be used
+  in annotations. Trait methods are called on the class, with static dispatch.
+- Traits cannot declare fields, default method bodies, or overloads.
+- Trait method parameter and return types may be `Int`, `String`, `Bool`, `Unit`, or class types.
+- Trait names share the top-level namespace with functions and classes.
+- Two built-in traits are always available and are implemented by the compiler:
+  - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
+  - `Display` generates a `toString`, enabling `print` of the class's objects.
+- Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
+- A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
+  objects stay comparable and printable.
+- `Unit` implicitly has `Eq` and `Display`, so `Unit == Unit` holds and `print(Unit)` works.
+- A class that declares `Eq` or `Display` cannot define the corresponding `equals` or `toString`
+  method itself.
 
 ## Variables and rebinding
 
@@ -159,15 +202,17 @@ count = count + 1
 - Rebinding requires the same type as the existing variable.
 - Rebinding an unknown variable is a compile-time error.
 - `val` parses but is not yet enforced as immutable.
-- Bindings are function-scoped; block scoping is not implemented.
+- Bindings are block-scoped: a `var` declared inside an `if` branch or `while` body is not
+  visible after that block.
 - Names cannot be redeclared or shadow any name already in scope, including parameters, local
-  bindings, fields, methods, top-level declarations, and built-ins.
+  bindings, fields, methods, top-level declarations, and built-ins. Sibling blocks may reuse a name,
+  because neither binding is in scope in the other.
 
 ## Types
 
 | Type     | Meaning                       | Examples               |
 |----------|-------------------------------|------------------------|
-| `Int`    | 32-bit signed integer         | `0`, `42`              |
+| `Int`    | 32-bit signed integer         | `0`, `42`, `-2147483648` |
 | `String` | Text                          | `"hello"`              |
 | `Bool`   | Boolean                       | `True`, `False`        |
 | `Unit`   | Exactly one value             | `Unit`                 |
@@ -209,8 +254,13 @@ a >= b
 True != False
 ```
 
-- `==` and `!=` compare `Int`, `Bool`, and `String` values and produce `Bool`.
-- `String` equality compares contents, not reference identity.
+- `==` and `!=` produce `Bool`.
+- `Int`, `Bool`, and `String` values compare by value; `String` equality compares contents, not
+  reference identity.
+- `Unit` values are always equal.
+- Objects of the same class compare structurally, field by field, when the class has the `Eq`
+  trait; nested objects compare recursively. Comparing objects of a class without `Eq` is
+  rejected, and objects of different classes cannot be compared.
 - `<`, `>`, `<=`, and `>=` are `Int`-only and produce `Bool`.
 
 ### Boolean logic
@@ -242,6 +292,8 @@ data |> processor.runtime.process() |> print()
 - The right side may be a bare callable (function, built-in, class constructor, sibling object
   method) or a member call chain; the forwarded value becomes the first argument.
 - Chained `|>` feeds each result into the next call.
+- Evaluation is left to right: the forwarded value is evaluated before the receiver chain and the
+  explicit arguments of the call it is passed to.
 
 ## Operator precedence
 
@@ -315,6 +367,9 @@ while counter < 3 {
 - `break` exits the innermost `while`.
 - `continue` jumps to the next condition check of the innermost `while`.
 - `break` and `continue` are only valid inside a loop.
+- They may appear in statements, including inside an `if` whose value forms a whole statement
+  (`var x = if c { break } else { 1 }`), but not inside a nested expression such as a call
+  argument or operator operand, where the jump would abandon a partially evaluated expression.
 - `while` is a statement and produces no value.
 
 ## Built-in `print`
@@ -323,9 +378,14 @@ while counter < 3 {
 print(42)
 print("hello")
 print(True)
+print(Unit)
+print(Point(1, 2))
 ```
 
 - Writes one value followed by a newline to standard output.
+- Prints `Int`, `String`, and `Bool` values directly and `Unit` as `Unit`.
+- Prints an object as `ClassName(field: value, ...)` only when its class has the `Display`
+  trait; nested objects print recursively through their own `Display` implementations.
 - Returns `Unit`.
 
 ## Newlines and blocks

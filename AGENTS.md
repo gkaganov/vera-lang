@@ -79,10 +79,23 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 ### Lowering
 
 - `JvmProgramLowering.lower(mainClassName, program)` is the public entry point.
-- First pass collects class and function declarations by name; classes lower to their own JVM
-  classes (including instance methods), then functions lower to static methods on the program
+- First pass collects class, trait, and function declarations by name; classes lower to their own
+  JVM classes (including instance methods), then functions lower to static methods on the program
   class.
+- Traits are compile-time contracts. `JvmProgramLowering` validates `VeraTraitDeclaration`
+  signatures and each class's `VeraClassDeclaration.traits` (every trait method must be
+  implemented with matching parameter and return types, and class-typed fields of `Eq`/`Display`
+  classes must carry the same trait). Traits produce no IR or bytecode.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
+- Locals are block-scoped: `JvmFunctionLoweringState` keeps a scope stack, and `if` branches and
+  `while` bodies open a new scope.
+- `JvmFunctionLowering` rejects `break`/`continue` outside a loop and inside nested expressions: it
+  tracks an expression depth, and a jump may only target a loop entered at the same depth. Only an
+  `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
+  both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
+- Return analysis treats an `if` with `else` whose branches all return as returning.
+- `value |> chain.call()` evaluates `value` into a compiler-generated local (`JvmLet`) before the
+  receiver chain, keeping left-to-right evaluation order.
 - The flat instruction layer verifies stack discipline and resolves labels/jumps.
 - The emitter must not interpret structured expressions or control flow.
 
@@ -91,12 +104,21 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmField`, `JvmConstructor`,
   `JvmMethod`, `JvmExpression`, `JvmStatement`, and block kinds `JvmExplicitReturnBlock`,
   `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`.
+- `JvmLet(local, value, body)` evaluates `value` into a compiler-generated local, then `body`.
 - Object construction is `JvmObjectConstruction`; field reads are `JvmGetField`; object method
   calls are `JvmInstanceCall` with an explicit receiver expression. `JvmMethod.receiver` is the
   optional instance receiver local; `null` means a static method.
+- `JvmBuiltinTraits` defines the built-in `Eq` and `Display` traits. `JvmObjectMethods`
+  generates a structural `equals` for classes with `Eq` and a `toString` for classes with
+  `Display`. Object `==`/`!=` lower to the generated `equals` and require `Eq`; `print` of an
+  object lowers to `toString` and requires `Display`. Missing traits are lowering errors. `!=`
+  negates through a comparison against `true`, and generated methods are never visible to Vera
+  name resolution.
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
   it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
+  `Unit` implicitly has `Eq` and `Display`; its generated `equals` always returns `true`
+  and its generated `toString` returns `Unit`, so `Unit` equality and printing use the object path.
 - A zero-parameter top-level `main` gets an additional JVM entry point `main(String[])V` that calls
   the Vera `main` and discards its result. `JvmType.Array` represents the `String[]` parameter.
 - **Operators**: `JvmIntUnaryOperator`, `JvmIntBinaryOperator`, and `JvmComparisonOperator` are
@@ -227,6 +249,9 @@ uncommitted changes:
 - Class and object types are `VeraClassDeclaration`/`VeraField`, `JvmField`/`JvmConstructor`/
   `JvmObjectConstruction`/`JvmGetField`/`JvmInstanceCall`, and `FlatNew`/`FlatGetField`/
   `FlatPutField`/`FlatInvokeSpecial`/`FlatInvokeVirtual`.
+- Trait types are `VeraTraitDeclaration`/`VeraTraitMethod` and `VeraClassDeclaration.traits`;
+  built-in traits live in `JvmBuiltinTraits` (`eq`, `display`, `names`), and generated trait
+  implementations live in `JvmObjectMethods`.
 - `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
   `FlatGetStatic`/`FlatPutStatic`.
 - The JVM entry-point adapter is built in `JvmProgramLowering` as a `JvmStaticCall` to `main`
@@ -247,27 +272,34 @@ uncommitted changes:
 - CRLF is normalized to a single `EOL` token.
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
   and `\r` escapes.
-- Constructs: `fn`, `class`, `var`, rebinding with `=`, `if` / `else if` / `else`, `while`,
-  `break`, `continue`, `print`.
+- Constructs: `fn`, `class`, `trait`, `has`, `var`, rebinding with `=`, `if` / `else if` /
+  `else`, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
-- `break` and `continue` target the innermost `while`; using either outside a loop is rejected.
+- `break` and `continue` target the innermost `while`; using either outside a loop or inside a
+  nested expression is rejected.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
   Unary `-` binds tighter than multiplicative operators.
-- `==` and `!=` support `Int`, `Bool`, and `String`; `String` equality compares contents. Ordering
+- `==` and `!=` support `Int`, `Bool`, `String`, and `Unit`; `String` equality compares contents.
+  Objects compare structurally only when their class has the built-in `Eq` trait. Ordering
   operators are `Int`-only.
+- `print` accepts `Int`, `String`, `Bool`, `Unit`, and objects whose class has the built-in
+  `Display` trait.
 - `and` and `or` are short-circuiting reserved keywords.
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
   first argument.
 - The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling
   object method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
+- Trait names share the top-level namespace with functions and classes; the built-in trait names
+  `Eq` and `Display` are reserved.
 
 ## Name Resolution
 
 - Shadowing is never allowed in Vera. Every name in a scope must be unique, including parameters,
-  locals, fields, methods, top-level functions, classes, and built-ins. A nested binding may not
-  reuse an outer name; declarations must be renamed instead.
+  locals, fields, methods, top-level functions, classes, traits, and built-ins. A nested binding
+  may not reuse an outer name; declarations must be renamed instead. Bindings are block-scoped, so
+  sibling blocks may reuse a name.
 - This rule is enforced during lowering.
 
 ## Non-goals

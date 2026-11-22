@@ -171,6 +171,8 @@ private class VeraLexerState(private val source: String) {
         val keywords: Map<String, VeraTokenType> = mapOf(
             "fn" to VeraTokenType.FN,
             "class" to VeraTokenType.CLASS,
+            "trait" to VeraTokenType.TRAIT,
+            "has" to VeraTokenType.HAS,
             "if" to VeraTokenType.IF,
             "else" to VeraTokenType.ELSE,
             "while" to VeraTokenType.WHILE,

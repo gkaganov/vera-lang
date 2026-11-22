@@ -17,6 +17,7 @@ import vera.jvm.ir.JvmIntBinary
 import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmIntUnary
 import vera.jvm.ir.JvmInstanceCall
+import vera.jvm.ir.JvmLet
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
@@ -83,7 +84,12 @@ object FlatInstructionLowering {
 
 private class FlatInstructionLoweringState {
 
-    private data class LoopContext(val breakLabel: FlatLabel, val continueLabel: FlatLabel)
+    /** A loop's jump targets and the operand-stack depth that `break` and `continue` must jump with. */
+    private data class LoopContext(
+        val breakLabel: FlatLabel,
+        val continueLabel: FlatLabel,
+        val stackDepth: Int,
+    )
 
     private val flatLocalSlots = mutableMapOf<JvmLocal, FlatLocalTable.Local>()
     private val loopContexts = mutableListOf<LoopContext>()
@@ -224,12 +230,14 @@ private class FlatInstructionLoweringState {
             JvmBreak -> {
                 val loopContext = loopContexts.lastOrNull()
                     ?: throw FlatInstructionException.BreakOutsideLoop()
+                requireLoopStackDepth("break", loopContext)
                 jump(loopContext.breakLabel)
             }
 
             JvmContinue -> {
                 val loopContext = loopContexts.lastOrNull()
                     ?: throw FlatInstructionException.ContinueOutsideLoop()
+                requireLoopStackDepth("continue", loopContext)
                 jump(loopContext.continueLabel)
             }
         }
@@ -244,7 +252,7 @@ private class FlatInstructionLoweringState {
         bindLabel(flatConditionLabel)
         lowerExpression(jvmWhile.condition)
         jumpIfFalse(flatEndLabel)
-        loopContexts += LoopContext(flatEndLabel, flatConditionLabel)
+        loopContexts += LoopContext(flatEndLabel, flatConditionLabel, flatBuilder.stackDepth)
         try {
             jvmWhile.body.statements.forEach { jvmStatement ->
                 lowerStatement(jvmStatement)
@@ -254,6 +262,16 @@ private class FlatInstructionLoweringState {
         }
         jump(flatConditionLabel)
         bindLabel(flatEndLabel)
+    }
+
+    private fun requireLoopStackDepth(jump: String, loopContext: LoopContext) {
+        if (flatBuilder.stackDepth != loopContext.stackDepth) {
+            throw FlatInstructionException.LoopJumpStackMismatch(
+                jump,
+                loopContext.stackDepth,
+                flatBuilder.stackDepth,
+            )
+        }
     }
 
     private fun lowerExpression(jvmExpression: JvmExpression): JvmType {
@@ -377,6 +395,14 @@ private class FlatInstructionLoweringState {
             }
 
             is JvmBuiltinCall -> lowerBuiltinCall(jvmExpression)
+
+            is JvmLet -> {
+                lowerExpression(jvmExpression.value)
+                val flatLocal = flatBuilder.allocateLocal(jvmExpression.local.type)
+                flatLocalSlots[jvmExpression.local] = flatLocal
+                append(FlatStoreLocal(flatLocal))
+                lowerExpression(jvmExpression.body)
+            }
 
             is JvmIfExpression -> {
                 lowerIfExpression(jvmExpression)

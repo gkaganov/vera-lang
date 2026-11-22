@@ -66,6 +66,10 @@ class FlatMethodBuilder(
     val nextFreeLocalSlot: FlatLocalTable.Slot
         get() = locals.nextFreeSlot
 
+    /** The number of values currently on the simulated operand stack. */
+    val stackDepth: Int
+        get() = stack.size()
+
     fun allocateLocal(jvmType: JvmType): FlatLocalTable.Local {
         val slot = locals.define(jvmType)
         return FlatLocalTable.Local(slot, jvmType)

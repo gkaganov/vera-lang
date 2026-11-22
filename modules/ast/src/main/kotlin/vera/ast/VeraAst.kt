@@ -10,8 +10,18 @@ data class VeraClassDeclaration(
     val name: Identifier,
     val fields: List<VeraField>,
     val methods: List<VeraFunctionDeclaration> = emptyList(),
+    val traits: List<Identifier> = emptyList(),
 ) : VeraDeclaration
 data class VeraField(val name: Identifier, val type: VeraType)
+data class VeraTraitDeclaration(
+    val name: Identifier,
+    val methods: List<VeraTraitMethod> = emptyList(),
+) : VeraDeclaration
+data class VeraTraitMethod(
+    val name: Identifier,
+    val parameters: List<VeraParameter>,
+    val returnType: VeraType,
+)
 
 sealed interface VeraStatement
 data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement

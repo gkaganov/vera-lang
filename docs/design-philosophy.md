@@ -41,21 +41,22 @@
 |-----------|-------------------------------------------------------------------------------------|----------------------------------------------|
 | Variables | `val` immutable, `var` mutable; rebind with `=`                                     | `var` and rebinding work; `val` not enforced |
 | Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and class types                   |
-| Classes   | Data-oriented structured objects                                                    | Fields, read access, and read-only methods work; updates do not |
-| Traits    | Shared behavior and composition without inheritance                                 | Not implemented                              |
+| Classes   | Data-oriented structured objects                                                    | Fields, access, methods, and `Eq`/`Display` traits work; updates do not |
+| Traits    | Shared behavior and composition without inheritance                                 | Required methods and `Eq`/`Display` markers work; default methods and trait values do not |
 | Functions | Pure by default; side effects declared as capabilities                              | `fn` exists; effects do not                  |
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
 | Services  | Separate abstraction for external interaction                                       | Not implemented                              |
 | Errors    | Errors as values instead of exception-driven control flow                           | Not implemented                              |
-| Other     | Comments, block scoping, additional unary operators, Java interop, entry points     | Not implemented                              |
+| Other     | Comments, additional unary operators, Java interop, entry points                    | Not implemented                              |
 
 Open design questions include effect syntax, the exact relationship between services and
 capabilities, and how much of the type system can stay simple.
 
 ## Value-object direction (proposed)
 
-Status: partially implemented. Class declarations, object construction, field access, and read-only
-instance methods work. Mutation methods and collection semantics are still proposed.
+Status: partially implemented. Class declarations, object construction, field access, read-only
+instance methods, and the `Eq`/`Display` traits work. Mutation methods and collection semantics are
+still proposed.
 
 - Objects have value semantics, not reference identity.
 - Values are immutable from the outside; there is no shared mutable state.
@@ -85,7 +86,9 @@ Open questions:
 
 - How methods return both a new version and a normal result.
 - Which collection representations to use first.
-- Whether structural equality and hashing are part of the initial object model.
+- Whether hashing is required for objects used as collection keys.
+- Whether Vera needs a universal `Any` top type, and how it would relate to traits, `Eq` and
+  `Display`, primitive boxing, and Java interop.
 - How Java interop exposes mutable or throwing APIs.
 
 ## Compiler pipeline

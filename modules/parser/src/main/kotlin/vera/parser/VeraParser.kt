@@ -28,6 +28,8 @@ import vera.ast.VeraRebindStatement
 import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
+import vera.ast.VeraTraitDeclaration
+import vera.ast.VeraTraitMethod
 import vera.ast.VeraType
 import vera.ast.VeraUnaryOperation
 import vera.ast.VeraUnaryOperator
@@ -59,6 +61,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return when {
             at(VeraTokenType.FN) -> parseFunctionDeclaration()
             at(VeraTokenType.CLASS) -> parseClassDeclaration()
+            at(VeraTokenType.TRAIT) -> parseTraitDeclaration()
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedDeclaration(token, token.location())
@@ -69,16 +72,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseFunctionDeclaration(): VeraFunctionDeclaration {
         expect(VeraTokenType.FN)
         val name = expect(VeraTokenType.IDENTIFIER, "function name")
-        expect(VeraTokenType.LPAREN)
-        val parameters = mutableListOf<VeraParameter>()
-        if (!at(VeraTokenType.RPAREN)) {
-            parameters += parseParameter()
-            while (match(VeraTokenType.COMMA)) {
-                parameters += parseParameter()
-            }
-        }
-        expect(VeraTokenType.RPAREN)
-        val returnType = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
+        val (parameters, returnType) = parseSignature()
         val body = parseBlock()
         return VeraFunctionDeclaration(
             Identifier(name.text),
@@ -91,6 +85,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseClassDeclaration(): VeraClassDeclaration {
         expect(VeraTokenType.CLASS)
         val name = expect(VeraTokenType.IDENTIFIER, "class name")
+        val traits = mutableListOf<Identifier>()
+        if (match(VeraTokenType.HAS)) {
+            traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
+            while (match(VeraTokenType.COMMA)) {
+                traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
+            }
+        }
         expect(VeraTokenType.LBRACE)
         skipEols()
         val fields = mutableListOf<VeraField>()
@@ -107,7 +108,47 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraClassDeclaration(Identifier(name.text), fields, methods)
+        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits)
+    }
+
+    private fun parseTraitDeclaration(): VeraTraitDeclaration {
+        expect(VeraTokenType.TRAIT)
+        val name = expect(VeraTokenType.IDENTIFIER, "trait name")
+        expect(VeraTokenType.LBRACE)
+        skipEols()
+        val methods = mutableListOf<VeraTraitMethod>()
+        while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
+            expect(VeraTokenType.FN, "trait method")
+            methods += parseTraitMethod()
+            // The last signature may share a line with the closing brace: `trait Shape { fn area(): Int }`.
+            if (!at(VeraTokenType.RBRACE)) {
+                parseStatementTerminator()
+            }
+            skipEols()
+        }
+        expect(VeraTokenType.RBRACE)
+        return VeraTraitDeclaration(Identifier(name.text), methods)
+    }
+
+    private fun parseTraitMethod(): VeraTraitMethod {
+        val name = expect(VeraTokenType.IDENTIFIER, "method name")
+        val (parameters, returnType) = parseSignature()
+        return VeraTraitMethod(Identifier(name.text), parameters, returnType)
+    }
+
+    /** Parses `(params)` and an optional `: Type`; an omitted return type is [VeraType.UNKNOWN]. */
+    private fun parseSignature(): Pair<List<VeraParameter>, VeraType> {
+        expect(VeraTokenType.LPAREN)
+        val parameters = mutableListOf<VeraParameter>()
+        if (!at(VeraTokenType.RPAREN)) {
+            parameters += parseParameter()
+            while (match(VeraTokenType.COMMA)) {
+                parameters += parseParameter()
+            }
+        }
+        expect(VeraTokenType.RPAREN)
+        val returnType = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
+        return parameters to returnType
     }
 
     private fun parseParameter(): VeraParameter {
@@ -305,6 +346,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
     private fun parseUnary(): VeraPrimaryExpression {
         if (match(VeraTokenType.MINUS)) {
+            if (at(VeraTokenType.INT_LITERAL)) {
+                // Fold the sign into the literal so `-2147483648` (Int.MIN_VALUE) is representable.
+                val token = advance()
+                val value = "-${token.text}".toIntOrNull()
+                    ?: throw VeraParseException.InvalidIntLiteral(token, token.location())
+                return VeraIntLiteral(value)
+            }
             return VeraUnaryOperation(VeraUnaryOperator.NEGATE, parseUnary())
         }
         return parseChainedPrimary()

@@ -17,11 +17,18 @@ import vera.jvm.instruction.FlatJump
 import vera.jvm.instruction.FlatLoadConstant
 import vera.jvm.instruction.FlatPop
 import vera.jvm.instruction.lowering.FlatInstructionLowering
+import vera.jvm.ir.JvmBoolLiteral
+import vera.jvm.ir.JvmBreak
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmBuiltinCall
 import vera.jvm.ir.JvmClass
+import vera.jvm.ir.JvmContinue
 import vera.jvm.ir.JvmExplicitReturnBlock
 import vera.jvm.ir.JvmExpressionStatement
+import vera.jvm.ir.JvmIfExpression
+import vera.jvm.ir.JvmImplicitReturnBlock
+import vera.jvm.ir.JvmIntBinary
+import vera.jvm.ir.JvmIntBinaryOperator
 import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmMethod
@@ -29,6 +36,8 @@ import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmRebind
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUnitReturnBlock
+import vera.jvm.ir.JvmWhile
 import vera.jvm.lowering.JvmLoweringException
 import vera.parser.VeraLexException
 import vera.parser.VeraParseException
@@ -58,6 +67,12 @@ class CompilerErrorTests {
 
         private fun classDeclaration(name: String, vararg lines: String): String = buildString {
             appendLine("class $name {")
+            lines.forEach { appendLine("    $it") }
+            appendLine("}")
+        }
+
+        private fun traitDeclaration(name: String, vararg lines: String): String = buildString {
+            appendLine("trait $name {")
             lines.forEach { appendLine("    $it") }
             appendLine("}")
         }
@@ -102,7 +117,7 @@ class CompilerErrorTests {
                 "non-function declarations",
                 "var value = 1",
                 VeraParseException.ExpectedDeclaration::class,
-                "expected a function or class declaration",
+                "expected a function, class, or trait declaration",
             ),
             CompileErrorCase(
                 "missing tokens",
@@ -119,6 +134,12 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "missing statement terminators",
                 function("print(1) print(2)"),
+                VeraParseException.ExpectedEndOfLine::class,
+                "expected end of line",
+            ),
+            CompileErrorCase(
+                "trait methods sharing a line",
+                "trait Shape { fn area(): Int fn perimeter(): Int }",
                 VeraParseException.ExpectedEndOfLine::class,
                 "expected end of line",
             ),
@@ -147,14 +168,74 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "break outside loops",
                 function("break"),
-                FlatInstructionException.BreakOutsideLoop::class,
+                JvmLoweringException.BreakOutsideLoop::class,
                 "break is only allowed inside a loop",
             ),
             CompileErrorCase(
                 "continue outside loops",
                 function("continue"),
-                FlatInstructionException.ContinueOutsideLoop::class,
+                JvmLoweringException.ContinueOutsideLoop::class,
                 "continue is only allowed inside a loop",
+            ),
+            CompileErrorCase(
+                "break inside call arguments",
+                "fn add(a: Int, b: Int): Int {\n    return a + b\n}\n" + function(
+                    "while True {",
+                    "    print(add(1, if True {",
+                    "        break",
+                    "        0",
+                    "    } else {",
+                    "        1",
+                    "    }))",
+                    "}",
+                ),
+                JvmLoweringException.LoopJumpInsideExpression::class,
+                "break cannot be used inside a nested expression",
+            ),
+            CompileErrorCase(
+                "continue inside operands",
+                function(
+                    "while True {",
+                    "    var value = 1 + if True {",
+                    "        continue",
+                    "        0",
+                    "    } else {",
+                    "        1",
+                    "    }",
+                    "}",
+                ),
+                JvmLoweringException.LoopJumpInsideExpression::class,
+                "continue cannot be used inside a nested expression",
+            ),
+            CompileErrorCase(
+                "undefined names",
+                function("print(missing)"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable missing is not defined",
+            ),
+            CompileErrorCase(
+                "member access on undefined names",
+                function("print(missing.value)"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable missing is not defined",
+            ),
+            CompileErrorCase(
+                "locals used after the if branch that declares them",
+                function("if True {", "    var inner = 1", "}", "print(inner)"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable inner is not defined",
+            ),
+            CompileErrorCase(
+                "locals used after the loop body that declares them",
+                function("while False {", "    var inner = 1", "}", "print(inner)"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable inner is not defined",
+            ),
+            CompileErrorCase(
+                "locals in nested blocks shadowing outer locals",
+                function("var value = 1", "if True {", "    var value = 2", "}"),
+                JvmLoweringException.ShadowingNotAllowed::class,
+                "name value is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
                 "rebinding unknown variables",
@@ -211,10 +292,10 @@ class CompilerErrorTests {
                 "operator '==' requires both operands to have the same type",
             ),
             CompileErrorCase(
-                "equality on unsupported types",
-                function("print(Unit == Unit)"),
-                JvmLoweringException.EqualityOperandsRequired::class,
-                "operator '==' is only defined for Int, Bool, and String operands, got Unit",
+                "object equality without the Eq trait",
+                classDeclaration("Point", "x: Int") + function("print(Point(1) == Point(1))"),
+                JvmLoweringException.ObjectEqualityRequiresTrait::class,
+                "class Point does not have the Eq trait",
             ),
             CompileErrorCase(
                 "ordering Bool operands",
@@ -315,16 +396,123 @@ class CompilerErrorTests {
                 "member access requires an object",
             ),
             CompileErrorCase(
-                "printing objects",
+                "printing objects without the Display trait",
                 classDeclaration("Point", "x: Int") + function("print(Point(1))"),
-                JvmLoweringException.PrintArgumentTypeNotSupported::class,
-                "print does not support values of type Point",
+                JvmLoweringException.PrintRequiresDisplayTrait::class,
+                "class Point does not have the Display trait",
             ),
             CompileErrorCase(
-                "printing Unit",
-                function("print(Unit)"),
-                JvmLoweringException.PrintArgumentTypeNotSupported::class,
-                "print does not support values of type Unit",
+                "unknown traits",
+                "class Point has Missing {\n    x: Int\n}",
+                JvmLoweringException.UnknownTrait::class,
+                "trait Missing is not defined",
+            ),
+            CompileErrorCase(
+                "trait methods that are not implemented",
+                traitDeclaration("Shape", "fn area(): Int") +
+                    "\nclass Square has Shape {\n    side: Int\n}",
+                JvmLoweringException.MissingTraitMethod::class,
+                "class Square has trait Shape but no method area",
+            ),
+            CompileErrorCase(
+                "trait methods with the wrong signature",
+                traitDeclaration("Shape", "fn area(): Int") +
+                    "\nclass Square has Shape {\n    side: Int\n" +
+                    "    fn area(): String {\n        return \"x\"\n    }\n}",
+                JvmLoweringException.TraitMethodSignatureMismatch::class,
+                "class Square method area does not match trait Shape: expected () -> INT, got () -> STRING",
+            ),
+            CompileErrorCase(
+                "traits listed more than once",
+                "class Point has Eq, Eq {\n    x: Int\n}",
+                JvmLoweringException.DuplicateTraitImplementation::class,
+                "class Point has trait Eq more than once",
+            ),
+            CompileErrorCase(
+                "duplicate trait declarations",
+                traitDeclaration("Shape") + traitDeclaration("Shape"),
+                JvmLoweringException.DuplicateTrait::class,
+                "trait Shape is declared more than once",
+            ),
+            CompileErrorCase(
+                "traits conflicting with builtin traits",
+                traitDeclaration("Eq"),
+                JvmLoweringException.NameConflictsWithBuiltinTrait::class,
+                "name Eq is reserved for a built-in trait",
+            ),
+            CompileErrorCase(
+                "declarations conflicting with builtin traits",
+                classDeclaration("Display", "x: Int"),
+                JvmLoweringException.NameConflictsWithBuiltinTrait::class,
+                "name Display is reserved for a built-in trait",
+            ),
+            CompileErrorCase(
+                "Eq fields whose types lack Eq",
+                "class Point {\n    x: Int\n}\nclass Line has Eq {\n    start: Point\n}",
+                JvmLoweringException.ClassFieldRequiresTrait::class,
+                "class Line field start has type Point, which does not have the Eq trait",
+            ),
+            CompileErrorCase(
+                "Display fields whose types lack Display",
+                "class Point {\n    x: Int\n}\nclass Line has Display {\n    start: Point\n}",
+                JvmLoweringException.ClassFieldRequiresTrait::class,
+                "class Line field start has type Point, which does not have the Display trait",
+            ),
+            CompileErrorCase(
+                "class methods conflicting with generated trait methods",
+                "class Point has Eq {\n    x: Int\n" +
+                    "    fn equals(other: Point): Bool {\n        return True\n    }\n}",
+                JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
+                "class Point method equals conflicts with the generated method for trait Eq",
+            ),
+            CompileErrorCase(
+                "class methods conflicting with generated Display methods",
+                "class Point has Display {\n    x: Int\n" +
+                    "    fn toString(): String {\n        return \"point\"\n    }\n}",
+                JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
+                "class Point method toString conflicts with the generated method for trait Display",
+            ),
+            CompileErrorCase(
+                "forwarding objects without the Display trait to print",
+                classDeclaration("Point", "x: Int") + function("Point(1) |> print"),
+                JvmLoweringException.PrintRequiresDisplayTrait::class,
+                "class Point does not have the Display trait",
+            ),
+            CompileErrorCase(
+                "duplicate trait method parameters",
+                traitDeclaration("Shape", "fn scale(by: Int, by: Int): Int"),
+                JvmLoweringException.ShadowingNotAllowed::class,
+                "name by is already in scope",
+            ),
+            CompileErrorCase(
+                "trailing commas in has clauses",
+                "class Point has Eq, {\n    x: Int\n}",
+                VeraParseException.ExpectedToken::class,
+                "expected trait name",
+            ),
+            CompileErrorCase(
+                "empty has clauses",
+                "class Point has {\n    x: Int\n}",
+                VeraParseException.ExpectedToken::class,
+                "expected trait name",
+            ),
+            CompileErrorCase(
+                "duplicate trait methods",
+                traitDeclaration("Shape", "fn area(): Int", "fn area(): Bool"),
+                JvmLoweringException.DuplicateTraitMethod::class,
+                "trait Shape has duplicate method area",
+            ),
+            CompileErrorCase(
+                "unknown trait method parameter types",
+                traitDeclaration("Shape", "fn area(value: Missing): Int"),
+                JvmLoweringException.UnknownClassType::class,
+                "class type Missing is not defined",
+            ),
+            CompileErrorCase(
+                "traits conflicting with class names",
+                traitDeclaration("Point") + "class Point {\n    x: Int\n}",
+                JvmLoweringException.TopLevelNameConflict::class,
+                "top-level name Point is declared more than once",
             ),
             CompileErrorCase(
                 "duplicate class fields",
@@ -663,6 +851,41 @@ class CompilerErrorTests {
             FlatInstructionLowering.lower(
                 jvmProgram(jvmMethod(listOf(JvmExpressionStatement(printCall)))),
             )
+        }
+    }
+
+    @Test
+    fun `instruction lowering rejects break outside loops`() {
+        assertCompilerError<FlatInstructionException.BreakOutsideLoop>("break is only allowed inside a loop") {
+            FlatInstructionLowering.lower(jvmProgram(jvmMethod(listOf(JvmBreak))))
+        }
+    }
+
+    @Test
+    fun `instruction lowering rejects continue outside loops`() {
+        assertCompilerError<FlatInstructionException.ContinueOutsideLoop>("continue is only allowed inside a loop") {
+            FlatInstructionLowering.lower(jvmProgram(jvmMethod(listOf(JvmContinue))))
+        }
+    }
+
+    @Test
+    fun `instruction lowering rejects loop jumps with values on the stack`() {
+        // `1 + if True { break; 0 } else { 1 }` would leave `1` on the stack when jumping.
+        val jvmIf = JvmIfExpression(
+            JvmBoolLiteral(true),
+            JvmImplicitReturnBlock(listOf(JvmBreak), JvmIntLiteral(0)),
+            JvmImplicitReturnBlock(emptyList(), JvmIntLiteral(1)),
+        )
+        val jvmLoop = JvmWhile(
+            JvmBoolLiteral(true),
+            JvmUnitReturnBlock(
+                listOf(JvmExpressionStatement(JvmIntBinary(JvmIntBinaryOperator.ADD, JvmIntLiteral(1), jvmIf))),
+            ),
+        )
+        assertCompilerError<FlatInstructionException.LoopJumpStackMismatch>(
+            "break must leave the operand stack at depth 0, but it has depth 1",
+        ) {
+            FlatInstructionLowering.lower(jvmProgram(jvmMethod(listOf(jvmLoop))))
         }
     }
 
