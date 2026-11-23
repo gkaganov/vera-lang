@@ -267,6 +267,8 @@ uncommitted changes:
 
 - Recursive descent: `VeraCompiler` → `VeraLexer` (including significant `EOL` tokens) →
   `VeraParser`.
+- The grammar is written out in EBNF in the Grammar section of [`docs/language.md`](docs/language.md).
+  Update it whenever `VeraParser` changes.
 - Newlines terminate statements.
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.

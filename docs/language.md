@@ -404,6 +404,89 @@ print(Point(1, 2))
 - CRLF line endings are supported.
 - Comments are not implemented.
 
+## Grammar
+
+The parser is hand-written recursive descent (`VeraParser.kt`): each rule below is one `parse*`
+function, `{ … }` is a loop, and `[ … ]` is optional. Keep this section in sync with the parser.
+
+Notation: `"text"` is a keyword or symbol, `UPPER` is a token class, and `EOL` is a newline token
+(one or more line breaks; CRLF counts as one).
+
+### Declarations
+
+```text
+program        = { EOL } { declaration { EOL } } EOF
+declaration    = function | class | trait
+
+function       = "fn" IDENT signature block
+signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]
+parameter      = IDENT ":" type
+
+class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member EOL } "}"
+member         = IDENT ":" type
+               | function
+
+trait          = "trait" IDENT "{" { EOL } { traitMethod traitEnd } "}"
+traitMethod    = "fn" IDENT signature
+traitEnd       = EOL                              (* may be omitted before the closing "}" *)
+
+type           = "Int" | "String" | "Bool" | "Unit" | IDENT
+```
+
+### Statements
+
+```text
+block          = "{" { EOL } { statement statementEnd } "}"
+statementEnd   = EOL | EOF
+
+statement      = ( "var" | "val" ) IDENT [ ":" type ] "=" expression
+               | IDENT "=" expression             (* rebinding; chosen when IDENT is followed by "=" *)
+               | "return" [ expression ]          (* no expression before EOL, EOF, or "}" *)
+               | "while" expression block
+               | "break"
+               | "continue"
+               | expression
+```
+
+### Expressions
+
+Each level binds tighter than the one above it; binary operators are left-associative.
+
+```text
+expression     = forward
+forward        = or       { "|>" or }
+or             = and      { "or" and }
+and            = equality { "and" equality }
+equality       = compare  { ( "==" | "!=" ) compare }
+compare        = additive { ( "<" | ">" | "<=" | ">=" ) additive }
+additive       = multiply { ( "+" | "-" ) multiply }
+multiply       = unary    { ( "*" | "/" | "%" ) unary }
+unary          = "-" INT                          (* folded into one literal, e.g. -2147483648 *)
+               | ( "-" | "not" ) unary
+               | chained
+chained        = primary { "." IDENT | "(" [ expression { "," expression } ] ")" }
+primary        = INT | STRING | "True" | "False" | "Unit" | IDENT
+               | "(" expression ")"
+               | if
+
+if             = "if" expression block [ { EOL } "else" ( if | block ) ]
+```
+
+- In an `if` block, a final expression statement becomes the block's value.
+- `{ EOL }` before `else` is only consumed when `else` follows; otherwise the newlines end the
+  enclosing statement.
+
+### Tokens
+
+```text
+IDENT          = ( letter | "_" ) { letter | digit | "_" }   (* ASCII; keywords excluded *)
+INT            = digit { digit }                              (* must fit in a 32-bit Int *)
+STRING         = '"' { character | escape } '"'               (* no line breaks inside *)
+escape         = "\n" | "\t" | "\r" | '\"' | "\\"
+```
+
+Spaces and tabs separate tokens and are otherwise ignored.
+
 ## Example
 
 ```vera
