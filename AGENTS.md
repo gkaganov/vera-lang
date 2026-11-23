@@ -302,7 +302,8 @@ uncommitted changes:
   Objects compare structurally only when their class has the built-in `Eq` trait. Ordering
   operators are `Int`-only.
 - `print` accepts `Int`, `String`, `Bool`, `Unit`, and objects whose class has the built-in
-  `Display` trait.
+  `Display` trait. `Bool` prints as `True`/`False` (matching the literals) through
+  `JvmObjectMethods.boolToString`, used by both `print` and generated `toString`.
 - `and` and `or` are short-circuiting reserved keywords; `not` is the `Bool`-only negation keyword.
   It lowers to `JvmLogicalNot` and `FlatBoolNot` (`iconst_1; ixor`).
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the

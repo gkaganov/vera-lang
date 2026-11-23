@@ -887,6 +887,9 @@ private class JvmFunctionLoweringState(
                 if (argumentType != JvmType.INT && argumentType != JvmType.STRING && argumentType != JvmType.BOOL) {
                     throw JvmLoweringException.PrintArgumentTypeNotSupported(argumentType)
                 }
+                if (argumentType == JvmType.BOOL) {
+                    return JvmBuiltinCall(JvmBuiltin.PRINT, listOf(JvmObjectMethods.boolToString(argument)))
+                }
                 JvmBuiltinCall(JvmBuiltin.PRINT, jvmArguments)
             }
         }

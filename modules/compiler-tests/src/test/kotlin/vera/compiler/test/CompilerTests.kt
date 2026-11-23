@@ -224,7 +224,7 @@ class VeraCompilerTests {
                         print(falseValue)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -634,7 +634,7 @@ class VeraCompilerTests {
                         print(both)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "7${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "7${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -1010,7 +1010,7 @@ class VeraCompilerTests {
                         print(4 == 5)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1021,7 +1021,7 @@ class VeraCompilerTests {
                         print(4 != 4)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1034,7 +1034,7 @@ class VeraCompilerTests {
                         print(False != False)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -1047,7 +1047,7 @@ class VeraCompilerTests {
                         print("hello" != "hello")
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -1061,7 +1061,7 @@ class VeraCompilerTests {
                         print(3 < 1 + 1)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}False${EOL}True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1073,7 +1073,7 @@ class VeraCompilerTests {
                         print(3 > 3)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1086,7 +1086,7 @@ class VeraCompilerTests {
                         print(3 >= 4)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1138,7 +1138,7 @@ class VeraCompilerTests {
                         print(1 + 1 == 3 - 1)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}true${EOL}true$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}True${EOL}True$EOL", testInfo)
     }
 
     @Test
@@ -1179,7 +1179,7 @@ class VeraCompilerTests {
                         print(False and False)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}false${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}False${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1192,7 +1192,7 @@ class VeraCompilerTests {
                         print(False or False)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}true${EOL}true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}True${EOL}True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1206,7 +1206,7 @@ class VeraCompilerTests {
                         print(not (1 < 2))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "false${EOL}true${EOL}true${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "False${EOL}True${EOL}True${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -1219,7 +1219,7 @@ class VeraCompilerTests {
                         print(True == not False)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}true${EOL}", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True${EOL}True${EOL}", testInfo)
     }
 
     @Test
@@ -1253,7 +1253,7 @@ class VeraCompilerTests {
                         return True
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "false${EOL}true${EOL}", testInfo)
+        assertProgramPrints(source, "False${EOL}True${EOL}", testInfo)
     }
 
     @Test
@@ -1313,7 +1313,7 @@ class VeraCompilerTests {
                         }
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "false$EOL", testInfo)
+        assertProgramPrints(source, "False$EOL", testInfo)
     }
 
     @Test
@@ -1330,7 +1330,7 @@ class VeraCompilerTests {
                         }
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true$EOL", testInfo)
+        assertProgramPrints(source, "True$EOL", testInfo)
     }
 
     @Test
@@ -1343,7 +1343,7 @@ class VeraCompilerTests {
                         return value
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true$EOL", testInfo)
+        assertProgramPrints(source, "True$EOL", testInfo)
     }
 
     @Test
@@ -1672,7 +1672,7 @@ class VeraCompilerTests {
                         print(message.active)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "Hello${EOL}false${EOL}", testInfo)
+        assertProgramPrints(source, "Hello${EOL}False${EOL}", testInfo)
     }
 
     @Test
@@ -2152,7 +2152,7 @@ class VeraCompilerTests {
                         print(Point(x = 1, y = 2) != Point(x = 1, y = 2))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -2172,7 +2172,7 @@ class VeraCompilerTests {
                         print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) != Line(start = Point(x = 0, y = 2), end = Point(x = 3, y = 4)))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True$EOL", testInfo)
     }
 
     @Test
@@ -2188,7 +2188,7 @@ class VeraCompilerTests {
                         print(Label(text = "same", active = True) != Label(text = "same", active = False))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False${EOL}True$EOL", testInfo)
     }
 
     @Test
@@ -2201,7 +2201,7 @@ class VeraCompilerTests {
                         print(Empty() != Empty())
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -2212,7 +2212,7 @@ class VeraCompilerTests {
                         print(Unit != Unit)
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "true${EOL}false$EOL", testInfo)
+        assertProgramPrints(source, "True${EOL}False$EOL", testInfo)
     }
 
     @Test
@@ -2231,7 +2231,7 @@ class VeraCompilerTests {
                 """.trimIndent()
         assertProgramPrints(
             source,
-            "first${EOL}second${EOL}true${EOL}first${EOL}second${EOL}false$EOL",
+            "first${EOL}second${EOL}True${EOL}first${EOL}second${EOL}False$EOL",
             testInfo,
         )
     }
@@ -2302,7 +2302,7 @@ class VeraCompilerTests {
                         print(Signal(Unit))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "Message(text: hello, active: true)${EOL}Signal(flag: Unit)$EOL", testInfo)
+        assertProgramPrints(source, "Message(text: hello, active: True)${EOL}Signal(flag: Unit)$EOL", testInfo)
     }
 
     @Test
@@ -2359,7 +2359,7 @@ class VeraCompilerTests {
                         print(Point(x = 1, y = 2) != Point(x = 2, y = 2))
                     }
                 """.trimIndent()
-        assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}true${EOL}true$EOL", testInfo)
+        assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}True${EOL}True$EOL", testInfo)
     }
 
     @Test

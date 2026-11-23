@@ -226,6 +226,11 @@ count = count + 1
 
 - `Unit` is a real value: it can be stored in fields and variables, passed, and returned.
   The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
+- `True` and `False` are the two variants of `Bool`, just as `Unit` is the single variant of `Unit`.
+  They print as written: `print(1 < 2)` outputs `True`.
+- Casing convention: types and variants are uppercase (`Int`, `Point`, `True`, `Unit`); variables,
+  parameters, fields, functions, and methods are lowercase. Vera has no primitive types to treat
+  differently.
 - String literals may contain any character except an unescaped `"` and raw newlines.
   Supported escapes: `\"`, `\\`, `\n`, `\t`, `\r`.
 - Other numeric types are not implemented.
@@ -430,7 +435,8 @@ print(Point(x = 1, y = 2))
 ```
 
 - Writes one value followed by a newline to standard output.
-- Prints `Int`, `String`, and `Bool` values directly and `Unit` as `Unit`.
+- Prints `Int` and `String` values directly, `Bool` values as `True` or `False`, and `Unit` as
+  `Unit`.
 - Prints an object as `ClassName(field: value, ...)` only when its class has the `Display`
   trait; nested objects print recursively through their own `Display` implementations.
 - Returns `Unit`.

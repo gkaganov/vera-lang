@@ -7,6 +7,8 @@ import vera.jvm.ir.JvmExplicitReturnBlock
 import vera.jvm.ir.JvmExpression
 import vera.jvm.ir.JvmField
 import vera.jvm.ir.JvmGetField
+import vera.jvm.ir.JvmIfExpression
+import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
@@ -110,6 +112,16 @@ internal object JvmObjectMethods {
         )
     }
 
+    /**
+     * Renders a `Bool` as `True` or `False`, the spelling of Vera's literals, rather than Java's
+     * `true`/`false`.
+     */
+    fun boolToString(jvmBool: JvmExpression): JvmExpression = JvmIfExpression(
+        condition = jvmBool,
+        thenBlock = JvmImplicitReturnBlock(emptyList(), JvmStringLiteral("True")),
+        elseBlock = JvmImplicitReturnBlock(emptyList(), JvmStringLiteral("False")),
+    )
+
     /** Builds a call to the generated `toString` method. */
     fun toStringCall(receiver: JvmExpression, className: Identifier): JvmExpression = JvmInstanceCall(
         receiver = receiver,
@@ -155,7 +167,8 @@ internal object JvmObjectMethods {
         val type = field.type
         return when (type) {
             JvmUnitType -> append(builder, JvmStringLiteral("Unit"))
-            JvmType.INT, JvmType.BOOL, JvmType.STRING -> append(builder, fieldRead(owner, field, receiver))
+            JvmType.INT, JvmType.STRING -> append(builder, fieldRead(owner, field, receiver))
+            JvmType.BOOL -> append(builder, boolToString(fieldRead(owner, field, receiver)))
             is JvmType.ClassType -> append(
                 builder,
                 toStringCall(fieldRead(owner, field, receiver), type.name),
