@@ -29,6 +29,10 @@ import vera.ast.VeraRebindStatement
 import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
+import vera.ast.VeraStringTemplate
+import vera.ast.VeraTemplatePart
+import vera.ast.VeraTemplateText
+import vera.ast.VeraTemplateValue
 import vera.ast.VeraTraitDeclaration
 import vera.ast.VeraTraitMethod
 import vera.ast.VeraType
@@ -431,6 +435,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 VeraStringLiteral(token.text)
             }
 
+            VeraTokenType.TEMPLATE_START -> parseStringTemplate()
+
             VeraTokenType.BOOL_LITERAL -> {
                 val token = advance()
                 if (token.text == "True") VeraBoolLiteral.TRUE else VeraBoolLiteral.FALSE
@@ -458,6 +464,23 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedExpression(token, token.location())
+            }
+        }
+    }
+
+    /** Parses `TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLATE_END`. */
+    private fun parseStringTemplate(): VeraStringTemplate {
+        val parts = mutableListOf<VeraTemplatePart>(VeraTemplateText(advance().text))
+        while (true) {
+            parts += VeraTemplateValue(parseExpression())
+            val token = current()
+            when (token.type) {
+                VeraTokenType.TEMPLATE_MIDDLE -> parts += VeraTemplateText(advance().text)
+                VeraTokenType.TEMPLATE_END -> {
+                    parts += VeraTemplateText(advance().text)
+                    return VeraStringTemplate(parts)
+                }
+                else -> throw VeraParseException.ExpectedToken("`}` to close the template placeholder", token, token.location())
             }
         }
     }

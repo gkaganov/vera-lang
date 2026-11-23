@@ -69,6 +69,13 @@ data class VeraBinaryOperation(
 sealed interface VeraLiteral : VeraPrimaryExpression
 data class VeraIntLiteral(val value: Int) : VeraLiteral
 data class VeraStringLiteral(val value: String) : VeraLiteral
+
+/** A string with `\{expr}` placeholders, as text and value parts in source order. */
+data class VeraStringTemplate(val parts: List<VeraTemplatePart>) : VeraPrimaryExpression
+sealed interface VeraTemplatePart
+data class VeraTemplateText(val text: String) : VeraTemplatePart
+data class VeraTemplateValue(val expression: VeraPrimaryExpression) : VeraTemplatePart
+
 enum class VeraBoolLiteral : VeraLiteral { TRUE, FALSE }
 data object VeraUnitLiteral : VeraLiteral
 data class VeraIdentifierAsExpression(val identifier: Identifier) : VeraPrimaryExpression

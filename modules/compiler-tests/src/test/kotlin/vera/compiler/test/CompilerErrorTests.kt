@@ -110,6 +110,18 @@ class CompilerErrorTests {
                 "unterminated string literal",
             ),
             CompileErrorCase(
+                "line breaks inside template placeholders",
+                function("print(\"sum: \\{1 +", "    2}\")"),
+                VeraLexException.UnterminatedString::class,
+                "unterminated string literal at line 2, column 11",
+            ),
+            CompileErrorCase(
+                "unclosed template placeholders",
+                function("print(\"value: \\{1\")"),
+                VeraLexException.UnterminatedString::class,
+                "unterminated string literal",
+            ),
+            CompileErrorCase(
                 "semicolons",
                 function("print(1);"),
                 VeraLexException.UnexpectedSemicolon::class,
@@ -136,6 +148,18 @@ class CompilerErrorTests {
                 function("var value ="),
                 VeraParseException.ExpectedExpression::class,
                 "expected an expression",
+            ),
+            CompileErrorCase(
+                "empty template placeholders",
+                function("print(\"value: \\{}\")"),
+                VeraParseException.ExpectedExpression::class,
+                "expected an expression",
+            ),
+            CompileErrorCase(
+                "template placeholders with two expressions",
+                function("var a = 1", "var b = 2", "print(\"\\{a b}\")"),
+                VeraParseException.ExpectedToken::class,
+                "expected `}` to close the template placeholder",
             ),
             CompileErrorCase(
                 "missing statement terminators",
@@ -519,6 +543,12 @@ class CompilerErrorTests {
                 function("var x = 1", "print(x.foo)"),
                 JvmLoweringException.MemberAccessRequiresObject::class,
                 "member access requires an object",
+            ),
+            CompileErrorCase(
+                "objects without the Display trait in string templates",
+                classDeclaration("Point", "x: Int") + function("print(\"at \\{Point(1)}\")"),
+                JvmLoweringException.TemplateValueRequiresDisplayTrait::class,
+                "class Point does not have the Display trait, so its objects cannot be used in a string template",
             ),
             CompileErrorCase(
                 "printing objects without the Display trait",

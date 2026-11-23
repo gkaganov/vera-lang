@@ -112,6 +112,18 @@ internal object JvmObjectMethods {
         )
     }
 
+    /** Concatenates `Int` and `String` [pieces] in order with a `StringBuilder`. */
+    fun concatenate(pieces: List<JvmExpression>): JvmExpression {
+        val builder = pieces.fold(stringBuilder()) { builder, piece -> append(builder, piece) }
+        return JvmInstanceCall(
+            receiver = builder,
+            ownerClass = stringBuilderType.name,
+            methodName = toStringName,
+            arguments = emptyList(),
+            signature = JvmMethodSignature(emptyList(), JvmType.STRING),
+        )
+    }
+
     /**
      * Renders a `Bool` as `True` or `False`, the spelling of Vera's literals, rather than Java's
      * `true`/`false`.

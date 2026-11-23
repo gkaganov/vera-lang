@@ -28,6 +28,11 @@ enum class VeraTokenType {
     IDENTIFIER,
     INT_LITERAL,
     STRING_LITERAL,
+    // A string template `"a \{x} b \{y} c"` lexes as TEMPLATE_START("a "), tokens of x,
+    // TEMPLATE_MIDDLE(" b "), tokens of y, TEMPLATE_END(" c").
+    TEMPLATE_START,
+    TEMPLATE_MIDDLE,
+    TEMPLATE_END,
     BOOL_LITERAL,
 
     // Punctuation & operators

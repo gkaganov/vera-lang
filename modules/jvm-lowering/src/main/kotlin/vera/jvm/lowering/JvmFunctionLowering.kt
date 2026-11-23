@@ -23,6 +23,9 @@ import vera.ast.VeraClassDeclaration
 import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
+import vera.ast.VeraStringTemplate
+import vera.ast.VeraTemplateText
+import vera.ast.VeraTemplateValue
 import vera.ast.VeraType
 import vera.ast.VeraUnaryOperation
 import vera.ast.VeraUnaryOperator
@@ -941,6 +944,8 @@ private class JvmFunctionLoweringState(
 
             is VeraStringLiteral -> PrimaryResolution.Resolved(JvmStringLiteral(veraPrimaryExpression.value))
 
+            is VeraStringTemplate -> PrimaryResolution.Resolved(lowerStringTemplate(veraPrimaryExpression))
+
             is VeraBoolLiteral -> PrimaryResolution.Resolved(
                 JvmBoolLiteral(veraPrimaryExpression == VeraBoolLiteral.TRUE),
             )
@@ -964,6 +969,35 @@ private class JvmFunctionLoweringState(
             is VeraBinaryOperation -> PrimaryResolution.Resolved(lowerBinaryOperation(veraPrimaryExpression))
 
             is VeraChainedExpression -> PrimaryResolution.Resolved(lowerChainedExpression(veraPrimaryExpression))
+        }
+    }
+
+    /**
+     * Lowers `"text \{value} text"` to a `StringBuilder` chain, evaluating placeholders left to right.
+     * Values render as `print` renders them: `Bool` as `True`/`False`, objects through `Display`.
+     */
+    private fun lowerStringTemplate(veraTemplate: VeraStringTemplate): JvmExpression {
+        val jvmPieces = veraTemplate.parts.mapNotNull { veraPart ->
+            when (veraPart) {
+                is VeraTemplateText -> veraPart.text.takeIf { text -> text.isNotEmpty() }?.let(::JvmStringLiteral)
+                is VeraTemplateValue -> lowerTemplateValue(lowerPrimaryExpression(veraPart.expression))
+            }
+        }
+        return JvmObjectMethods.concatenate(jvmPieces)
+    }
+
+    private fun lowerTemplateValue(jvmValue: JvmExpression): JvmExpression {
+        val jvmType = jvmValue.type
+        return when {
+            jvmType == JvmType.INT || jvmType == JvmType.STRING -> jvmValue
+            jvmType == JvmType.BOOL -> JvmObjectMethods.boolToString(jvmValue)
+            jvmType is JvmType.ClassType -> {
+                if (!hasBuiltinTrait(jvmType.name, JvmBuiltinTraits.display)) {
+                    throw JvmLoweringException.TemplateValueRequiresDisplayTrait(jvmType.name)
+                }
+                JvmObjectMethods.toStringCall(jvmValue, jvmType.name)
+            }
+            else -> throw JvmLoweringException.TemplateValueTypeNotSupported(jvmType)
         }
     }
 

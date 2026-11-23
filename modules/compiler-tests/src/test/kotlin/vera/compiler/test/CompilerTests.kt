@@ -122,6 +122,82 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `string templates insert values`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Display {
+                        x: Int
+                        y: Int
+                        fn sum(): Int {
+                            return x + y
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        var name = "Vera"
+                        var a = 2
+                        var b = 3
+                        var point = Point(x = 1, y = 2)
+                        print("Hello, \{name}!")
+                        print("\{a} + \{b} = \{a + b}")
+                        print("\{42}")
+                        print("ok: \{a < b}, unit: \{Unit}")
+                        print("point \{point} sums to \{point.sum()}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(
+            source,
+            "Hello, Vera!${EOL}2 + 3 = 5${EOL}42${EOL}ok: True, unit: Unit${EOL}point Point(x: 1, y: 2) sums to 3$EOL",
+            testInfo,
+        )
+    }
+
+    @Test
+    fun `string template placeholders can hold nested strings, templates, and blocks`(testInfo: TestInfo) {
+        val source = """
+                    fn shout(text: String): String {
+                        return "\{text}!"
+                    }
+                    fn $TEST_MAIN() {
+                        var ready = True
+                        print("\{shout("hi")} and \{"inner \{1 + 1}"}")
+                        print("status: \{if ready { "go" } else { "wait" }}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "hi! and inner 2${EOL}status: go$EOL", testInfo)
+    }
+
+    @Test
+    fun `plain braces and escaped placeholders stay literal`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var value = 7
+                        print("{\"key\": \{value}}")
+                        print("\\{value}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "{\"key\": 7}${EOL}\\{value}$EOL", testInfo)
+    }
+
+    @Test
+    fun `string template placeholders are evaluated left to right`(testInfo: TestInfo) {
+        val source = """
+                    fn first(): Int {
+                        print("first")
+                        return 1
+                    }
+                    fn second(): Int {
+                        print("second")
+                        return 2
+                    }
+                    fn $TEST_MAIN() {
+                        var text = "\{first()}-\{second()}"
+                        print(text)
+                        text |> print
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "first${EOL}second${EOL}1-2${EOL}1-2$EOL", testInfo)
+    }
+
+    @Test
     fun `strings support punctuation unicode and escapes`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

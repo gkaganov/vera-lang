@@ -27,6 +27,7 @@ Implemented:
 - Structural object equality through the built-in `Eq` trait.
 - Object printing through the built-in `Display` trait.
 - `//` line comments and `///` doc comments.
+- String templates with `\{expr}` placeholders.
 
 Not implemented:
 
@@ -233,6 +234,7 @@ count = count + 1
   differently.
 - String literals may contain any character except an unescaped `"` and raw newlines.
   Supported escapes: `\"`, `\\`, `\n`, `\t`, `\r`.
+- `\{` starts a string template placeholder; see [String templates](#string-templates).
 - Other numeric types are not implemented.
 
 ## Expressions
@@ -288,6 +290,24 @@ not done
   or `a != b` to negate a comparison.
 - `not` applies to a whole member chain: `not task.isFinished()` negates the call result.
 - Both operands must be `Bool`.
+
+### String templates
+
+```vera
+print("Hello, \{name}!")
+print("\{a} + \{b} = \{a + b}")
+print("\{user.name} has \{user.count()} items")
+```
+
+- `\{expr}` inside a string literal inserts the value of `expr`. Any expression is allowed,
+  including calls, `if` expressions, and nested strings, but a placeholder must fit on one line.
+- Values render exactly as `print` renders them: `Int` and `String` directly, `Bool` as
+  `True`/`False`, `Unit` as `Unit`, and objects through their `Display` trait. Using an object whose
+  class lacks `Display` is a compile error.
+- Placeholders are evaluated left to right.
+- A plain `{` is ordinary text, so `"{\"key\": \{value}}"` works. Write `\\{` for a literal
+  backslash followed by `{`.
+- Templates are the way to build strings; `+` is only defined for `Int`.
 
 ### Function calls
 
@@ -547,9 +567,10 @@ unary          = "-" INT                          (* folded into one literal, e.
                | chained
 chained        = primary { "." IDENT | "(" [ argument { "," argument } ] ")" }
 argument       = [ IDENT "=" ] expression      (* names required for 2+ written arguments *)
-primary        = INT | STRING | "True" | "False" | "Unit" | IDENT
+primary        = INT | STRING | template | "True" | "False" | "Unit" | IDENT
                | "(" expression ")"
                | if
+template       = TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLATE_END
 
 if             = "if" expression block [ { EOL } "else" ( if | block ) ]
 ```
@@ -561,11 +582,14 @@ if             = "if" expression block [ { EOL } "else" ( if | block ) ]
 ### Tokens
 
 ```text
-IDENT          = ( letter | "_" ) { letter | digit | "_" }   (* ASCII; keywords excluded *)
-INT            = digit { digit }                              (* must fit in a 32-bit Int *)
-STRING         = '"' { character | escape } '"'               (* no line breaks inside *)
-escape         = "\n" | "\t" | "\r" | '\"' | "\\"
-COMMENT        = "//" { character }                         (* to end of line; includes "///" *)
+IDENT           = ( letter | "_" ) { letter | digit | "_" }  (* ASCII; keywords excluded *)
+INT             = digit { digit }                             (* must fit in a 32-bit Int *)
+STRING          = '"' { character | escape } '"'              (* no line breaks inside *)
+escape          = "\n" | "\t" | "\r" | '\"' | "\\"
+TEMPLATE_START  = '"' { character | escape } "\{"             (* text before the first placeholder *)
+TEMPLATE_MIDDLE = "}" { character | escape } "\{"             (* text between placeholders *)
+TEMPLATE_END    = "}" { character | escape } '"'              (* text after the last placeholder *)
+COMMENT         = "//" { character }                          (* to end of line; includes "///" *)
 ```
 
 Spaces, tabs, and comments separate tokens and are otherwise ignored. The lexer drops a newline

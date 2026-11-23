@@ -250,6 +250,14 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${className.value} does not have the Display trait, so its objects cannot be printed",
     )
 
+    class TemplateValueRequiresDisplayTrait(val className: Identifier) : JvmLoweringException(
+        "class ${className.value} does not have the Display trait, so its objects cannot be used in a string template",
+    )
+
+    class TemplateValueTypeNotSupported(val actual: JvmType) : JvmLoweringException(
+        "string templates do not support values of type ${actual.render()}",
+    )
+
     class ClassFieldRequiresTrait(
         val className: Identifier,
         val field: Identifier,

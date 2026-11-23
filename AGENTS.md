@@ -289,6 +289,11 @@ uncommitted changes:
   block comments.
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
   and `\r` escapes.
+- String templates: `VeraLexer` splits `"a \{x} b"` into `TEMPLATE_START`, the placeholder's tokens,
+  `TEMPLATE_MIDDLE`, and `TEMPLATE_END`, tracking open placeholders by bracket depth so `{ }` blocks
+  inside a placeholder work; a line break inside a placeholder is an unterminated string. The
+  parser builds `VeraStringTemplate`, and lowering joins the parts with a `StringBuilder`
+  (`JvmObjectMethods.concatenate`), rendering values as `print` does.
 - Constructs: `fn`, `class`, `trait`, `has`, `var`, rebinding with `=`, `if` / `else if` /
   `else`, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
