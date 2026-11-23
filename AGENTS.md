@@ -84,7 +84,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   class.
 - Traits are compile-time contracts. `JvmProgramLowering` validates `VeraTraitDeclaration`
   signatures and each class's `VeraClassDeclaration.traits` (every trait method must be
-  implemented with matching parameter and return types, and class-typed fields of `Eq`/`Display`
+  implemented with matching parameter names, parameter types, and return type, and class-typed fields of `Eq`/`Display`
   classes must carry the same trait). Traits produce no IR or bytecode.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
 - Locals are block-scoped: `JvmFunctionLoweringState` keeps a scope stack, and `if` branches and
@@ -94,6 +94,11 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- Calls carry `VeraArgument(name, expression)`. `JvmFunctionLowering.requireArgumentNames` checks every
+  function, method, constructor, and built-in call after its arity check. Only written arguments
+  count; the value forwarded by `|>` fills the first parameter unnamed. One written argument is
+  passed unnamed; two or more are named with `name = value`, in parameter order, or as a bare
+  identifier equal to the parameter name.
 - A statement after `return`, `break`, `continue`, or an always-returning `if` in the same block is
   rejected as `UnreachableStatement`, including an `if` block's final value expression.
 - `value |> chain.call()` evaluates `value` into a compiler-generated local (`JvmLet`) before the
@@ -301,7 +306,9 @@ uncommitted changes:
 - `and` and `or` are short-circuiting reserved keywords; `not` is the `Bool`-only negation keyword.
   It lowers to `JvmLogicalNot` and `FlatBoolNot` (`iconst_1; ixor`).
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
-  first argument.
+  first argument, unnamed, and does not count toward the named-argument rules: `1 |> add(2)`.
+- Call arguments are `name = value` or a bare expression (`VeraParserState.parseArgument`).
+  Calls with two or more arguments must name them; see Lowering.
 - The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling
   object method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.

@@ -36,7 +36,10 @@ data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, v
 
 sealed interface VeraChainedExpressionData
 data class VeraMemberAccess(val member: Identifier) : VeraChainedExpressionData
-data class VeraArguments(val expressions: List<VeraPrimaryExpression>) : VeraChainedExpressionData
+data class VeraArguments(val arguments: List<VeraArgument>) : VeraChainedExpressionData
+
+/** A call argument. [name] is set for `name = value`; a bare argument has no name. */
+data class VeraArgument(val name: Identifier?, val expression: VeraPrimaryExpression)
 
 enum class VeraOperator(val symbol: String) {
     FORWARD_APPLICATION("|>"),

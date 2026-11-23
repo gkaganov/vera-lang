@@ -234,6 +234,17 @@ object JvmProgramLowering {
                         actualReturn = actualReturn,
                     )
                 }
+                traitMethod.parameters.zip(classMethod.parameters).forEach { (traitParameter, classParameter) ->
+                    if (traitParameter.name != classParameter.name) {
+                        throw JvmLoweringException.TraitMethodParameterNameMismatch(
+                            className = veraClass.name,
+                            trait = traitName,
+                            method = traitMethod.name,
+                            expected = traitParameter.name,
+                            actual = classParameter.name,
+                        )
+                    }
+                }
             }
         }
     }

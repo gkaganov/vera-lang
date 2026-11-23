@@ -396,9 +396,85 @@ class CompilerErrorTests {
                 "function add requires 2 arguments, got 1",
             ),
             CompileErrorCase(
+                "unnamed arguments in multi-argument calls",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    function("print(add(1, 2))"),
+                JvmLoweringException.ArgumentNameRequired::class,
+                "argument 1 of function add must be named: write `left = ...`",
+            ),
+            CompileErrorCase(
+                "named arguments out of parameter order",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    function("print(add(right = 2, left = 1))"),
+                JvmLoweringException.ArgumentNameMismatch::class,
+                "argument 1 of function add is named right, but parameter 1 is left; " +
+                    "arguments must follow the parameter order",
+            ),
+            CompileErrorCase(
+                "shorthand arguments out of parameter order",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    function("var left = 1", "var right = 2", "print(add(right, left))"),
+                JvmLoweringException.ArgumentNameMismatch::class,
+                "argument 1 of function add is named right, but parameter 1 is left",
+            ),
+            CompileErrorCase(
+                "shorthand arguments that match no parameter",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    function("var first = 1", "print(add(first, right = 2))"),
+                JvmLoweringException.ArgumentNameRequired::class,
+                "argument 1 of function add must be named: write `left = ...`",
+            ),
+            CompileErrorCase(
+                "unnamed constructor arguments",
+                classDeclaration("Point", "x: Int", "y: Int") + function("print(Point(1, 2).x)"),
+                JvmLoweringException.ArgumentNameRequired::class,
+                "argument 1 of class Point must be named: write `x = ...`",
+            ),
+            CompileErrorCase(
+                "unnamed method arguments",
+                classDeclaration("Box", "base: Int", "fn plus(a: Int, b: Int): Int {", "    return a + b", "}") +
+                    function("print(Box(1).plus(a = 1, 2))"),
+                JvmLoweringException.ArgumentNameRequired::class,
+                "argument 2 of method Box.plus must be named: write `b = ...`",
+            ),
+            CompileErrorCase(
+                "a named single written argument after a forwarded value",
+                "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                    function("print(1 |> add(right = 2))"),
+                JvmLoweringException.SingleArgumentNamed::class,
+                "a call to function add with one written argument passes it without a name; remove `right =`",
+            ),
+            CompileErrorCase(
+                "unnamed written arguments after a forwarded value",
+                "fn clamp(value: Int, low: Int, high: Int): Int {\n    return value\n}\n" +
+                    function("print(42 |> clamp(0, high = 10))"),
+                JvmLoweringException.ArgumentNameRequired::class,
+                "argument 2 of function clamp must be named: write `low = ...`",
+            ),
+            CompileErrorCase(
+                "named single arguments",
+                "fn double(value: Int): Int {\n    return value * 2\n}\n" + function("print(double(value = 2))"),
+                JvmLoweringException.SingleArgumentNamed::class,
+                "a call to function double with one written argument passes it without a name; remove `value =`",
+            ),
+            CompileErrorCase(
+                "named print arguments",
+                function("print(value = 1)"),
+                JvmLoweringException.SingleArgumentNamed::class,
+                "a call to print with one written argument passes it without a name",
+            ),
+            CompileErrorCase(
+                "trait methods with renamed parameters",
+                traitDeclaration("Scaled", "fn scale(by: Int): Int") +
+                    "\nclass Counter has Scaled {\n    value: Int\n" +
+                    "    fn scale(amount: Int): Int {\n        return value * amount\n    }\n}",
+                JvmLoweringException.TraitMethodParameterNameMismatch::class,
+                "class Counter method scale names a parameter amount, but trait Scaled names it by",
+            ),
+            CompileErrorCase(
                 "function arguments with the wrong type",
                 "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                    "fn testMain(): Int {\n    return add(1, \"wrong\")\n}",
+                    "fn testMain(): Int {\n    return add(left = 1, right = \"wrong\")\n}",
                 JvmLoweringException.FunctionArgumentTypeMismatch::class,
                 "function add parameter right requires INT, got STRING",
             ),

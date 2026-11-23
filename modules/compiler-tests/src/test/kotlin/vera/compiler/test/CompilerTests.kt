@@ -102,7 +102,7 @@ class VeraCompilerTests {
     fun `multiple Int parameters can be passed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        return add3Ints(99, 98, 2 * 48 + 1)
+                        return add3Ints(int1 = 99, int2 = 98, int3 = 2 * 48 + 1)
                     }
                     fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
                         return int1 + int2 + int3
@@ -594,8 +594,8 @@ class VeraCompilerTests {
                     }
                     fn $TEST_MAIN() {
                         print(add(
-                            1,
-                            add(2, 3)
+                            a = 1,
+                            b = add(a = 2, b = 3)
                         ))
                         print((1
                             + 2))
@@ -888,7 +888,7 @@ class VeraCompilerTests {
                         return a + b
                     }
                     fn $TEST_MAIN(): Int {
-                        return add(1, if True {
+                        return add(a = 1, b = if True {
                             var count = 0
                             while True {
                                 count = count + 1
@@ -1373,7 +1373,7 @@ class VeraCompilerTests {
                         return point.x + point.y
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(1, 2) |> sum
+                        return Point(x = 1, y = 2) |> sum
                     }
                 """.trimIndent()
         assertProgramReturns(source, 3, testInfo)
@@ -1416,7 +1416,7 @@ class VeraCompilerTests {
                         return value * 2
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(3, 4).x |> double
+                        return Point(x = 3, y = 4).x |> double
                     }
                 """.trimIndent()
         assertProgramReturns(source, 6, testInfo)
@@ -1511,6 +1511,67 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `named arguments work for functions, constructors, and methods`(testInfo: TestInfo) {
+        val source = """
+                    class Rect {
+                        width: Int
+                        height: Int
+                        fn scaled(factor: Int, extra: Int): Int {
+                            return width * height * factor + extra
+                        }
+                    }
+                    fn area(width: Int, height: Int): Int {
+                        return width * height
+                    }
+                    fn $TEST_MAIN() {
+                        print(area(width = 3, height = 4))
+                        var rect = Rect(width = 2, height = 5)
+                        print(rect.scaled(factor = 2, extra = 1))
+                        print(Rect(
+                            width = 1,
+                            height = 1
+                        ).width)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "12${EOL}21${EOL}1$EOL", testInfo)
+    }
+
+    @Test
+    fun `bare locals with matching names count as named arguments`(testInfo: TestInfo) {
+        val source = """
+                    class Point {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN(): Int {
+                        var x = 3
+                        var y = 4
+                        var point = Point(x, y)
+                        var mixed = Point(x, y = 10)
+                        return point.x + point.y + mixed.y
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 17, testInfo)
+    }
+
+    @Test
+    fun `only written arguments count when naming forwarded calls`(testInfo: TestInfo) {
+        val source = """
+                    fn add(left: Int, right: Int): Int {
+                        return left + right
+                    }
+                    fn clamp(value: Int, low: Int, high: Int): Int {
+                        return if value < low { low } else if value > high { high } else { value }
+                    }
+                    fn $TEST_MAIN() {
+                        1 |> add(2) |> print
+                        42 |> clamp(low = 0, high = 10) |> print
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "3${EOL}10$EOL", testInfo)
+    }
+
+    @Test
     fun `forward application calls sibling class methods`(testInfo: TestInfo) {
         val source = """
                     class Counter {
@@ -1554,7 +1615,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var point = Point(1, 2)
+                        var point = Point(x = 1, y = 2)
                         return point.x + point.y
                     }
                 """.trimIndent()
@@ -1573,7 +1634,7 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN(): Int {
-                        var line = Line(Point(1, 2), Point(3, 4))
+                        var line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
                         return line.start.x + line.end.y
                     }
                 """.trimIndent()
@@ -1588,10 +1649,10 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn add(left: Point, right: Point): Point {
-                        return Point(left.x + right.x, left.y + right.y)
+                        return Point(x = left.x + right.x, y = left.y + right.y)
                     }
                     fn $TEST_MAIN(): Int {
-                        var result = add(Point(1, 2), Point(3, 4))
+                        var result = add(left = Point(x = 1, y = 2), right = Point(x = 3, y = 4))
                         return result.x * 10 + result.y
                     }
                 """.trimIndent()
@@ -1606,7 +1667,7 @@ class VeraCompilerTests {
                         active: Bool
                     }
                     fn $TEST_MAIN() {
-                        var message = Message("Hello", False)
+                        var message = Message(text = "Hello", active = False)
                         print(message.text)
                         print(message.active)
                     }
@@ -1622,7 +1683,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(4, 5).y
+                        return Point(x = 4, y = 5).y
                     }
                 """.trimIndent()
         assertProgramReturns(source, 5, testInfo)
@@ -1636,7 +1697,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn makePoint(): Point {
-                        return Point(7, 8)
+                        return Point(x = 7, y = 8)
                     }
                     fn $TEST_MAIN(): Int {
                         var point: Point = makePoint()
@@ -1658,7 +1719,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(1, 2).sum()
+                        return Point(x = 1, y = 2).sum()
                     }
                 """.trimIndent()
         assertProgramReturns(source, 3, testInfo)
@@ -1672,11 +1733,11 @@ class VeraCompilerTests {
                         y: Int
 
                         fn offset(dx: Int, dy: Int): Point {
-                            return Point(x + dx, y + dy)
+                            return Point(x = x + dx, y = y + dy)
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var point = Point(1, 2).offset(3, 4)
+                        var point = Point(x = 1, y = 2).offset(dx = 3, dy = 4)
                         return point.x * 10 + point.y
                     }
                 """.trimIndent()
@@ -1740,7 +1801,7 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN(): Int {
-                        var line = Line(Point(1, 2), Point(3, 4))
+                        var line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
                         return line.start.sum() + line.end.sum()
                     }
                 """.trimIndent()
@@ -1779,11 +1840,11 @@ class VeraCompilerTests {
                         y: Int
 
                         fn withX(newX: Int): Point {
-                            return Point(newX, y)
+                            return Point(x = newX, y = y)
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(1, 2).withX(7).x
+                        return Point(x = 1, y = 2).withX(7).x
                     }
                 """.trimIndent()
         assertProgramReturns(source, 7, testInfo)
@@ -1865,7 +1926,7 @@ class VeraCompilerTests {
                         y: Int
 
                         fn offset(dx: Int, dy: Int): Point {
-                            return Point(x + dx, y + dy)
+                            return Point(x = x + dx, y = y + dy)
                         }
                     }
                     class Box {
@@ -1877,7 +1938,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        return Box(Point(1, 2)).shifted(3, 4)
+                        return Box(Point(x = 1, y = 2)).shifted(dx = 3, dy = 4)
                     }
                 """.trimIndent()
         assertProgramReturns(source, 46, testInfo)
@@ -1895,7 +1956,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        return Point(1, 2).total(Point(3, 4))
+                        return Point(x = 1, y = 2).total(Point(x = 3, y = 4))
                     }
                 """.trimIndent()
         assertProgramReturns(source, 10, testInfo)
@@ -2030,15 +2091,15 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `trait methods match by parameter type not name`(testInfo: TestInfo) {
+    fun `trait methods with parameters are implemented with the same names`(testInfo: TestInfo) {
         val source = """
                     trait Scaled {
                         fn scale(by: Int): Int
                     }
                     class Counter has Scaled {
                         value: Int
-                        fn scale(amount: Int): Int {
-                            return value * amount
+                        fn scale(by: Int): Int {
+                            return value * by
                         }
                     }
                     fn $TEST_MAIN(): Int {
@@ -2069,7 +2130,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN() {
-                        var entry = Entry("item", 7)
+                        var entry = Entry(label = "item", amount = 7)
                         print(entry.name())
                         print(entry.value())
                     }
@@ -2085,10 +2146,10 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN() {
-                        print(Point(1, 2) == Point(1, 2))
-                        print(Point(1, 2) == Point(1, 3))
-                        print(Point(1, 2) != Point(1, 3))
-                        print(Point(1, 2) != Point(1, 2))
+                        print(Point(x = 1, y = 2) == Point(x = 1, y = 2))
+                        print(Point(x = 1, y = 2) == Point(x = 1, y = 3))
+                        print(Point(x = 1, y = 2) != Point(x = 1, y = 3))
+                        print(Point(x = 1, y = 2) != Point(x = 1, y = 2))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}false$EOL", testInfo)
@@ -2106,9 +2167,9 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN() {
-                        print(Line(Point(1, 2), Point(3, 4)) == Line(Point(1, 2), Point(3, 4)))
-                        print(Line(Point(1, 2), Point(3, 4)) == Line(Point(1, 2), Point(3, 5)))
-                        print(Line(Point(1, 2), Point(3, 4)) != Line(Point(0, 2), Point(3, 4)))
+                        print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) == Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)))
+                        print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) == Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 5)))
+                        print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) != Line(start = Point(x = 0, y = 2), end = Point(x = 3, y = 4)))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
@@ -2122,9 +2183,9 @@ class VeraCompilerTests {
                         active: Bool
                     }
                     fn $TEST_MAIN() {
-                        print(Label("same", True) == Label("same", True))
-                        print(Label("same", True) == Label("other", True))
-                        print(Label("same", True) != Label("same", False))
+                        print(Label(text = "same", active = True) == Label(text = "same", active = True))
+                        print(Label(text = "same", active = True) == Label(text = "other", active = True))
+                        print(Label(text = "same", active = True) != Label(text = "same", active = False))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "true${EOL}false${EOL}true$EOL", testInfo)
@@ -2183,7 +2244,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN() {
-                        print(Point(1, 2))
+                        print(Point(x = 1, y = 2))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "Point(x: 1, y: 2)$EOL", testInfo)
@@ -2197,8 +2258,8 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN() {
-                        Point(1, 2) |> print
-                        Point(3, 4) |> print()
+                        Point(x = 1, y = 2) |> print
+                        Point(x = 3, y = 4) |> print()
                     }
                 """.trimIndent()
         assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}Point(x: 3, y: 4)$EOL", testInfo)
@@ -2216,7 +2277,7 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN() {
-                        print(Line(Point(1, 2), Point(3, 4)))
+                        print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)))
                     }
                 """.trimIndent()
         assertProgramPrints(
@@ -2237,7 +2298,7 @@ class VeraCompilerTests {
                         flag: Unit
                     }
                     fn $TEST_MAIN() {
-                        print(Message("hello", True))
+                        print(Message(text = "hello", active = True))
                         print(Signal(Unit))
                     }
                 """.trimIndent()
@@ -2274,8 +2335,8 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var first = Point(1, 2)
-                        var second = Point(1, 2)
+                        var first = Point(x = 1, y = 2)
+                        var second = Point(x = 1, y = 2)
                         if first == second {
                             return 1
                         }
@@ -2293,9 +2354,9 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN() {
-                        print(Point(1, 2))
-                        print(Point(1, 2) == Point(1, 2))
-                        print(Point(1, 2) != Point(2, 2))
+                        print(Point(x = 1, y = 2))
+                        print(Point(x = 1, y = 2) == Point(x = 1, y = 2))
+                        print(Point(x = 1, y = 2) != Point(x = 2, y = 2))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "Point(x: 1, y: 2)${EOL}true${EOL}true$EOL", testInfo)

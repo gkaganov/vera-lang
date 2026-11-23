@@ -40,7 +40,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Recursion: recursive top-level functions and methods appear to work; add integration tests and
   document them explicitly.
 - Default class field values: decide whether fields may omit constructor arguments by declaring a
-  default, or keep positional construction mandatory.
+  default, or keep every field required at construction.
 - Trait representation: keep traits as compile-time contracts or map them to JVM interfaces once
   trait-typed values and dynamic dispatch exist.
 

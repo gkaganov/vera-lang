@@ -21,7 +21,7 @@ Implemented:
 - `if` / `else if` / `else` expressions.
 - `while`.
 - Function calls, `print`, and forward application with `|>`.
-- Top-level `class` declarations with immutable fields, positional construction, field access,
+- Top-level `class` declarations with immutable fields, named construction, field access,
   and read-only instance methods.
 - Top-level `trait` declarations and `class ... has ...` clauses.
 - Structural object equality through the built-in `Eq` trait.
@@ -72,7 +72,7 @@ fn add(a: Int, b: Int): Int {
 }
 
 fn main() {
-    print(add(1, 2))
+    print(add(a = 1, b = 2))
 }
 ```
 
@@ -124,7 +124,7 @@ class Point {
 }
 
 fn main() {
-    var point = Point(1, 2)
+    var point = Point(x = 1, y = 2)
     print(point.x)
     print(point.sum())
 }
@@ -147,7 +147,8 @@ fn main() {
 - A class cannot have both a field and a method with the same name.
 - Field types may be `Int`, `String`, `Bool`, `Unit`, or another class type.
 - Objects are immutable; fields are read-only from Vera source.
-- The compiler generates a positional constructor in field declaration order.
+- The compiler generates a constructor with one parameter per field, in field declaration order.
+  Construction follows the named-argument rules: `Point(x = 1, y = 2)`.
 - Field access uses `.` and can be chained: `line.start.x`.
 - Class types can be used in parameter, return, and local type annotations.
 - Each class compiles to its own JVM class with final fields, a generated constructor, and public
@@ -176,7 +177,8 @@ class Square has Shape {
   valid.
 - A class opts into traits with `has` after its name: `class Square has Shape`.
 - An implementing class must define every trait method with the same parameter types and return
-  type; parameter names may differ.
+  type and the same parameter names. Parameter names are part of the trait, because callers name
+  their arguments.
 - Traits are compile-time contracts: they produce no bytecode, are not types, and cannot be used
   in annotations. Trait methods are called on the class, with static dispatch.
 - Traits cannot declare fields, default method bodies, or overloads.
@@ -285,18 +287,32 @@ not done
 ### Function calls
 
 ```vera
-add(1, 2)
+add(a = 1, b = 2)
+Point(x, y)
 print("hello")
 ```
+
+- A call with two or more written arguments names every argument with `name = value`, in the
+  declared parameter order. This applies to functions, methods, and class constructors.
+- A bare local whose name equals the parameter at that position counts as named: `Point(x, y)`
+  passes the locals `x` and `y`. The compiler checks the names, so `Point(y, x)` is an error.
+- A call with one written argument passes it without a name: `print(x)`, `double(2)`, `Box(5)`,
+  and `value |> add(2)`. Naming it is an error. The value forwarded by `|>` is not written in the
+  argument list, so it does not count.
+- Arguments out of parameter order, missing names, and unknown names are compile errors.
 
 ### Forward application
 
 ```vera
 2 |> add(1)
+42 |> clamp(low = 0, high = 10)
 data |> processor.runtime.process() |> print()
 ```
 
-- `value |> f(args)` lowers to `f(value, args)`.
+- `value |> f(x)` lowers to `f(value, x)`: the forwarded value fills the first parameter without a
+  name.
+- Only written arguments count for the naming rules, so `2 |> add(1)` is a call with one written
+  argument and stays unnamed, while `42 |> clamp(low = 0, high = 10)` names both written arguments.
 - `value |> f` lowers to `f(value)`.
 - The right side may be a bare callable (function, built-in, class constructor, sibling object
   method) or a member call chain; the forwarded value becomes the first argument.
@@ -398,7 +414,7 @@ Rejected, because the `break` is nested in a call argument:
 
 ```vera
 while True {
-    print(add(1, if done { break } else { 2 }))
+    print(add(a = 1, b = if done { break } else { 2 }))
 }
 ```
 - `while` is a statement and produces no value.
@@ -410,7 +426,7 @@ print(42)
 print("hello")
 print(True)
 print(Unit)
-print(Point(1, 2))
+print(Point(x = 1, y = 2))
 ```
 
 - Writes one value followed by a newline to standard output.
@@ -523,7 +539,8 @@ multiply       = unary    { ( "*" | "/" | "%" ) unary }
 unary          = "-" INT                          (* folded into one literal, e.g. -2147483648 *)
                | ( "-" | "not" ) unary
                | chained
-chained        = primary { "." IDENT | "(" [ expression { "," expression } ] ")" }
+chained        = primary { "." IDENT | "(" [ argument { "," argument } ] ")" }
+argument       = [ IDENT "=" ] expression      (* names required for 2+ written arguments *)
 primary        = INT | STRING | "True" | "False" | "Unit" | IDENT
                | "(" expression ")"
                | if
@@ -565,7 +582,7 @@ fn main() {
         counter = counter + 1
     }
 
-    if add(1, 2) == 3 {
+    if add(a = 1, b = 2) == 3 {
         print("ok")
     }
 

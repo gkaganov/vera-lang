@@ -324,6 +324,43 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "calling a value is not supported yet",
     )
 
+    /** A call with one written argument names it; a single written argument is passed without a name. */
+    class SingleArgumentNamed(val callee: String, val name: Identifier) : JvmLoweringException(
+        "a call to $callee with one written argument passes it without a name; remove `${name.value} =`",
+    )
+
+    /** A call with two or more arguments passes one without its parameter name. */
+    class ArgumentNameRequired(
+        val callee: String,
+        val position: Int,
+        val parameter: Identifier,
+    ) : JvmLoweringException(
+        "argument $position of $callee must be named: write `${parameter.value} = ...`",
+    )
+
+    /** An argument names a different parameter than the one at its position. */
+    class ArgumentNameMismatch(
+        val callee: String,
+        val position: Int,
+        val actual: Identifier,
+        val expected: Identifier,
+    ) : JvmLoweringException(
+        "argument $position of $callee is named ${actual.value}, but parameter $position is " +
+            "${expected.value}; arguments must follow the parameter order",
+    )
+
+    /** A class method implementing a trait renames one of the trait method's parameters. */
+    class TraitMethodParameterNameMismatch(
+        val className: Identifier,
+        val trait: Identifier,
+        val method: Identifier,
+        val expected: Identifier,
+        val actual: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} method ${method.value} names a parameter ${actual.value}, but trait " +
+            "${trait.value} names it ${expected.value}; parameter names are part of the trait",
+    )
+
     /** A statement follows one that always leaves the block, such as `return` or `break`. */
     class UnreachableStatement(val after: String) : JvmLoweringException(
         "unreachable statement after $after",

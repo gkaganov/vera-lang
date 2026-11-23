@@ -1,5 +1,6 @@
 package vera.parser
 
+import vera.ast.VeraArgument
 import vera.ast.VeraArguments
 import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
@@ -393,17 +394,27 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return if (data.isEmpty()) base else VeraChainedExpression(base, data)
     }
 
-    private fun parseArgumentList(): List<VeraPrimaryExpression> {
+    private fun parseArgumentList(): List<VeraArgument> {
         expect(VeraTokenType.LPAREN)
-        val arguments = mutableListOf<VeraPrimaryExpression>()
+        val arguments = mutableListOf<VeraArgument>()
         if (!at(VeraTokenType.RPAREN)) {
-            arguments += parseExpression()
+            arguments += parseArgument()
             while (match(VeraTokenType.COMMA)) {
-                arguments += parseExpression()
+                arguments += parseArgument()
             }
         }
         expect(VeraTokenType.RPAREN)
         return arguments
+    }
+
+    /** Parses `name = value` or a bare `value`. */
+    private fun parseArgument(): VeraArgument {
+        if (at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND) {
+            val name = advance()
+            expect(VeraTokenType.BIND)
+            return VeraArgument(Identifier(name.text), parseExpression())
+        }
+        return VeraArgument(null, parseExpression())
     }
 
     private fun parsePrimary(): VeraPrimaryExpression {

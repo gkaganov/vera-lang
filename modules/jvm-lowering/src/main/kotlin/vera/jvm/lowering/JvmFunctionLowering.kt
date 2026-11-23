@@ -135,6 +135,18 @@ private class JvmFunctionLoweringState(
         val exit: String? = null,
     )
 
+    /**
+     * A lowered call argument. [explicitName] is set for `name = value`, [shorthandName] for a bare
+     * identifier (which may stand for the parameter of the same name), and [forwarded] for the value
+     * passed by `|>`, which always fills the first parameter.
+     */
+    private data class LoweredArgument(
+        val jvmExpression: JvmExpression,
+        val explicitName: Identifier? = null,
+        val shorthandName: Identifier? = null,
+        val forwarded: Boolean = false,
+    )
+
     /** A lowered expression and whether evaluating it always returns from the current function. */
     private data class LoweredExpression(val jvmExpression: JvmExpression, val returns: Boolean)
 
@@ -427,8 +439,10 @@ private class JvmFunctionLoweringState(
     private fun lowerForwardApplication(veraOperation: VeraBinaryOperation): JvmExpression {
         return when (val veraRight = veraOperation.right) {
             is VeraIdentifierAsExpression -> {
-                val jvmArguments = listOf(lowerPrimaryExpression(veraOperation.left))
-                lowerNamedCall(veraRight.identifier, jvmArguments)
+                val loweredArguments = listOf(
+                    LoweredArgument(lowerPrimaryExpression(veraOperation.left), forwarded = true),
+                )
+                lowerNamedCall(veraRight.identifier, loweredArguments)
             }
 
             // A bare call such as `f(a)` evaluates the forwarded value first anyway.
@@ -556,11 +570,11 @@ private class JvmFunctionLoweringState(
                     throw JvmLoweringException.UnknownVariable(veraName)
                 }
 
-                val jvmArguments = lowerForwardedArguments(
+                val loweredArguments = lowerForwardedArguments(
                     forwardedArgument,
                     forwardedArgumentIndex == 0,
                 ) { lowerArguments(firstData) }
-                jvmExpression = lowerNamedCall(veraName, jvmArguments)
+                jvmExpression = lowerNamedCall(veraName, loweredArguments)
                 dataIndex = 1
             }
         }
@@ -595,7 +609,7 @@ private class JvmFunctionLoweringState(
                             throw JvmLoweringException.UnknownClassField(ownerType.name, member)
                         }
                         if (nextData is VeraArguments) {
-                            val jvmArguments = lowerForwardedArguments(
+                            val loweredArguments = lowerForwardedArguments(
                                 forwardedArgument,
                                 forwardedArgumentIndex == dataIndex + 1,
                             ) { lowerArguments(nextData) }
@@ -603,7 +617,7 @@ private class JvmFunctionLoweringState(
                                 jvmExpression,
                                 veraClass,
                                 veraMethod,
-                                jvmArguments,
+                                loweredArguments,
                             )
                             dataIndex += 2
                         } else {
@@ -622,28 +636,28 @@ private class JvmFunctionLoweringState(
     private fun lowerForwardedArguments(
         forwardedArgument: (() -> JvmExpression)?,
         shouldInject: Boolean,
-        lowerExplicitArguments: () -> List<JvmExpression>,
-    ): List<JvmExpression> {
+        lowerExplicitArguments: () -> List<LoweredArgument>,
+    ): List<LoweredArgument> {
         if (!shouldInject) {
             return lowerExplicitArguments()
         }
         val forward = forwardedArgument
             ?: throw JvmLoweringException.InternalInvariant("missing forwarded argument")
-        return listOf(forward()) + lowerExplicitArguments()
+        return listOf(LoweredArgument(forward(), forwarded = true)) + lowerExplicitArguments()
     }
 
     private fun lowerNamedCall(
         veraName: Identifier,
-        jvmArguments: List<JvmExpression>,
+        loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
         val veraClass = visibleClasses[veraName]
         val receiver = receiverClass
         val receiverMethod = receiver?.methods?.firstOrNull { it.name == veraName }
         return when {
-            veraClass != null -> lowerObjectConstruction(veraClass, jvmArguments)
+            veraClass != null -> lowerObjectConstruction(veraClass, loweredArguments)
             receiver != null && receiverMethod != null ->
-                lowerInstanceMethodCall(readReceiver(), receiver, receiverMethod, jvmArguments)
-            else -> lowerFunctionCall(veraName, jvmArguments)
+                lowerInstanceMethodCall(readReceiver(), receiver, receiverMethod, loweredArguments)
+            else -> lowerFunctionCall(veraName, loweredArguments)
         }
     }
 
@@ -663,19 +677,25 @@ private class JvmFunctionLoweringState(
         jvmReceiver: JvmExpression,
         veraClass: VeraClassDeclaration,
         veraMethod: VeraFunctionDeclaration,
-        jvmArguments: List<JvmExpression>,
+        loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
         val jvmParameters = veraMethod.parameters.map { veraParameter ->
             JvmParameter(veraParameter.name, lowerType(veraParameter.type))
         }
-        if (jvmArguments.size != jvmParameters.size) {
+        if (loweredArguments.size != jvmParameters.size) {
             throw JvmLoweringException.MethodArityMismatch(
                 veraClass.name,
                 veraMethod.name,
                 jvmParameters.size,
-                jvmArguments.size,
+                loweredArguments.size,
             )
         }
+        requireArgumentNames(
+            "method ${veraClass.name.value}.${veraMethod.name.value}",
+            veraMethod.parameters.map { veraParameter -> veraParameter.name },
+            loweredArguments,
+        )
+        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
         jvmArguments.forEachIndexed { index, jvmArgument ->
             val expectedType = jvmParameters[index].type
             if (jvmArgument.type != expectedType) {
@@ -702,15 +722,21 @@ private class JvmFunctionLoweringState(
 
     private fun lowerObjectConstruction(
         veraClass: VeraClassDeclaration,
-        jvmArguments: List<JvmExpression>,
+        loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
-        if (jvmArguments.size != veraClass.fields.size) {
+        if (loweredArguments.size != veraClass.fields.size) {
             throw JvmLoweringException.ClassConstructorArityMismatch(
                 veraClass.name,
                 veraClass.fields.size,
-                jvmArguments.size,
+                loweredArguments.size,
             )
         }
+        requireArgumentNames(
+            "class ${veraClass.name.value}",
+            veraClass.fields.map { field -> field.name },
+            loweredArguments,
+        )
+        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
 
         val jvmFieldTypes = veraClass.fields.map { field -> lowerType(field.type) }
         jvmArguments.forEachIndexed { index, jvmArgument ->
@@ -737,11 +763,11 @@ private class JvmFunctionLoweringState(
 
     private fun lowerFunctionCall(
         veraFunctionName: Identifier,
-        jvmArguments: List<JvmExpression>,
+        loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
         val builtin = Builtin.from(veraFunctionName)
         if (builtin != null) {
-            return lowerBuiltinCall(builtin, jvmArguments)
+            return lowerBuiltinCall(builtin, loweredArguments)
         }
 
         val veraFunctionDeclaration = visibleFunctions[veraFunctionName]
@@ -749,13 +775,19 @@ private class JvmFunctionLoweringState(
         val jvmParameters = veraFunctionDeclaration.parameters.map { veraParameter ->
             JvmParameter(veraParameter.name, lowerType(veraParameter.type))
         }
-        if (jvmArguments.size != jvmParameters.size) {
+        if (loweredArguments.size != jvmParameters.size) {
             throw JvmLoweringException.FunctionArityMismatch(
                 veraFunctionName,
                 jvmParameters.size,
-                jvmArguments.size,
+                loweredArguments.size,
             )
         }
+        requireArgumentNames(
+            "function ${veraFunctionName.value}",
+            veraFunctionDeclaration.parameters.map { veraParameter -> veraParameter.name },
+            loweredArguments,
+        )
+        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
         jvmArguments.forEachIndexed { index, jvmArgument ->
             val expectedType = jvmParameters[index].type
             if (jvmArgument.type != expectedType) {
@@ -779,27 +811,68 @@ private class JvmFunctionLoweringState(
         )
     }
 
-    private fun lowerArguments(veraArguments: VeraArguments): List<JvmExpression> {
-        val jvmArguments = mutableListOf<JvmExpression>()
-        for (veraPrimaryExpression in veraArguments.expressions) {
-            jvmArguments.add(lowerPrimaryExpression(veraPrimaryExpression))
+    private fun lowerArguments(veraArguments: VeraArguments): List<LoweredArgument> =
+        veraArguments.arguments.map { veraArgument ->
+            val veraExpression = veraArgument.expression
+            LoweredArgument(
+                jvmExpression = lowerPrimaryExpression(veraExpression),
+                explicitName = veraArgument.name,
+                shorthandName = (veraExpression as? VeraIdentifierAsExpression)
+                    ?.identifier
+                    ?.takeIf { veraArgument.name == null },
+            )
         }
-        return jvmArguments
+
+    /**
+     * Checks argument names against [parameterNames] once the arity is known to match. Only written
+     * arguments count: the value forwarded by `|>` fills the first parameter without a name. A call
+     * with one written argument passes it without a name. A call with two or more written arguments
+     * names every one in parameter order, either as `name = value` or as a bare identifier with the
+     * parameter's name.
+     */
+    private fun requireArgumentNames(
+        callee: String,
+        parameterNames: List<Identifier>,
+        loweredArguments: List<LoweredArgument>,
+    ) {
+        val writtenArguments = loweredArguments.filterNot { loweredArgument -> loweredArgument.forwarded }
+        if (writtenArguments.size < 2) {
+            val explicitName = writtenArguments.firstOrNull()?.explicitName ?: return
+            throw JvmLoweringException.SingleArgumentNamed(callee, explicitName)
+        }
+        loweredArguments.forEachIndexed { index, loweredArgument ->
+            val expectedName = parameterNames[index]
+            val position = index + 1
+            val explicitName = loweredArgument.explicitName
+            val shorthandName = loweredArgument.shorthandName
+            when {
+                loweredArgument.forwarded -> {}
+                explicitName == expectedName -> {}
+                explicitName != null ->
+                    throw JvmLoweringException.ArgumentNameMismatch(callee, position, explicitName, expectedName)
+                shorthandName == expectedName -> {}
+                shorthandName != null && shorthandName in parameterNames ->
+                    throw JvmLoweringException.ArgumentNameMismatch(callee, position, shorthandName, expectedName)
+                else -> throw JvmLoweringException.ArgumentNameRequired(callee, position, expectedName)
+            }
+        }
     }
 
     private fun lowerBuiltinCall(
         builtin: Builtin,
-        jvmArguments: List<JvmExpression>,
+        loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
         return when (builtin.jvmBuiltin) {
             JvmBuiltin.PRINT -> {
-                if (jvmArguments.size != 1) {
+                if (loweredArguments.size != 1) {
                     throw JvmLoweringException.BuiltinArityMismatch(
                         JvmBuiltin.PRINT,
                         1,
-                        jvmArguments.size,
+                        loweredArguments.size,
                     )
                 }
+                requireArgumentNames("print", listOf(Identifier("value")), loweredArguments)
+                val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
                 val argument = jvmArguments.first()
                 val argumentType = argument.type
                 if (argumentType is JvmType.ClassType) {
