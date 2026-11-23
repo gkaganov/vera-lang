@@ -16,6 +16,7 @@ enum class VeraTokenType {
     RETURN,
     AND,
     OR,
+    NOT,
 
     // Types
     INT_TYPE,

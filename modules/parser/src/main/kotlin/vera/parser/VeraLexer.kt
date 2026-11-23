@@ -183,6 +183,7 @@ private class VeraLexerState(private val source: String) {
             "return" to VeraTokenType.RETURN,
             "and" to VeraTokenType.AND,
             "or" to VeraTokenType.OR,
+            "not" to VeraTokenType.NOT,
             "Int" to VeraTokenType.INT_TYPE,
             "String" to VeraTokenType.STRING_TYPE,
             "Bool" to VeraTokenType.BOOL_TYPE,

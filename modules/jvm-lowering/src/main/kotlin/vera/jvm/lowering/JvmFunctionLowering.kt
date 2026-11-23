@@ -54,6 +54,7 @@ import vera.jvm.ir.JvmLet
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
+import vera.jvm.ir.JvmLogicalNot
 import vera.jvm.ir.JvmLogicalOr
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodSignature
@@ -364,6 +365,11 @@ private class JvmFunctionLoweringState(
                 }
                 JvmIntUnary(JvmIntUnaryOperator.NEGATE, jvmOperand)
             }
+
+            VeraUnaryOperator.NOT -> {
+                requireBoolOperand(jvmOperand.type, veraUnaryOperation.operator.symbol)
+                JvmLogicalNot(jvmOperand)
+            }
         }
     }
 
@@ -372,16 +378,16 @@ private class JvmFunctionLoweringState(
             VeraOperator.AND -> {
                 val jvmLeft = lowerPrimaryExpression(veraOperation.left)
                 val jvmRight = lowerPrimaryExpression(veraOperation.right)
-                requireBoolOperand(jvmLeft.type, veraOperation.operator)
-                requireBoolOperand(jvmRight.type, veraOperation.operator)
+                requireBoolOperand(jvmLeft.type, veraOperation.operator.symbol)
+                requireBoolOperand(jvmRight.type, veraOperation.operator.symbol)
                 return JvmLogicalAnd(jvmLeft, jvmRight)
             }
 
             VeraOperator.OR -> {
                 val jvmLeft = lowerPrimaryExpression(veraOperation.left)
                 val jvmRight = lowerPrimaryExpression(veraOperation.right)
-                requireBoolOperand(jvmLeft.type, veraOperation.operator)
-                requireBoolOperand(jvmRight.type, veraOperation.operator)
+                requireBoolOperand(jvmLeft.type, veraOperation.operator.symbol)
+                requireBoolOperand(jvmRight.type, veraOperation.operator.symbol)
                 return JvmLogicalOr(jvmLeft, jvmRight)
             }
 
@@ -441,9 +447,9 @@ private class JvmFunctionLoweringState(
         }
     }
 
-    private fun requireBoolOperand(jvmType: JvmType, veraOperator: VeraOperator) {
+    private fun requireBoolOperand(jvmType: JvmType, operatorSymbol: String) {
         if (jvmType != JvmType.BOOL) {
-            throw JvmLoweringException.BoolOperandsRequired(veraOperator.symbol, jvmType)
+            throw JvmLoweringException.BoolOperandsRequired(operatorSymbol, jvmType)
         }
     }
 
@@ -458,7 +464,7 @@ private class JvmFunctionLoweringState(
                 throw JvmLoweringException.ObjectEqualityRequiresTrait(jvmType.name)
             }
             val equalsCall = JvmObjectMethods.equalsCall(jvmLeft, jvmType.name, jvmRight)
-            return if (veraOperator == VeraOperator.EQUALS) equalsCall else negate(equalsCall)
+            return if (veraOperator == VeraOperator.EQUALS) equalsCall else JvmLogicalNot(equalsCall)
         }
         val jvmOperator = if (veraOperator == VeraOperator.EQUALS) {
             JvmComparisonOperator.EQ
@@ -467,10 +473,6 @@ private class JvmFunctionLoweringState(
         }
         return JvmComparison(jvmOperator, jvmLeft, jvmRight)
     }
-
-    /** A logical negation expressed as a comparison against `true`. */
-    private fun negate(jvmExpression: JvmExpression): JvmExpression =
-        JvmComparison(JvmComparisonOperator.NEQ, jvmExpression, JvmBoolLiteral(true))
 
     private fun hasBuiltinTrait(className: Identifier, trait: Identifier): Boolean =
         className == JvmUnitType.name || visibleClasses[className]?.traits?.contains(trait) == true

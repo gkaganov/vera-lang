@@ -21,6 +21,7 @@ import vera.jvm.ir.JvmLet
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
+import vera.jvm.ir.JvmLogicalNot
 import vera.jvm.ir.JvmLogicalOr
 import vera.jvm.ir.JvmMethod
 import vera.jvm.ir.JvmMethodSignature
@@ -44,6 +45,7 @@ import vera.jvm.ir.JvmBreak
 import vera.jvm.ir.JvmContinue
 import vera.jvm.instruction.FlatBindLabel
 import vera.jvm.instruction.FlatBoolEqualityJump
+import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatCreateLabel
 import vera.jvm.instruction.FlatDup
 import vera.jvm.instruction.FlatField
@@ -331,6 +333,12 @@ private class FlatInstructionLoweringState {
 
             is JvmLogicalOr -> {
                 lowerLogicalOr(jvmExpression)
+                JvmType.BOOL
+            }
+
+            is JvmLogicalNot -> {
+                lowerExpression(jvmExpression.operand)
+                append(FlatBoolNot)
                 JvmType.BOOL
             }
 

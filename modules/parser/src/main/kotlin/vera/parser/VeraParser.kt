@@ -355,6 +355,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             }
             return VeraUnaryOperation(VeraUnaryOperator.NEGATE, parseUnary())
         }
+        if (match(VeraTokenType.NOT)) {
+            return VeraUnaryOperation(VeraUnaryOperator.NOT, parseUnary())
+        }
         return parseChainedPrimary()
     }
 

@@ -268,6 +268,18 @@ class CompilerErrorTests {
                 "operator 'and' is only defined for Bool operands",
             ),
             CompileErrorCase(
+                "non-Bool not operands",
+                function("var value = not 1"),
+                JvmLoweringException.BoolOperandsRequired::class,
+                "operator 'not' is only defined for Bool operands",
+            ),
+            CompileErrorCase(
+                "not applied to an Int comparison operand",
+                function("var value = not 1 == 2"),
+                JvmLoweringException.BoolOperandsRequired::class,
+                "operator 'not' is only defined for Bool operands",
+            ),
+            CompileErrorCase(
                 "binary operands with different types",
                 function("var value = 1 + \"x\""),
                 JvmLoweringException.OperandTypesDiffer::class,

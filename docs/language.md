@@ -52,7 +52,7 @@ Reserved words cannot be used as identifiers:
 |----------|----------|
 | Declarations | `fn`, `class`, `trait`, `has`, `var`, `val` |
 | Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
-| Operators | `and`, `or` |
+| Operators | `and`, `or`, `not` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
 | Boolean literals | `True`, `False` |
 
@@ -268,9 +268,14 @@ True != False
 ```vera
 left and right
 left or right
+not done
 ```
 
 - `and` and `or` are short-circuiting.
+- `not` negates a `Bool`. Like unary `-`, it binds tighter than every binary operator, so
+  `not a == b` means `(not a) == b` and `not a and b` means `(not a) and b`. Write `not (a == b)`
+  or `a != b` to negate a comparison.
+- `not` applies to a whole member chain: `not task.isFinished()` negates the call result.
 - Both operands must be `Bool`.
 
 ### Function calls
@@ -307,7 +312,8 @@ Lowest to highest:
 6. `+`, `-`
 7. `*`, `/`, `%`
 
-Unary `-` binds tighter than multiplicative operators and is right-associative.
+Unary `-` and `not` bind tighter than multiplicative operators and are right-associative; member
+access and calls bind tighter still.
 
 ## Control flow
 

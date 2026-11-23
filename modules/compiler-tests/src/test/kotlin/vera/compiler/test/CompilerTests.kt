@@ -1025,6 +1025,52 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `not negates booleans`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var done = False
+                        print(not True)
+                        print(not done)
+                        print(not not True)
+                        print(not (1 < 2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "false${EOL}true${EOL}true${EOL}false${EOL}", testInfo)
+    }
+
+    @Test
+    fun `not binds tighter than comparison and logical operators`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(not True == False)
+                        print(not False and False)
+                        print(not True or True)
+                        print(True == not False)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "true${EOL}false${EOL}true${EOL}true${EOL}", testInfo)
+    }
+
+    @Test
+    fun `not applies to whole member call chains`(testInfo: TestInfo) {
+        val source = """
+                    class Task {
+                        finished: Bool
+                        fn isFinished(): Bool {
+                            return finished
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        var task = Task(False)
+                        if not task.isFinished() and not task.finished {
+                            print("pending")
+                        }
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "pending$EOL", testInfo)
+    }
+
+    @Test
     fun `logical operators short-circuit`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {

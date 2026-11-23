@@ -112,7 +112,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   generates a structural `equals` for classes with `Eq` and a `toString` for classes with
   `Display`. Object `==`/`!=` lower to the generated `equals` and require `Eq`; `print` of an
   object lowers to `toString` and requires `Display`. Missing traits are lowering errors. `!=`
-  negates through a comparison against `true`, and generated methods are never visible to Vera
+  negates the call with `JvmLogicalNot`, and generated methods are never visible to Vera
   name resolution.
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
   it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
@@ -279,13 +279,15 @@ uncommitted changes:
 - `break` and `continue` target the innermost `while`; using either outside a loop or inside a
   nested expression is rejected.
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
-  Unary `-` binds tighter than multiplicative operators.
+  Unary `-` and `not` bind tighter than multiplicative operators; `not a == b` is `(not a) == b`,
+  which reads like Java's `!a == b`.
 - `==` and `!=` support `Int`, `Bool`, `String`, and `Unit`; `String` equality compares contents.
   Objects compare structurally only when their class has the built-in `Eq` trait. Ordering
   operators are `Int`-only.
 - `print` accepts `Int`, `String`, `Bool`, `Unit`, and objects whose class has the built-in
   `Display` trait.
-- `and` and `or` are short-circuiting reserved keywords.
+- `and` and `or` are short-circuiting reserved keywords; `not` is the `Bool`-only negation keyword.
+  It lowers to `JvmLogicalNot` and `FlatBoolNot` (`iconst_1; ixor`).
 - `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
   first argument.
 - The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling

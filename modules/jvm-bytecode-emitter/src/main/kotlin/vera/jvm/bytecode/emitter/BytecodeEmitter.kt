@@ -16,6 +16,7 @@ import vera.jvm.instruction.FlatInstructionWithDebugInfo
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
 import vera.jvm.instruction.FlatIntUnaryOperation
+import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
 import vera.jvm.instruction.FlatInvokestatic
@@ -111,6 +112,11 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
             )
 
             is FlatLoadConstant -> emitLoadConstant(codeBuilder, instruction)
+
+            is FlatBoolNot -> {
+                codeBuilder.iconst_1()
+                codeBuilder.ixor()
+            }
 
             is FlatIntUnaryOperation -> {
                 when (instruction.operator) {

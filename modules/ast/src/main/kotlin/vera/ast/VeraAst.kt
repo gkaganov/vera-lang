@@ -49,7 +49,8 @@ enum class VeraOperator(val symbol: String) {
 }
 
 enum class VeraUnaryOperator(val symbol: String) {
-    NEGATE("-")
+    NEGATE("-"),
+    NOT("not"),
 }
 
 sealed interface VeraPrimaryExpression

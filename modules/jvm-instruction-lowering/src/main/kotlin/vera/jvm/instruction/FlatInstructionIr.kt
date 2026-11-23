@@ -73,6 +73,14 @@ data class FlatIntUnaryOperation(val operator: JvmIntUnaryOperator) : FlatInstru
     )
 }
 
+/** Logical negation of the `Bool` on top of the stack. */
+data object FlatBoolNot : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(JvmType.BOOL),
+        stackPushes = listOf(JvmType.BOOL),
+    )
+}
+
 data class FlatIntBinaryOperation(val operator: JvmIntBinaryOperator) : FlatInstruction {
     override val effect = FlatInstructionEffect(
         stackPops = listOf(JvmType.INT, JvmType.INT),

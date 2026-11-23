@@ -114,6 +114,10 @@ data class JvmLogicalOr(
     override val type = JvmType.BOOL
 }
 
+data class JvmLogicalNot(val operand: JvmExpression) : JvmExpression {
+    override val type = JvmType.BOOL
+}
+
 data class JvmObjectConstruction(
     val className: Identifier,
     val arguments: List<JvmExpression>,
