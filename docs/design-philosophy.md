@@ -39,7 +39,7 @@
 
 | Area      | Direction                                                                           | Status                                       |
 |-----------|-------------------------------------------------------------------------------------|----------------------------------------------|
-| Variables | `val` immutable, `var` mutable; rebind with `=`                                     | `var` and rebinding work; `val` not enforced |
+| Variables | `val` immutable, `mut val` mutable; rebind with `=`                                 | Implemented; parameters are immutable        |
 | Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and class types                   |
 | Classes   | Data-oriented structured objects                                                    | Fields, access, methods, and `Eq`/`Display` traits work; updates do not |
 | Traits    | Shared behavior and composition without inheritance                                 | Required methods and `Eq`/`Display` markers work; default methods and trait values do not |

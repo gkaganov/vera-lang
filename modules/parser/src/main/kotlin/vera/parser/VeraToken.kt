@@ -11,7 +11,7 @@ enum class VeraTokenType {
     WHILE,
     BREAK,
     CONTINUE,
-    VAR,
+    MUT,
     VAL,
     RETURN,
     AND,

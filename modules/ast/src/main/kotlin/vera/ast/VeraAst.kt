@@ -18,9 +18,14 @@ data class VeraFunctionDeclaration(
     override val name: Identifier,
     val parameters: List<VeraParameter>,
     val returnType: VeraType,
-    val body: VeraExplicitReturnBlock,
+    val body: VeraFunctionBody,
     override val span: SourceSpan,
 ) : VeraDeclaration
+
+/** A function body: a block with explicit `return`s, or `= expression`. */
+sealed interface VeraFunctionBody
+data class VeraBlockBody(val block: VeraExplicitReturnBlock) : VeraFunctionBody
+data class VeraExpressionBody(val expression: VeraPrimaryExpression) : VeraFunctionBody
 
 data class VeraClassDeclaration(
     override val name: Identifier,
@@ -49,12 +54,17 @@ sealed interface VeraStatement {
     val span: SourceSpan
 }
 
+/** `val name = value`, or `mut val name = value` when [mutable] so the binding can be rebound. */
 data class VeraBindStatement(
     val name: Identifier,
     val type: VeraType,
     val expression: VeraExpression,
+    val mutable: Boolean,
     override val span: SourceSpan,
 ) : VeraStatement
+
+/** `mut val name` without a value: makes the parameter [name] rebindable from here on. */
+data class VeraMutableParameter(val name: Identifier, override val span: SourceSpan) : VeraStatement
 
 data class VeraRebindStatement(
     val name: Identifier,

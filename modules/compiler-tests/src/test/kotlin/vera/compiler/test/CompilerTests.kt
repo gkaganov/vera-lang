@@ -59,11 +59,11 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `var with explicit type declaration can be bound and accessed`(testInfo: TestInfo) {
+    fun `val with explicit type declaration can be bound and accessed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var myVar1: Int = 50
-                        var myVar2: Int = 51
+                        val myVar1: Int = 50
+                        val myVar2: Int = 51
                         return myVar1 + myVar2 + 52
                     }
                 """.trimIndent()
@@ -74,7 +74,7 @@ class VeraCompilerTests {
     fun `Int can be returned`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var numberResult: Int = getInt() + 0
+                        val numberResult: Int = getInt() + 0
                         return numberResult
                     }
                     fn getInt(): Int {
@@ -88,7 +88,7 @@ class VeraCompilerTests {
     fun `one Int parameter can be passed`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var numberResult: Int = receiveAndReturn(369)
+                        val numberResult: Int = receiveAndReturn(369)
                         return numberResult
                     }
                     fn receiveAndReturn(int: Int): Int {
@@ -132,10 +132,10 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN() {
-                        var name = "Vera"
-                        var a = 2
-                        var b = 3
-                        var point = Point(x = 1, y = 2)
+                        val name = "Vera"
+                        val a = 2
+                        val b = 3
+                        val point = Point(x = 1, y = 2)
                         print("Hello, \{name}!")
                         print("\{a} + \{b} = \{a + b}")
                         print("\{42}")
@@ -157,7 +157,7 @@ class VeraCompilerTests {
                         return "\{text}!"
                     }
                     fn $TEST_MAIN() {
-                        var ready = True
+                        val ready = True
                         print("\{shout("hi")} and \{"inner \{1 + 1}"}")
                         print("status: \{if ready { "go" } else { "wait" }}")
                     }
@@ -169,7 +169,7 @@ class VeraCompilerTests {
     fun `plain braces and escaped placeholders stay literal`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var value = 7
+                        val value = 7
                         print("{\"key\": \{value}}")
                         print("\\{value}")
                     }
@@ -189,7 +189,7 @@ class VeraCompilerTests {
                         return 2
                     }
                     fn $TEST_MAIN() {
-                        var text = "\{first()}-\{second()}"
+                        val text = "\{first()}-\{second()}"
                         print(text)
                         text |> print
                     }
@@ -219,11 +219,11 @@ class VeraCompilerTests {
     }
 
     @Test
-    fun `var types can be inferred when bound directly`(testInfo: TestInfo) {
+    fun `val types can be inferred when bound directly`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var inferredString = "I am a String"
-                        var inferredInt = 1000
+                        val inferredString = "I am a String"
+                        val inferredInt = 1000
                         print(inferredString)
                         print(inferredInt)
                     }
@@ -258,7 +258,7 @@ class VeraCompilerTests {
         val source = """
                     fn $TEST_MAIN() {
                         print(-1)
-                        var value = 5
+                        val value = 5
                         print(-value)
                         print(-2 * 3)
                         print(1 - -2)
@@ -500,7 +500,7 @@ class VeraCompilerTests {
         val source = """
                     fn $TEST_MAIN() {
                         print(if True {
-                            var value = 40
+                            val value = 40
                             value + 2
                         } else {
                             0
@@ -545,7 +545,7 @@ class VeraCompilerTests {
     fun `if expressions can be bound to a variable`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var value = if False {
+                        val value = if False {
                             1
                         } else {
                             2
@@ -685,7 +685,7 @@ class VeraCompilerTests {
         val source = """
                     fn $TEST_MAIN() {
                         print(if True {
-                            var value = 2
+                            val value = 2
                             value * 3
                         } else {
                             0
@@ -699,11 +699,11 @@ class VeraCompilerTests {
     fun `a trailing operator continues the statement`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var total =
+                        val total =
                             1 +
                             2 *
                             3
-                        var both = True and
+                        val both = True and
 
                             False
                         print(total)
@@ -729,7 +729,7 @@ class VeraCompilerTests {
                         return value + 1
                     }
                     fn $TEST_MAIN() {
-                        var box = Box(Inner(20))
+                        val box = Box(Inner(20))
                         box
                             .inner
                             .doubled()
@@ -744,7 +744,7 @@ class VeraCompilerTests {
     fun `a leading minus starts a new statement`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var value = 1
+                        val value = 1
                         -2
                         return value
                     }
@@ -758,7 +758,7 @@ class VeraCompilerTests {
                     class Point { x: Int }
                     fn one(): Int { return 1 }
                     fn $TEST_MAIN() {
-                        var counter = 0
+                        mut val counter = 0
                         while counter < 3 { counter = counter + 1 }
                         print(if counter == 3 { Point(5).x } else { 0 })
                         print(one())
@@ -804,7 +804,7 @@ class VeraCompilerTests {
                         return value + 1
                     }
                     fn $TEST_MAIN() {
-                        var total = 1 + // continues after a trailing operator
+                        val total = 1 + // continues after a trailing operator
                             2
                         print(total)
                         total
@@ -878,7 +878,7 @@ class VeraCompilerTests {
     fun `break exits the innermost while loop`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var count = 0
+                        mut val count = 0
                         while True {
                             count = count + 1
                             if count == 3 {
@@ -895,8 +895,8 @@ class VeraCompilerTests {
     fun `continue skips the rest of the loop body`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var count = 0
-                        var total = 0
+                        mut val count = 0
+                        mut val total = 0
                         while count < 5 {
                             count = count + 1
                             if count == 3 {
@@ -914,11 +914,11 @@ class VeraCompilerTests {
     fun `break only exits the innermost loop`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var outer = 0
-                        var total = 0
+                        mut val outer = 0
+                        mut val total = 0
                         while outer < 3 {
                             outer = outer + 1
-                            var inner = 0
+                            mut val inner = 0
                             while True {
                                 inner = inner + 1
                                 if inner == 2 {
@@ -937,11 +937,11 @@ class VeraCompilerTests {
     fun `break works inside an if that forms a whole statement`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var counter = 0
-                        var last = 0
+                        mut val counter = 0
+                        mut val last = 0
                         while True {
                             counter = counter + 1
-                            var value = if counter < 10 {
+                            val value = if counter < 10 {
                                 if counter == 3 {
                                     break
                                 }
@@ -965,7 +965,7 @@ class VeraCompilerTests {
                     }
                     fn $TEST_MAIN(): Int {
                         return add(a = 1, b = if True {
-                            var count = 0
+                            mut val count = 0
                             while True {
                                 count = count + 1
                                 if count == 4 {
@@ -986,19 +986,19 @@ class VeraCompilerTests {
         val source = """
                     fn pick(flag: Bool): Int {
                         return if flag {
-                            var value = 1
+                            val value = 1
                             value
                         } else {
-                            var value = 2
+                            val value = 2
                             value
                         }
                     }
                     fn $TEST_MAIN() {
                         print(pick(True))
                         print(pick(False))
-                        var round = 0
+                        mut val round = 0
                         while round < 2 {
-                            var doubled = round * 2
+                            val doubled = round * 2
                             print(doubled)
                             round = round + 1
                         }
@@ -1029,6 +1029,86 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `functions and methods can have expression bodies`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Square has Shape {
+                        side: Int
+                        fn area(): Int = side * side
+                    }
+                    fn double(value: Int): Int = value * 2
+                    fn greet(name: String): String = "Hello, \{name}!"
+                    fn sign(value: Int): Int = if value > 0 { 1 } else if value < 0 { -1 } else { 0 }
+                    fn total(first: Int, second: Int): Int =
+                        first + second
+                    fn log(text: String) = print(text)
+                    fn $TEST_MAIN() {
+                        print(Square(3).area())
+                        print(4 |> double)
+                        print(greet("Vera"))
+                        print(sign(-7))
+                        print(total(first = 2, second = 3))
+                        log("done")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "9${EOL}8${EOL}Hello, Vera!${EOL}-1${EOL}5${EOL}done$EOL", testInfo)
+    }
+
+    @Test
+    fun `mut val bindings can be rebound`(testInfo: TestInfo) {
+        val source = """
+                    class Point has Display {
+                        x: Int
+                        y: Int
+                    }
+                    fn $TEST_MAIN() {
+                        val limit = 3
+                        mut val count = 0
+                        mut val point = Point(x = 0, y = 0)
+                        while count < limit {
+                            count = count + 1
+                            point = Point(x = point.x + count, y = point.y)
+                        }
+                        print(count)
+                        print(point)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "3${EOL}Point(x: 6, y: 0)$EOL", testInfo)
+    }
+
+    @Test
+    fun `mut val without a value makes a parameter rebindable`(testInfo: TestInfo) {
+        val source = """
+                    class Counter {
+                        start: Int
+                        fn countUp(steps: Int): Int {
+                            mut val steps
+                            mut val total = start
+                            while steps > 0 {
+                                total = total + 1
+                                steps = steps - 1
+                            }
+                            return total
+                        }
+                    }
+                    fn countdown(from: Int) {
+                        mut val from
+                        while from > 0 {
+                            print(from)
+                            from = from - 1
+                        }
+                    }
+                    fn $TEST_MAIN() {
+                        countdown(3)
+                        print(Counter(10).countUp(2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "3${EOL}2${EOL}1${EOL}12$EOL", testInfo)
+    }
+
+    @Test
     fun `the smallest Int literal can be written`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
@@ -1044,7 +1124,7 @@ class VeraCompilerTests {
     fun `variables can be rebound with equals`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var value = 1
+                        mut val value = 1
                         value = 42
                         return value
                     }
@@ -1056,7 +1136,7 @@ class VeraCompilerTests {
     fun `rebinding can read the previous value`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var value = 1
+                        mut val value = 1
                         value = value + 2
                         return value
                     }
@@ -1068,7 +1148,7 @@ class VeraCompilerTests {
     fun `while loops can terminate through rebinding`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var counter = 0
+                        mut val counter = 0
                         while counter <= 2 {
                             print(counter)
                             counter = counter + 1
@@ -1231,8 +1311,8 @@ class VeraCompilerTests {
     fun `if and while conditions may use grouping parentheses`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var count = 0
-                        var total = 0
+                        mut val count = 0
+                        mut val total = 0
                         while (count < 3) {
                             if (count == 1) or (count == 2) {
                                 total = total + count
@@ -1275,7 +1355,7 @@ class VeraCompilerTests {
     fun `not negates booleans`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
-                        var done = False
+                        val done = False
                         print(not True)
                         print(not done)
                         print(not not True)
@@ -1308,7 +1388,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN() {
-                        var task = Task(False)
+                        val task = Task(False)
                         if not task.isFinished() and not task.finished {
                             print("pending")
                         }
@@ -1512,7 +1592,7 @@ class VeraCompilerTests {
                         runtime: Runtime
                     }
                     fn $TEST_MAIN(): Int {
-                        var processor = Processor(Runtime(10))
+                        val processor = Processor(Runtime(10))
                         return 5 |> processor.runtime.process()
                     }
                 """.trimIndent()
@@ -1530,7 +1610,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var calculator = Calculator(100)
+                        val calculator = Calculator(100)
                         return 1 |> calculator.add(20)
                     }
                 """.trimIndent()
@@ -1551,7 +1631,7 @@ class VeraCompilerTests {
                         runtime: Runtime
                     }
                     fn $TEST_MAIN() {
-                        var processor = Processor(Runtime(10))
+                        val processor = Processor(Runtime(10))
                         1 |> processor.runtime.process() |> print()
                     }
                 """.trimIndent()
@@ -1601,7 +1681,7 @@ class VeraCompilerTests {
                     }
                     fn $TEST_MAIN() {
                         print(area(width = 3, height = 4))
-                        var rect = Rect(width = 2, height = 5)
+                        val rect = Rect(width = 2, height = 5)
                         print(rect.scaled(factor = 2, extra = 1))
                         print(Rect(
                             width = 1,
@@ -1620,10 +1700,10 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var x = 3
-                        var y = 4
-                        var point = Point(x, y)
-                        var mixed = Point(x, y = 10)
+                        val x = 3
+                        val y = 4
+                        val point = Point(x, y)
+                        val mixed = Point(x, y = 10)
                         return point.x + point.y + mixed.y
                     }
                 """.trimIndent()
@@ -1676,7 +1756,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var point = 2 |> Point(1)
+                        val point = 2 |> Point(1)
                         return point.x * 10 + point.y
                     }
                 """.trimIndent()
@@ -1691,7 +1771,7 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var point = Point(x = 1, y = 2)
+                        val point = Point(x = 1, y = 2)
                         return point.x + point.y
                     }
                 """.trimIndent()
@@ -1710,7 +1790,7 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN(): Int {
-                        var line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
+                        val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
                         return line.start.x + line.end.y
                     }
                 """.trimIndent()
@@ -1728,7 +1808,7 @@ class VeraCompilerTests {
                         return Point(x = left.x + right.x, y = left.y + right.y)
                     }
                     fn $TEST_MAIN(): Int {
-                        var result = add(left = Point(x = 1, y = 2), right = Point(x = 3, y = 4))
+                        val result = add(left = Point(x = 1, y = 2), right = Point(x = 3, y = 4))
                         return result.x * 10 + result.y
                     }
                 """.trimIndent()
@@ -1743,7 +1823,7 @@ class VeraCompilerTests {
                         active: Bool
                     }
                     fn $TEST_MAIN() {
-                        var message = Message(text = "Hello", active = False)
+                        val message = Message(text = "Hello", active = False)
                         print(message.text)
                         print(message.active)
                     }
@@ -1776,7 +1856,7 @@ class VeraCompilerTests {
                         return Point(x = 7, y = 8)
                     }
                     fn $TEST_MAIN(): Int {
-                        var point: Point = makePoint()
+                        val point: Point = makePoint()
                         return point.x + makePoint().y
                     }
                 """.trimIndent()
@@ -1813,7 +1893,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var point = Point(x = 1, y = 2).offset(dx = 3, dy = 4)
+                        val point = Point(x = 1, y = 2).offset(dx = 3, dy = 4)
                         return point.x * 10 + point.y
                     }
                 """.trimIndent()
@@ -1877,7 +1957,7 @@ class VeraCompilerTests {
                         end: Point
                     }
                     fn $TEST_MAIN(): Int {
-                        var line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
+                        val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
                         return line.start.sum() + line.end.sum()
                     }
                 """.trimIndent()
@@ -2009,7 +2089,7 @@ class VeraCompilerTests {
                         point: Point
 
                         fn shifted(dx: Int, dy: Int): Int {
-                            var moved = point.offset(dx, dy)
+                            val moved = point.offset(dx, dy)
                             return moved.x * 10 + moved.y
                         }
                     }
@@ -2045,8 +2125,8 @@ class VeraCompilerTests {
                         flag: Unit
                     }
                     fn $TEST_MAIN(): Int {
-                        var signal = Signal(Unit)
-                        var flag: Unit = signal.flag
+                        val signal = Signal(Unit)
+                        val flag: Unit = signal.flag
                         return 1
                     }
                 """.trimIndent()
@@ -2056,11 +2136,11 @@ class VeraCompilerTests {
     @Test
     fun `Unit values can be passed and returned`(testInfo: TestInfo) {
         val source = """
-                    fn identity(unit: Unit): Unit {
+                    fn identity(unit: Unit) {
                         return unit
                     }
                     fn $TEST_MAIN(): Int {
-                        var unit = identity(Unit)
+                        val unit = identity(Unit)
                         return 1
                     }
                 """.trimIndent()
@@ -2070,11 +2150,11 @@ class VeraCompilerTests {
     @Test
     fun `Unit can be returned explicitly`(testInfo: TestInfo) {
         val source = """
-                    fn explicitUnit(): Unit {
+                    fn explicitUnit() {
                         return Unit
                     }
                     fn $TEST_MAIN(): Int {
-                        var unit = explicitUnit()
+                        val unit = explicitUnit()
                         return 1
                     }
                 """.trimIndent()
@@ -2085,7 +2165,7 @@ class VeraCompilerTests {
     fun `if without else produces Unit`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var result: Unit = if False {
+                        val result: Unit = if False {
                             print("no")
                         }
                         return 1
@@ -2098,7 +2178,7 @@ class VeraCompilerTests {
     fun `if without else discards a non-Unit branch value`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN(): Int {
-                        var result: Unit = if False {
+                        val result: Unit = if False {
                             1
                         }
                         return 1
@@ -2120,7 +2200,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var square = Square(3)
+                        val square = Square(3)
                         return square.area()
                     }
                 """.trimIndent()
@@ -2139,7 +2219,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var square = Square(4)
+                        val square = Square(4)
                         return square.area()
                     }
                 """.trimIndent()
@@ -2159,7 +2239,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN() {
-                        var host = Host("vera")
+                        val host = Host("vera")
                         host.greet()
                     }
                 """.trimIndent()
@@ -2179,7 +2259,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN(): Int {
-                        var counter = Counter(2)
+                        val counter = Counter(2)
                         return counter.scale(3)
                     }
                 """.trimIndent()
@@ -2206,7 +2286,7 @@ class VeraCompilerTests {
                         }
                     }
                     fn $TEST_MAIN() {
-                        var entry = Entry(label = "item", amount = 7)
+                        val entry = Entry(label = "item", amount = 7)
                         print(entry.name())
                         print(entry.value())
                     }
@@ -2411,8 +2491,8 @@ class VeraCompilerTests {
                         y: Int
                     }
                     fn $TEST_MAIN(): Int {
-                        var first = Point(x = 1, y = 2)
-                        var second = Point(x = 1, y = 2)
+                        val first = Point(x = 1, y = 2)
+                        val second = Point(x = 1, y = 2)
                         if first == second {
                             return 1
                         }

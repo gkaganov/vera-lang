@@ -71,6 +71,11 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         val token: VeraToken,
     ) : VeraParseException("invalid Int literal '${token.text}'", token)
 
+    /** `: Unit` as a return type; a function returning `Unit` leaves the return type out. */
+    class ExplicitUnitReturnType(
+        val found: VeraToken,
+    ) : VeraParseException("leave out the return type for a function that returns `Unit`; remove `: Unit`", found)
+
     /** Java syntax with a different spelling, or no counterpart, in Vera. [hint] says what to write. */
     class JavaSyntax(
         val found: VeraToken,

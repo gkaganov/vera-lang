@@ -300,7 +300,7 @@ private class VeraLexerState(private val source: String) {
             "while" to VeraTokenType.WHILE,
             "break" to VeraTokenType.BREAK,
             "continue" to VeraTokenType.CONTINUE,
-            "var" to VeraTokenType.VAR,
+            "mut" to VeraTokenType.MUT,
             "val" to VeraTokenType.VAL,
             "return" to VeraTokenType.RETURN,
             "and" to VeraTokenType.AND,

@@ -14,7 +14,7 @@
 Implemented:
 
 - Top-level functions with typed parameters and optional return types.
-- `var` bindings and rebinding with `=`.
+- `val` bindings, immutable by default, and `mut val` bindings that can be rebound with `=`.
 - `Int`, `String`, `Bool`, and `Unit`.
 - Integer arithmetic and comparisons.
 - `and` / `or` short-circuiting boolean operators.
@@ -31,7 +31,6 @@ Implemented:
 
 Not implemented:
 
-- `val` immutability enforcement.
 - Object mutation (including `mut fn` methods).
 - Trait default method bodies and trait-typed values.
 - Effects, capabilities, services, errors-as-values.
@@ -52,7 +51,7 @@ Reserved words cannot be used as identifiers:
 
 | Category | Keywords |
 |----------|----------|
-| Declarations | `fn`, `class`, `trait`, `has`, `var`, `val` |
+| Declarations | `fn`, `class`, `trait`, `has`, `val`, `mut` |
 | Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or`, `not` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
@@ -95,10 +94,17 @@ class be launched with `java <ClassName>`, while the Vera `main` keeps its decla
 fn name(parameter: Type, other: Type): ReturnType {
     return expression
 }
+
+fn double(value: Int): Int = value * 2
+fn log(text: String) = print(text)
 ```
 
 - Parameters require a name and type.
-- Return type is optional; omitted return type means `Unit`.
+- Return types are written out, except for `Unit`: a function without a return type returns `Unit`.
+  Writing `: Unit` is a compile error, so there is one way to declare a `Unit` function.
+- `= expression` is a short form for a function whose body is a single expression; it returns the
+  expression's value. A non-`Unit` expression body needs its return type written:
+  `fn double(value: Int) = value * 2` is an error. Block bodies keep explicit `return`.
 - Calls check the argument count and types against the callee's parameters.
 - A return expression must match the declared return type.
 - `return` without an expression returns from a `Unit` function.
@@ -125,7 +131,7 @@ class Point {
 }
 
 fn main() {
-    var point = Point(x = 1, y = 2)
+    val point = Point(x = 1, y = 2)
     print(point.x)
     print(point.sum())
 }
@@ -183,7 +189,8 @@ class Square has Shape {
 - Traits are compile-time contracts: they produce no bytecode, are not types, and cannot be used
   in annotations. Trait methods are called on the class, with static dispatch.
 - Traits cannot declare fields, default method bodies, or overloads.
-- Trait method parameter and return types may be `Int`, `String`, `Bool`, `Unit`, or class types.
+- Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, or class types; return types
+  follow the function rules, so a `Unit` method leaves its return type out.
 - Trait names share the top-level namespace with functions and classes.
 - Two built-in traits are always available and are implemented by the compiler:
   - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
@@ -198,18 +205,37 @@ class Square has Shape {
 ## Variables and rebinding
 
 ```vera
-var count = 0
-var name: String = "Vera"
+val name: String = "Vera"
+mut val count = 0
 
 count = count + 1
 ```
 
-- `var` introduces a binding; the type is inferred or declared explicitly.
-- `name = expression` rebinds an existing variable.
-- Rebinding requires the same type as the existing variable.
+- `val` introduces an immutable binding; the type is inferred or declared explicitly.
+- `mut val` introduces a binding that can be rebound. Every declaration reads as adjective and
+  noun, like the planned `mut fn`: a `mut val` is a mutable value.
+- `name = expression` rebinds a `mut val`. Rebinding a `val` is a compile error that suggests
+  `mut val`.
+- Parameters are immutable, and the signature never marks them `mut`. To rebind one, write
+  `mut val name` without a value directly in the function body; from that line on, the parameter
+  `name` can be rebound:
+
+```vera
+fn countdown(from: Int) {
+    mut val from
+    while from > 0 {
+        print(from)
+        from = from - 1
+    }
+}
+```
+
+- `mut val name` without a value only applies to parameters, only once per parameter, and not inside
+  a nested block.
+- Rebinding requires the same type as the existing binding.
 - Rebinding an unknown variable is a compile-time error.
-- `val` parses but is not yet enforced as immutable.
-- Bindings are block-scoped: a `var` declared inside an `if` branch or `while` body is not
+- Vera has no `var`; writing it is a compile error that suggests `val` or `mut val`.
+- Bindings are block-scoped: a `val` declared inside an `if` branch or `while` body is not
   visible after that block.
 - Names cannot be redeclared or shadow any name already in scope, including parameters, local
   bindings, fields, methods, top-level declarations, and built-ins. Sibling blocks may reuse a name,
@@ -386,13 +412,13 @@ if condition {
 - `if` without `else` produces `Unit`.
 
 ```vera
-var label = if count > 0 {
+val label = if count > 0 {
     "positive"
 } else {
     "not positive"
 }
 
-var result = if count > 10 {
+val result = if count > 10 {
     count * 2
 } else if count > 5 {
     count + 1
@@ -404,7 +430,7 @@ var result = if count > 10 {
 ### `while`
 
 ```vera
-var counter = 0
+mut val counter = 0
 
 while counter < 3 {
     print(counter)
@@ -422,11 +448,11 @@ while counter < 3 {
   statement, but not inside a nested expression such as a call argument or operator operand, where
   the jump would abandon a partially evaluated expression:
 
-Allowed, because the outer `if` forms the whole `var` statement:
+Allowed, because the outer `if` forms the whole `val` statement:
 
 ```vera
 while True {
-    var next = if ready {
+    val next = if ready {
         if done { break }
         step()
     } else {
@@ -498,11 +524,11 @@ fn total(orders: Orders): Int {
   statement.
 
 ```vera
-var report = orders
+val report = orders
     |> paidOnly()
     |> summarize()
 
-var total = subtotal +
+val total = subtotal +
     shipping
 ```
 
@@ -520,8 +546,8 @@ Notation: `"text"` is a keyword or symbol, `UPPER` is a token class, and `EOL` i
 program        = { EOL } { declaration { EOL } } EOF
 declaration    = function | class | trait
 
-function       = "fn" IDENT signature block
-signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]
+function       = "fn" IDENT signature ( block | "=" expression )
+signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]   (* type is not "Unit" *)
 parameter      = IDENT ":" type
 
 class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member statementEnd } "}"
@@ -540,7 +566,8 @@ type           = "Int" | "String" | "Bool" | "Unit" | IDENT
 block          = "{" { EOL } { statement statementEnd } "}"
 statementEnd   = EOL | EOF | (* nothing, before the closing "}" *)
 
-statement      = ( "var" | "val" ) IDENT [ ":" type ] "=" expression
+statement      = [ "mut" ] "val" IDENT [ ":" type ] "=" expression
+               | "mut" "val" IDENT                (* no value: makes a parameter rebindable *)
                | IDENT "=" expression             (* rebinding; chosen when IDENT is followed by "=" *)
                | "return" [ expression ]          (* no expression before EOL, EOF, or "}" *)
                | "while" expression block
@@ -605,7 +632,7 @@ fn add(a: Int, b: Int): Int {
 }
 
 fn main() {
-    var counter = 0
+    mut val counter = 0
 
     while counter < 3 {
         print(counter)
@@ -645,14 +672,14 @@ error: argument 1 of function add must be named: write `left = ...`
 | `;` | end the statement with a newline |
 | `new Point()` | call the class directly: `Point(...)` |
 | `extends`, `implements` | no inheritance; list traits with `has` |
-| `int count = 0`, `String name = ...` | declare with `var name: Type = ...` |
-| `public`, `private`, `static`, `final` | no modifiers; `val` for bindings that should not change |
+| `var count = 0`, `int count = 0`, `String name = ...` | declare with `val name: Type = ...` (or `mut val`) |
+| `public`, `private`, `static`, `final` | no modifiers; bindings are immutable by default |
 | `for (...)` | use `while` |
 | `int`, `boolean`, `void` as types | use `Int`, `Bool`, `Unit` |
 | `null`, `this` | not part of Vera |
 | `"a" + name` | use a string template: `"a\{name}"` |
 
-- Words such as `new`, `final`, or `for` are not reserved; the hints only appear where the code
+- Words such as `var`, `new`, `final`, or `for` are not reserved; the hints only appear where the code
   would not compile anyway.
 
 ## Further reading

@@ -25,6 +25,28 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         JvmNameHints.withHelp("variable ${name.value} is not defined", hint, suggestion),
     )
 
+    /** Rebinding a `val`; only `mut val` bindings can be rebound. */
+    class ImmutableBindingRebound(val name: Identifier) : JvmLoweringException(
+        "${name.value} is immutable; declare it with `mut val` to rebind it",
+    )
+
+    class MutableParameterRequiresParameter(val name: Identifier) : JvmLoweringException(
+        "`mut val ${name.value}` without a value makes a parameter rebindable, but ${name.value} is not a parameter",
+    )
+
+    class MutableParameterRepeated(val name: Identifier) : JvmLoweringException(
+        "parameter ${name.value} is already rebindable",
+    )
+
+    class MutableParameterOutsideFunctionBody(val name: Identifier) : JvmLoweringException(
+        "`mut val ${name.value}` must be written directly in the function body, not inside a block",
+    )
+
+    /** Rebinding a parameter; parameters are immutable. */
+    class ParameterRebound(val name: Identifier) : JvmLoweringException(
+        "parameter ${name.value} cannot be rebound; write `mut val ${name.value}` first to make it rebindable",
+    )
+
     class RebindTypeMismatch(
         val name: Identifier,
         val declared: JvmType,
@@ -348,6 +370,12 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${className.value} method ${method.value} does not match trait ${trait.value}: " +
             "expected ${renderSignature(expectedParameters, expectedReturn)}, " +
             "got ${renderSignature(actualParameters, actualReturn)}",
+    )
+
+    /** `fn name() = expression` whose expression is not `Unit` but has no return type written. */
+    class ExpressionBodyReturnTypeRequired(val function: Identifier, val actual: JvmType) : JvmLoweringException(
+        "function ${function.value} returns ${actual.render()}, so its return type must be written: " +
+            "`fn ${function.value}(...): ${actual.render()} = ...`",
     )
 
     class MissingReturnValue(val actual: JvmType) : JvmLoweringException(

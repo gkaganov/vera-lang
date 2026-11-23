@@ -10,12 +10,6 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### `val` immutability enforcement
-
-- Status: not started.
-- Area: parser and lowering.
-- Acceptance: rebinding a `val` is rejected; `var` and rebinding continue to work.
-
 ### Object mutation
 
 - Status: not started.

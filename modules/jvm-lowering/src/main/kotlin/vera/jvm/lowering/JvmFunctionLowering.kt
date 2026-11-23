@@ -4,18 +4,21 @@ import vera.ast.VeraArguments
 import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBlock
+import vera.ast.VeraBlockBody
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraBreakStatement
 import vera.ast.VeraChainedExpression
 import vera.ast.VeraContinueStatement
 import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
+import vera.ast.VeraExpressionBody
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
 import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
+import vera.ast.VeraMutableParameter
 import vera.ast.VeraOperator
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraRebindStatement
@@ -135,7 +138,7 @@ private class JvmFunctionLoweringState(
      * leaves its block, a description of how; any statement after it in the same block is unreachable.
      */
     private data class LoweredStatement(
-        val jvmStatement: JvmStatement,
+        val jvmStatement: JvmStatement?,
         val returns: Boolean,
         val exit: String? = null,
     )
@@ -159,8 +162,11 @@ private class JvmFunctionLoweringState(
     /** A lowered block and whether executing it always returns from the current function. */
     private data class LoweredBlock(val jvmBlock: JvmBlock, val returns: Boolean)
 
+    /** A visible local: its IR local, whether it may be rebound (`mut val`), and whether it is a parameter. */
+    private data class LocalBinding(val jvmLocal: JvmLocal, val mutable: Boolean, val parameter: Boolean)
+
     /** Visible locals by block scope, innermost last. The first scope holds parameters and the body. */
-    private val scopes = mutableListOf(mutableMapOf<Identifier, JvmLocal>())
+    private val scopes = mutableListOf(mutableMapOf<Identifier, LocalBinding>())
 
     /**
      * How many enclosing expressions are partially evaluated at this point. `break` and `continue` may
@@ -180,18 +186,14 @@ private class JvmFunctionLoweringState(
         val jvmParameters = veraFunction.parameters
             .map { veraParameter ->
                 val jvmLocal = located(veraParameter.span) {
-                    declareLocal(veraParameter.name, lowerType(veraParameter.type))
+                    declareLocal(veraParameter.name, lowerType(veraParameter.type), parameter = true)
                 }
                 JvmParameter(jvmLocal.name, jvmLocal.type)
             }
 
-        val loweredStatements = lowerStatementList(veraFunction.body.statements)
-        val jvmStatements = loweredStatements.map { loweredStatement -> loweredStatement.jvmStatement }.toMutableList()
-        if (loweredStatements.none { loweredStatement -> loweredStatement.returns }) {
-            if (currentReturnType != JvmUnitType) {
-                throw JvmLoweringException.MissingReturnStatement(currentReturnType).at(veraFunction.span)
-            }
-            jvmStatements += JvmReturn(null)
+        val jvmStatements = when (val veraBody = veraFunction.body) {
+            is VeraBlockBody -> lowerBlockBody(veraFunction, veraBody)
+            is VeraExpressionBody -> listOf(JvmReturn(lowerExpressionBody(veraFunction, veraBody)))
         }
 
         return JvmMethod(
@@ -201,6 +203,37 @@ private class JvmFunctionLoweringState(
             JvmExplicitReturnBlock(jvmStatements),
             receiver = receiverLocal,
         )
+    }
+
+    private fun lowerBlockBody(veraFunction: VeraFunctionDeclaration, veraBody: VeraBlockBody): List<JvmStatement> {
+        val loweredStatements = lowerStatementList(veraBody.block.statements)
+        val jvmStatements = loweredStatements.mapNotNull { loweredStatement -> loweredStatement.jvmStatement }.toMutableList()
+        if (loweredStatements.none { loweredStatement -> loweredStatement.returns }) {
+            if (currentReturnType != JvmUnitType) {
+                throw JvmLoweringException.MissingReturnStatement(currentReturnType).at(veraFunction.span)
+            }
+            jvmStatements += JvmReturn(null)
+        }
+        return jvmStatements
+    }
+
+    /**
+     * Lowers `= expression`, which returns the expression's value. An omitted return type means `Unit`,
+     * so an expression of another type needs its return type written out.
+     */
+    private fun lowerExpressionBody(
+        veraFunction: VeraFunctionDeclaration,
+        veraBody: VeraExpressionBody,
+    ): JvmExpression {
+        val jvmValue = lowerStatementExpression(veraBody.expression).jvmExpression
+        if (jvmValue.type != currentReturnType) {
+            if (veraFunction.returnType == VeraType.UNKNOWN) {
+                throw JvmLoweringException.ExpressionBodyReturnTypeRequired(veraFunction.name, jvmValue.type)
+                    .at(veraFunction.span)
+            }
+            throw JvmLoweringException.ReturnTypeMismatch(currentReturnType, jvmValue.type).at(veraBody.expression.span)
+        }
+        return jvmValue
     }
 
     /** @return the lowered statement and whether it explicitly returns from the current function. */
@@ -240,6 +273,11 @@ private class JvmFunctionLoweringState(
 
             is VeraRebindStatement -> LoweredStatement(lowerRebindStatement(veraStatement), false)
 
+            is VeraMutableParameter -> {
+                makeParameterMutable(veraStatement)
+                LoweredStatement(jvmStatement = null, returns = false)
+            }
+
             is VeraBreakStatement -> {
                 val loopDepth = loopExpressionDepths.lastOrNull()
                     ?: throw JvmLoweringException.BreakOutsideLoop()
@@ -276,9 +314,37 @@ private class JvmFunctionLoweringState(
         return JvmWhile(jvmCondition, JvmUnitReturnBlock(jvmBody))
     }
 
+    /**
+     * `mut val name` without a value: lets the parameter [VeraMutableParameter.name] be rebound from
+     * here on. It must be written directly in the function body, so the rest of the function sees it.
+     */
+    private fun makeParameterMutable(veraStatement: VeraMutableParameter) {
+        val name = veraStatement.name
+        if (scopes.size != 1) {
+            throw JvmLoweringException.MutableParameterOutsideFunctionBody(name)
+        }
+        val functionScope = scopes.first()
+        val binding = functionScope[name]
+        if (binding == null || !binding.parameter) {
+            throw JvmLoweringException.MutableParameterRequiresParameter(name)
+        }
+        if (binding.mutable) {
+            throw JvmLoweringException.MutableParameterRepeated(name)
+        }
+        functionScope[name] = binding.copy(mutable = true)
+    }
+
     private fun lowerRebindStatement(veraRebindStatement: VeraRebindStatement): JvmStatement {
-        val jvmLocal = lookupLocal(veraRebindStatement.name)
+        val binding = lookupBinding(veraRebindStatement.name)
             ?: throw unknownVariable(veraRebindStatement.name)
+        if (!binding.mutable) {
+            throw if (binding.parameter) {
+                JvmLoweringException.ParameterRebound(veraRebindStatement.name)
+            } else {
+                JvmLoweringException.ImmutableBindingRebound(veraRebindStatement.name)
+            }
+        }
+        val jvmLocal = binding.jvmLocal
         val jvmExpression = lowerExpression(veraRebindStatement.expression)
         if (jvmExpression.type != jvmLocal.type) {
             throw JvmLoweringException.RebindTypeMismatch(
@@ -301,7 +367,7 @@ private class JvmFunctionLoweringState(
                 jvmExpressionType,
             )
         }
-        val jvmLocal = declareLocal(veraBindStatement.name, jvmExpressionType)
+        val jvmLocal = declareLocal(veraBindStatement.name, jvmExpressionType, mutable = veraBindStatement.mutable)
         return JvmVarDeclaration(jvmLocal, jvmExpression)
     }
 
@@ -372,13 +438,20 @@ private class JvmFunctionLoweringState(
         receiverClass?.methods?.forEach { method -> add(method.name) }
     }
 
-    private fun lookupLocal(name: Identifier): JvmLocal? =
+    private fun lookupLocal(name: Identifier): JvmLocal? = lookupBinding(name)?.jvmLocal
+
+    private fun lookupBinding(name: Identifier): LocalBinding? =
         scopes.asReversed().firstNotNullOfOrNull { scope -> scope[name] }
 
-    private fun declareLocal(name: Identifier, jvmType: JvmType): JvmLocal {
+    private fun declareLocal(
+        name: Identifier,
+        jvmType: JvmType,
+        mutable: Boolean = false,
+        parameter: Boolean = false,
+    ): JvmLocal {
         requireFreshName(name)
         val jvmLocal = JvmLocal(name, jvmType)
-        scopes.last()[name] = jvmLocal
+        scopes.last()[name] = LocalBinding(jvmLocal, mutable, parameter)
         return jvmLocal
     }
 
@@ -950,7 +1023,7 @@ private class JvmFunctionLoweringState(
 
     private fun lowerBlock(veraBlock: VeraBlock): LoweredBlock = withScope {
         val loweredStatements = lowerStatementList(veraBlock.statements)
-        val jvmStatements = loweredStatements.map { loweredStatement -> loweredStatement.jvmStatement }
+        val jvmStatements = loweredStatements.mapNotNull { loweredStatement -> loweredStatement.jvmStatement }
         val statementsReturn = loweredStatements.any { loweredStatement -> loweredStatement.returns }
         when (veraBlock) {
             is VeraExplicitReturnBlock -> LoweredBlock(JvmExplicitReturnBlock(jvmStatements), statementsReturn)
@@ -969,7 +1042,7 @@ private class JvmFunctionLoweringState(
     }
 
     private fun lowerBlockStatements(veraStatements: List<VeraStatement>): List<JvmStatement> =
-        lowerStatementList(veraStatements).map { loweredStatement -> loweredStatement.jvmStatement }
+        lowerStatementList(veraStatements).mapNotNull { loweredStatement -> loweredStatement.jvmStatement }
 
     /** Lowers a block's statements in order, rejecting any statement after one that always leaves it. */
     private fun lowerStatementList(veraStatements: List<VeraStatement>): List<LoweredStatement> {

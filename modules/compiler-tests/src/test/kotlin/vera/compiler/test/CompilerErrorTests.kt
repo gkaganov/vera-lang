@@ -142,13 +142,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "Java increments",
-                function("var count = 0", "count++"),
+                function("val count = 0", "count++"),
                 VeraLexException.JavaOperator::class,
                 "Vera does not use `++`; write `x = x + 1` instead",
             ),
             CompileErrorCase(
                 "Java compound assignments",
-                function("var count = 0", "count -= 2"),
+                function("val count = 0", "count -= 2"),
                 VeraLexException.JavaOperator::class,
                 "Vera does not use `-=`; write `x = x - value` instead",
             ),
@@ -164,7 +164,7 @@ class CompilerErrorTests {
         fun parserErrors(): List<CompileErrorCase> = listOf(
             CompileErrorCase(
                 "non-function declarations",
-                "var value = 1",
+                "val value = 1",
                 VeraParseException.ExpectedDeclaration::class,
                 "expected a function, class, or trait declaration",
             ),
@@ -176,7 +176,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "missing expressions",
-                function("var value ="),
+                function("val value ="),
                 VeraParseException.ExpectedExpression::class,
                 "expected an expression",
             ),
@@ -188,13 +188,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "template placeholders with two expressions",
-                function("var a = 1", "var b = 2", "print(\"\\{a b}\")"),
+                function("val a = 1", "val b = 2", "print(\"\\{a b}\")"),
                 VeraParseException.ExpectedToken::class,
                 "expected `}` to close the template placeholder",
             ),
             CompileErrorCase(
                 "Java object creation with new",
-                function("var point = new Point()"),
+                function("val point = new Point()"),
                 VeraParseException.JavaSyntax::class,
                 "Vera has no `new`; call the class directly: `Point(...)`",
             ),
@@ -214,13 +214,13 @@ class CompilerErrorTests {
                 "Java-style declarations with primitive types",
                 function("int count = 0"),
                 VeraParseException.JavaSyntax::class,
-                "Vera declares variables with `var`: write `var count: Int = ...`",
+                "Vera declares variables with `val`: write `val count: Int = ...`",
             ),
             CompileErrorCase(
                 "Java-style declarations with Vera types",
                 function("String name = \"Vera\""),
                 VeraParseException.JavaSyntax::class,
-                "Vera declares variables with `var`: write `var name: String = ...`",
+                "Vera declares variables with `val`: write `val name: String = ...`",
             ),
             CompileErrorCase(
                 "Java modifiers on declarations",
@@ -236,15 +236,39 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "Java final bindings",
-                function("final var count = 1"),
+                function("final val count = 1"),
                 VeraParseException.JavaSyntax::class,
-                "Vera has no `final`; use `val` for a binding that should not change",
+                "Vera has no `final`; bindings are immutable by default, so write `val`",
             ),
             CompileErrorCase(
                 "Java for loops",
                 function("for (item in items) {", "}"),
                 VeraParseException.JavaSyntax::class,
                 "Vera has no `for` loop; use `while`",
+            ),
+            CompileErrorCase(
+                "explicit Unit return types",
+                "fn log(text: String): Unit {\n}",
+                VeraParseException.ExplicitUnitReturnType::class,
+                "leave out the return type for a function that returns `Unit`; remove `: Unit`",
+            ),
+            CompileErrorCase(
+                "explicit Unit return types on trait methods",
+                traitDeclaration("Resettable", "fn reset(): Unit"),
+                VeraParseException.ExplicitUnitReturnType::class,
+                "leave out the return type for a function that returns `Unit`",
+            ),
+            CompileErrorCase(
+                "Java and Kotlin var declarations",
+                function("var count = 0"),
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `var`; declare with `val`, or `mut val` for a binding you rebind",
+            ),
+            CompileErrorCase(
+                "mut without val",
+                function("mut count = 0"),
+                VeraParseException.ExpectedToken::class,
+                "expected `val` after `mut`, found 'count'",
             ),
             CompileErrorCase(
                 "missing statement terminators",
@@ -311,7 +335,7 @@ class CompilerErrorTests {
                 "continue inside operands",
                 function(
                     "while True {",
-                    "    var value = 1 + if True {",
+                    "    val value = 1 + if True {",
                     "        continue",
                     "        0",
                     "    } else {",
@@ -342,7 +366,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "block results after break",
-                function("while True {", "    var value = if True {", "        break", "        0", "    } else {", "        1", "    }", "}"),
+                function("while True {", "    val value = if True {", "        break", "        0", "    } else {", "        1", "    }", "}"),
                 JvmLoweringException.UnreachableStatement::class,
                 "unreachable statement after break",
             ),
@@ -355,7 +379,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "misspelled variables",
-                function("var count = 1", "print(cuont)"),
+                function("val count = 1", "print(cuont)"),
                 JvmLoweringException.UnknownVariable::class,
                 "variable cuont is not defined; did you mean `count`?",
             ),
@@ -411,7 +435,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "Java null",
-                function("var value = null"),
+                function("val value = null"),
                 JvmLoweringException.UnknownVariable::class,
                 "variable null is not defined; Vera has no `null`",
             ),
@@ -423,9 +447,57 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "String concatenation with plus",
-                function("var name = \"Vera\"", "print(\"Hello \" + name)"),
+                function("val name = \"Vera\"", "print(\"Hello \" + name)"),
                 JvmLoweringException.StringConcatenationNotSupported::class,
                 "Vera builds strings with templates, not `+`; write \"text \\{value}\"",
+            ),
+            CompileErrorCase(
+                "expression bodies without a return type",
+                "fn double(value: Int) = value * 2",
+                JvmLoweringException.ExpressionBodyReturnTypeRequired::class,
+                "function double returns Int, so its return type must be written: `fn double(...): Int = ...`",
+            ),
+            CompileErrorCase(
+                "expression bodies of the wrong type",
+                "fn double(value: Int): String = value * 2",
+                JvmLoweringException.ReturnTypeMismatch::class,
+                "return requires String, got Int",
+            ),
+            CompileErrorCase(
+                "rebinding val bindings",
+                function("val count = 0", "count = 1"),
+                JvmLoweringException.ImmutableBindingRebound::class,
+                "count is immutable; declare it with `mut val` to rebind it",
+            ),
+            CompileErrorCase(
+                "rebinding parameters",
+                "fn next(value: Int): Int {\n    value = value + 1\n    return value\n}",
+                JvmLoweringException.ParameterRebound::class,
+                "parameter value cannot be rebound; write `mut val value` first to make it rebindable",
+            ),
+            CompileErrorCase(
+                "mut val without a value for a local",
+                function("val count = 0", "mut val count"),
+                JvmLoweringException.MutableParameterRequiresParameter::class,
+                "`mut val count` without a value makes a parameter rebindable, but count is not a parameter",
+            ),
+            CompileErrorCase(
+                "rebinding a parameter before it is made rebindable",
+                "fn next(value: Int): Int {\n    value = value + 1\n    mut val value\n    return value\n}",
+                JvmLoweringException.ParameterRebound::class,
+                "parameter value cannot be rebound; write `mut val value` first to make it rebindable at line 2, column 5",
+            ),
+            CompileErrorCase(
+                "mut val without a value repeated",
+                "fn next(value: Int): Int {\n    mut val value\n    mut val value\n    return value\n}",
+                JvmLoweringException.MutableParameterRepeated::class,
+                "parameter value is already rebindable",
+            ),
+            CompileErrorCase(
+                "mut val without a value inside a block",
+                "fn next(value: Int) {\n    if True {\n        mut val value\n    }\n}",
+                JvmLoweringException.MutableParameterOutsideFunctionBody::class,
+                "`mut val value` must be written directly in the function body, not inside a block",
             ),
             CompileErrorCase(
                 "undefined names",
@@ -441,19 +513,19 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "locals used after the if branch that declares them",
-                function("if True {", "    var inner = 1", "}", "print(inner)"),
+                function("if True {", "    val inner = 1", "}", "print(inner)"),
                 JvmLoweringException.UnknownVariable::class,
                 "variable inner is not defined",
             ),
             CompileErrorCase(
                 "locals used after the loop body that declares them",
-                function("while False {", "    var inner = 1", "}", "print(inner)"),
+                function("while False {", "    val inner = 1", "}", "print(inner)"),
                 JvmLoweringException.UnknownVariable::class,
                 "variable inner is not defined",
             ),
             CompileErrorCase(
                 "locals in nested blocks shadowing outer locals",
-                function("var value = 1", "if True {", "    var value = 2", "}"),
+                function("val value = 1", "if True {", "    val value = 2", "}"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name value is already in scope; shadowing is not allowed",
             ),
@@ -465,7 +537,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "rebinding to a different type",
-                function("var value = 1", "value = \"text\""),
+                function("mut val value = 1", "value = \"text\""),
                 JvmLoweringException.RebindTypeMismatch::class,
                 "cannot rebind variable value",
             ),
@@ -477,37 +549,37 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "bindings that contradict their declared type",
-                function("var value: Int = \"text\""),
+                function("val value: Int = \"text\""),
                 JvmLoweringException.BindTypeMismatch::class,
                 "variable value is declared as Int but bound to a value of type String",
             ),
             CompileErrorCase(
                 "non-Bool logical operands",
-                function("var value = 1 and True"),
+                function("val value = 1 and True"),
                 JvmLoweringException.BoolOperandsRequired::class,
                 "operator 'and' is only defined for Bool operands",
             ),
             CompileErrorCase(
                 "non-Bool not operands",
-                function("var value = not 1"),
+                function("val value = not 1"),
                 JvmLoweringException.BoolOperandsRequired::class,
                 "operator 'not' is only defined for Bool operands",
             ),
             CompileErrorCase(
                 "not applied to an Int comparison operand",
-                function("var value = not 1 == 2"),
+                function("val value = not 1 == 2"),
                 JvmLoweringException.BoolOperandsRequired::class,
                 "operator 'not' is only defined for Bool operands",
             ),
             CompileErrorCase(
                 "binary operands with different types",
-                function("var value = 1 * \"x\""),
+                function("val value = 1 * \"x\""),
                 JvmLoweringException.OperandTypesDiffer::class,
                 "operator '*' requires both operands to have the same type",
             ),
             CompileErrorCase(
                 "non-Int binary operands",
-                function("var value = \"x\" * \"y\""),
+                function("val value = \"x\" * \"y\""),
                 JvmLoweringException.IntOperandsRequired::class,
                 "operator '*' is only defined for Int operands",
             ),
@@ -537,7 +609,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "if branches with different types",
-                function("var value = if True {", "    1", "} else {", "    \"no\"", "}"),
+                function("val value = if True {", "    1", "} else {", "    \"no\"", "}"),
                 JvmLoweringException.IfBranchTypeMismatch::class,
                 "if branches must have the same type",
             ),
@@ -596,14 +668,14 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "shorthand arguments out of parameter order",
                 "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                    function("var left = 1", "var right = 2", "print(add(right, left))"),
+                    function("val left = 1", "val right = 2", "print(add(right, left))"),
                 JvmLoweringException.ArgumentNameMismatch::class,
                 "argument 1 of function add is named right, but parameter 1 is left",
             ),
             CompileErrorCase(
                 "shorthand arguments that match no parameter",
                 "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                    function("var first = 1", "print(add(first, right = 2))"),
+                    function("val first = 1", "print(add(first, right = 2))"),
                 JvmLoweringException.ArgumentNameRequired::class,
                 "argument 1 of function add must be named: write `left = ...`",
             ),
@@ -699,7 +771,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "member access on non-object values",
-                function("var x = 1", "print(x.foo)"),
+                function("val x = 1", "print(x.foo)"),
                 JvmLoweringException.MemberAccessRequiresObject::class,
                 "member access requires an object",
             ),
@@ -854,13 +926,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "class constructors with the wrong arity",
-                classDeclaration("Point", "x: Int") + function("var point = Point()"),
+                classDeclaration("Point", "x: Int") + function("val point = Point()"),
                 JvmLoweringException.ClassConstructorArityMismatch::class,
                 "class Point constructor requires 1 argument, got 0",
             ),
             CompileErrorCase(
                 "class constructor arguments with the wrong type",
-                classDeclaration("Point", "x: Int") + function("var point = Point(\"wrong\")"),
+                classDeclaration("Point", "x: Int") + function("val point = Point(\"wrong\")"),
                 JvmLoweringException.ClassConstructorArgumentTypeMismatch::class,
                 "class Point field x requires Int, got String",
             ),
@@ -872,7 +944,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "class types used as values",
-                classDeclaration("Point", "x: Int") + function("var point = Point"),
+                classDeclaration("Point", "x: Int") + function("val point = Point"),
                 JvmLoweringException.ClassTypeUsedAsValue::class,
                 "class type Point cannot be used as a value",
             ),
@@ -1001,7 +1073,7 @@ class CompilerErrorTests {
                     "Point",
                     "x: Int",
                     "fn compute(): Int {",
-                    "    var x = 1",
+                    "    val x = 1",
                     "    return x",
                     "}",
                 ),
@@ -1015,7 +1087,7 @@ class CompilerErrorTests {
                     "x: Int",
                     "fn compute(): Int {",
                     "    if True {",
-                    "        var x = 1",
+                    "        val x = 1",
                     "    }",
                     "    return x",
                     "}",
@@ -1025,13 +1097,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "locals shadowing parameters",
-                "fn testMain(value: Int) {\n    var value = 1\n}",
+                "fn testMain(value: Int) {\n    val value = 1\n}",
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name value is already in scope; shadowing is not allowed",
             ),
             CompileErrorCase(
                 "locals shadowing locals",
-                function("var value = 1", "var value = 2"),
+                function("val value = 1", "val value = 2"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name value is already in scope; shadowing is not allowed",
             ),
@@ -1125,7 +1197,7 @@ class CompilerErrorTests {
     @Test
     fun `unknown names without a close match get no suggestion`() {
         val error = Assertions.assertThrows(JvmLoweringException.UnknownVariable::class.java) {
-            VeraCompiler.compile(Identifier("ErrorTest"), function("var count = 1", "print(total)"))
+            VeraCompiler.compile(Identifier("ErrorTest"), function("val count = 1", "print(total)"))
         }
         Assertions.assertEquals("variable total is not defined", error.message)
     }
@@ -1162,7 +1234,7 @@ class CompilerErrorTests {
     @Test
     fun `diagnostics point at the unexpected token of a parse error`() {
         assertRendersAs(
-            "fn testMain() {\n    var value =\n}\n",
+            "fn testMain() {\n    val value =\n}\n",
             """
             error: expected an expression, found '}'
              --> main.vera:3:1
@@ -1204,12 +1276,12 @@ class CompilerErrorTests {
     @Test
     fun `diagnostics underline a multi-line span to the end of its first line`() {
         assertRendersAs(
-            "fn testMain() {\n    var value = if True {\n        1\n    } else {\n        \"a\"\n    }\n}\n",
+            "fn testMain() {\n    val value = if True {\n        1\n    } else {\n        \"a\"\n    }\n}\n",
             """
             error: if branches must have the same type, got Int and String
              --> main.vera:2:17
               |
-            2 |     var value = if True {
+            2 |     val value = if True {
               |                 ^^^^^^^^^
             """,
         )

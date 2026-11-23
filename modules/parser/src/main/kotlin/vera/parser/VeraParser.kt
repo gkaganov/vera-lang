@@ -5,6 +5,7 @@ import vera.ast.VeraArguments
 import vera.ast.VeraBinaryOperation
 import vera.ast.VeraBindStatement
 import vera.ast.VeraBlock
+import vera.ast.VeraBlockBody
 import vera.ast.VeraBoolLiteral
 import vera.ast.VeraBreakStatement
 import vera.ast.VeraChainedExpression
@@ -14,6 +15,7 @@ import vera.ast.VeraContinueStatement
 import vera.ast.VeraDeclaration
 import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
+import vera.ast.VeraExpressionBody
 import vera.ast.VeraField
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
@@ -21,6 +23,7 @@ import vera.ast.VeraIfExpression
 import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
+import vera.ast.VeraMutableParameter
 import vera.ast.VeraOperator
 import vera.ast.VeraParameter
 import vera.ast.VeraPrimaryExpression
@@ -80,14 +83,12 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val fnToken = expect(VeraTokenType.FN)
         val name = expect(VeraTokenType.IDENTIFIER, "function name")
         val (parameters, returnType) = parseSignature()
-        val body = parseBlock()
-        return VeraFunctionDeclaration(
-            Identifier(name.text),
-            parameters,
-            returnType,
-            VeraExplicitReturnBlock(body),
-            spanOf(fnToken, name),
-        )
+        val body = if (match(VeraTokenType.BIND)) {
+            VeraExpressionBody(parseExpression())
+        } else {
+            VeraBlockBody(VeraExplicitReturnBlock(parseBlock()))
+        }
+        return VeraFunctionDeclaration(Identifier(name.text), parameters, returnType, body, spanOf(fnToken, name))
     }
 
     private fun parseClassDeclaration(): VeraClassDeclaration {
@@ -157,7 +158,14 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             }
         }
         expect(VeraTokenType.RPAREN)
-        val returnType = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
+        val returnType = if (match(VeraTokenType.COLON)) {
+            if (at(VeraTokenType.UNIT_TYPE)) {
+                throw VeraParseException.ExplicitUnitReturnType(current())
+            }
+            parseTypeRef()
+        } else {
+            VeraType.UNKNOWN
+        }
         return parameters to returnType
     }
 
@@ -229,7 +237,17 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseStatement(): VeraStatement {
         rejectJavaStatement()
         val statement = when {
-            at(VeraTokenType.VAR) || at(VeraTokenType.VAL) -> parseBindStatement()
+            at(VeraTokenType.VAL) -> parseBindStatement(advance(), mutable = false)
+            at(VeraTokenType.MUT) -> {
+                val keyword = advance()
+                expect(VeraTokenType.VAL, "`val` after `mut`")
+                if (at(VeraTokenType.IDENTIFIER) && peek().type in statementEnds) {
+                    val name = advance()
+                    VeraMutableParameter(Identifier(name.text), spanFrom(keyword))
+                } else {
+                    parseBindStatement(keyword, mutable = true)
+                }
+            }
             at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND -> parseRebindStatement()
             at(VeraTokenType.RETURN) -> parseReturnStatement()
             at(VeraTokenType.WHILE) -> parseWhileStatement()
@@ -241,13 +259,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return statement
     }
 
-    private fun parseBindStatement(): VeraBindStatement {
-        val keyword = advance() // var | val
+    /** Parses a binding after its `val` or `mut val`; [keyword] is the first keyword token. */
+    private fun parseBindStatement(keyword: VeraToken, mutable: Boolean): VeraBindStatement {
         val name = expect(VeraTokenType.IDENTIFIER, "variable name")
         val type = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
         expect(VeraTokenType.BIND)
         val expression = parseExpression()
-        return VeraBindStatement(Identifier(name.text), type, VeraExpression(expression), spanFrom(keyword))
+        return VeraBindStatement(Identifier(name.text), type, VeraExpression(expression), mutable, spanFrom(keyword))
     }
 
     private fun parseRebindStatement(): VeraRebindStatement {
@@ -552,10 +570,16 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             token.type == VeraTokenType.IDENTIFIER && token.text == "new" && next.type == VeraTokenType.IDENTIFIER ->
                 throw javaNew()
 
+            token.type == VeraTokenType.IDENTIFIER && token.text == "var" && next.type == VeraTokenType.IDENTIFIER ->
+                throw VeraParseException.JavaSyntax(
+                    token,
+                    "Vera has no `var`; declare with `val`, or `mut val` for a binding you rebind",
+                )
+
             token.type == VeraTokenType.IDENTIFIER && token.text == "final" ->
                 throw VeraParseException.JavaSyntax(
                     token,
-                    "Vera has no `final`; use `val` for a binding that should not change",
+                    "Vera has no `final`; bindings are immutable by default, so write `val`",
                 )
 
             token.type == VeraTokenType.IDENTIFIER && token.text in javaModifiers &&
@@ -567,7 +591,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             startsWithType && next.type == VeraTokenType.IDENTIFIER ->
                 throw VeraParseException.JavaSyntax(
                     token,
-                    "Vera declares variables with `var`: write `var ${next.text}: ${veraTypeName(token.text)} = ...`",
+                    "Vera declares variables with `val`: write `val ${next.text}: ${veraTypeName(token.text)} = ...`",
                 )
         }
     }
@@ -635,6 +659,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private companion object {
         val javaModifiers = setOf("public", "private", "protected", "static", "final", "abstract")
         val javaTypeNames = mapOf("int" to "Int", "Integer" to "Int", "boolean" to "Bool", "Boolean" to "Bool")
+        /** Tokens that can follow a complete statement. */
+        val statementEnds = setOf(VeraTokenType.EOL, VeraTokenType.EOF, VeraTokenType.RBRACE)
         val builtinTypeTokens = setOf(
             VeraTokenType.INT_TYPE,
             VeraTokenType.STRING_TYPE,

@@ -94,6 +94,16 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- Bindings: `val` is immutable and `mut val` (`VeraBindStatement.mutable`) can be rebound; the lowering
+  scope stack records each local's mutability. Rebinding a `val` is `ImmutableBindingRebound` and
+  rebinding a parameter is `ParameterRebound`; parameters cannot be marked `mut` in a signature.
+  `mut val name` without a value (`VeraMutableParameter`) marks a parameter rebindable from that
+  statement on; it is only allowed for parameters, once, and directly in the function body. `var` is not a
+  keyword, and `var x = ...` gets a hint.
+- Function bodies are `VeraBlockBody` (explicit `return`s) or `VeraExpressionBody` (`= expression`,
+  lowered to a single `JvmReturn`). An omitted return type means `Unit`; a non-`Unit` expression body
+  without one is `ExpressionBodyReturnTypeRequired`. The parser rejects an explicit `: Unit` return
+  type (`VeraParseException.ExplicitUnitReturnType`).
 - Calls carry `VeraArgument(name, expression)`. `JvmFunctionLowering.requireArgumentNames` checks every
   function, method, constructor, and built-in call after its arity check. Only written arguments
   count; the value forwarded by `|>` fills the first parameter unnamed. One written argument is
@@ -307,7 +317,7 @@ uncommitted changes:
   inside a placeholder work; a line break inside a placeholder is an unterminated string. The
   parser builds `VeraStringTemplate`, and lowering joins the parts with a `StringBuilder`
   (`JvmObjectMethods.concatenate`), rendering values as `print` does.
-- Constructs: `fn`, `class`, `trait`, `has`, `var`, rebinding with `=`, `if` / `else if` /
+- Constructs: `fn`, `class`, `trait`, `has`, `val`, `mut val`, rebinding with `=`, `if` / `else if` /
   `else`, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
