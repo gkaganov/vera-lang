@@ -214,6 +214,15 @@ private class VeraLexerState(private val source: String) {
         val next = source.getOrNull(index + 1)
 
         val (type, length) = when (char) {
+            '!' if next != '=' -> throw javaOperator("!", "write `not` instead, for example `not done`")
+            '&' if next == '&' -> throw javaOperator("&&", "write `and` instead")
+            '|' if next == '|' -> throw javaOperator("||", "write `or` instead")
+            '+' if next == '+' -> throw javaOperator("++", "write `x = x + 1` instead")
+            '+' if next == '=' -> throw compoundAssignment(char)
+            '-' if next == '=' -> throw compoundAssignment(char)
+            '*' if next == '=' -> throw compoundAssignment(char)
+            '/' if next == '=' -> throw compoundAssignment(char)
+            '%' if next == '=' -> throw compoundAssignment(char)
             '=' if next == '=' -> VeraTokenType.EQ to 2
             '!' if next == '=' -> VeraTokenType.NEQ to 2
             '<' if next == '=' -> VeraTokenType.LTE to 2
@@ -242,6 +251,12 @@ private class VeraLexerState(private val source: String) {
         trackBracket(type)
         tokens += VeraToken(type, source.substring(index - length, index), startLine, startColumn, column)
     }
+
+    private fun javaOperator(operator: String, hint: String): VeraLexException.JavaOperator =
+        VeraLexException.JavaOperator(operator, hint, SourceLocation(line, column))
+
+    private fun compoundAssignment(operator: Char): VeraLexException.JavaOperator =
+        javaOperator("$operator=", "write `x = x $operator value` instead")
 
     private fun trackBracket(type: VeraTokenType) {
         when (type) {

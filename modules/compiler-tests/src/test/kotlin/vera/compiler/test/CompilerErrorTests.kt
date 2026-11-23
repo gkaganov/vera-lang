@@ -123,6 +123,36 @@ class CompilerErrorTests {
                 "unterminated string literal",
             ),
             CompileErrorCase(
+                "Java negation",
+                function("print(!True)"),
+                VeraLexException.JavaOperator::class,
+                "Vera does not use `!`; write `not` instead, for example `not done`",
+            ),
+            CompileErrorCase(
+                "Java logical and",
+                function("print(True && False)"),
+                VeraLexException.JavaOperator::class,
+                "Vera does not use `&&`; write `and` instead",
+            ),
+            CompileErrorCase(
+                "Java logical or",
+                function("print(True || False)"),
+                VeraLexException.JavaOperator::class,
+                "Vera does not use `||`; write `or` instead",
+            ),
+            CompileErrorCase(
+                "Java increments",
+                function("var count = 0", "count++"),
+                VeraLexException.JavaOperator::class,
+                "Vera does not use `++`; write `x = x + 1` instead",
+            ),
+            CompileErrorCase(
+                "Java compound assignments",
+                function("var count = 0", "count -= 2"),
+                VeraLexException.JavaOperator::class,
+                "Vera does not use `-=`; write `x = x - value` instead",
+            ),
+            CompileErrorCase(
                 "semicolons",
                 function("print(1);"),
                 VeraLexException.UnexpectedSemicolon::class,
@@ -161,6 +191,60 @@ class CompilerErrorTests {
                 function("var a = 1", "var b = 2", "print(\"\\{a b}\")"),
                 VeraParseException.ExpectedToken::class,
                 "expected `}` to close the template placeholder",
+            ),
+            CompileErrorCase(
+                "Java object creation with new",
+                function("var point = new Point()"),
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `new`; call the class directly: `Point(...)`",
+            ),
+            CompileErrorCase(
+                "Java inheritance with extends",
+                "class Square extends Shape {\n}",
+                VeraParseException.JavaSyntax::class,
+                "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
+            ),
+            CompileErrorCase(
+                "Java interfaces with implements",
+                "class Square implements Shape {\n}",
+                VeraParseException.JavaSyntax::class,
+                "Vera lists traits with `has`: `class Square has Trait`",
+            ),
+            CompileErrorCase(
+                "Java-style declarations with primitive types",
+                function("int count = 0"),
+                VeraParseException.JavaSyntax::class,
+                "Vera declares variables with `var`: write `var count: Int = ...`",
+            ),
+            CompileErrorCase(
+                "Java-style declarations with Vera types",
+                function("String name = \"Vera\""),
+                VeraParseException.JavaSyntax::class,
+                "Vera declares variables with `var`: write `var name: String = ...`",
+            ),
+            CompileErrorCase(
+                "Java modifiers on declarations",
+                "public fn main() {\n}",
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `public` modifier; declarations are written without modifiers",
+            ),
+            CompileErrorCase(
+                "Java modifiers on fields",
+                "class Point {\n    private x: Int\n}",
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `private` modifier",
+            ),
+            CompileErrorCase(
+                "Java final bindings",
+                function("final var count = 1"),
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `final`; use `val` for a binding that should not change",
+            ),
+            CompileErrorCase(
+                "Java for loops",
+                function("for (item in items) {", "}"),
+                VeraParseException.JavaSyntax::class,
+                "Vera has no `for` loop; use `while`",
             ),
             CompileErrorCase(
                 "missing statement terminators",
@@ -270,6 +354,80 @@ class CompilerErrorTests {
                 "unreachable statement after an if whose branches all return",
             ),
             CompileErrorCase(
+                "misspelled variables",
+                function("var count = 1", "print(cuont)"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable cuont is not defined; did you mean `count`?",
+            ),
+            CompileErrorCase(
+                "misspelled functions",
+                "fn greet() {\n}\n" + function("gret()"),
+                JvmLoweringException.UnknownFunction::class,
+                "function gret is not defined; did you mean `greet`?",
+            ),
+            CompileErrorCase(
+                "misspelled built-ins",
+                function("pirnt(1)"),
+                JvmLoweringException.UnknownFunction::class,
+                "function pirnt is not defined; did you mean `print`?",
+            ),
+            CompileErrorCase(
+                "misspelled fields",
+                classDeclaration("Size", "width: Int", "height: Int") +
+                    function("print(Size(width = 1, height = 2).widht)"),
+                JvmLoweringException.UnknownClassField::class,
+                "class Size has no field widht; did you mean `width`?",
+            ),
+            CompileErrorCase(
+                "misspelled methods",
+                classDeclaration("Size", "width: Int", "fn area(): Int {", "    return width", "}") +
+                    function("print(Size(2).aera())"),
+                JvmLoweringException.UnknownClassMethod::class,
+                "class Size has no method aera; did you mean `area`?",
+            ),
+            CompileErrorCase(
+                "misspelled types",
+                "fn show(value: Strng) {\n}",
+                JvmLoweringException.UnknownClassType::class,
+                "class type Strng is not defined; did you mean `String`?",
+            ),
+            CompileErrorCase(
+                "misspelled traits",
+                "class Point has Eqq {\n    x: Int\n}",
+                JvmLoweringException.UnknownTrait::class,
+                "trait Eqq is not defined; did you mean `Eq`?",
+            ),
+            CompileErrorCase(
+                "Java primitive type names",
+                "fn show(value: int) {\n}",
+                JvmLoweringException.UnknownClassType::class,
+                "class type int is not defined; Vera's integer type is `Int`",
+            ),
+            CompileErrorCase(
+                "Java void return types",
+                "fn show(): void {\n}",
+                JvmLoweringException.UnknownClassType::class,
+                "class type void is not defined; use `Unit`, or leave out the return type",
+            ),
+            CompileErrorCase(
+                "Java null",
+                function("var value = null"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable null is not defined; Vera has no `null`",
+            ),
+            CompileErrorCase(
+                "Java this",
+                classDeclaration("Point", "x: Int", "fn getX(): Int {", "    return this.x", "}"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable this is not defined; Vera has no `this`; refer to fields and methods by their names",
+            ),
+            CompileErrorCase(
+                "String concatenation with plus",
+                function("var name = \"Vera\"", "print(\"Hello \" + name)"),
+                JvmLoweringException.StringConcatenationNotSupported::class,
+                "Vera builds strings with templates, not `+`; write \"text \\{value}\"",
+            ),
+            CompileErrorCase(
                 "undefined names",
                 function("print(missing)"),
                 JvmLoweringException.UnknownVariable::class,
@@ -343,15 +501,15 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "binary operands with different types",
-                function("var value = 1 + \"x\""),
+                function("var value = 1 * \"x\""),
                 JvmLoweringException.OperandTypesDiffer::class,
-                "operator '+' requires both operands to have the same type",
+                "operator '*' requires both operands to have the same type",
             ),
             CompileErrorCase(
                 "non-Int binary operands",
-                function("var value = \"x\" + \"y\""),
+                function("var value = \"x\" * \"y\""),
                 JvmLoweringException.IntOperandsRequired::class,
-                "operator '+' is only defined for Int operands",
+                "operator '*' is only defined for Int operands",
             ),
             CompileErrorCase(
                 "non-Int unary operands",
@@ -411,7 +569,7 @@ class CompilerErrorTests {
                 "calls to unknown functions",
                 function("missing()"),
                 JvmLoweringException.UnknownFunction::class,
-                "function missing not found.",
+                "function missing is not defined",
             ),
             CompileErrorCase(
                 "function calls with the wrong arity",
@@ -962,6 +1120,14 @@ class CompilerErrorTests {
     @MethodSource("loweringErrors")
     fun `lowering errors are reported`(case: CompileErrorCase) {
         assertCompilationFails(case)
+    }
+
+    @Test
+    fun `unknown names without a close match get no suggestion`() {
+        val error = Assertions.assertThrows(JvmLoweringException.UnknownVariable::class.java) {
+            VeraCompiler.compile(Identifier("ErrorTest"), function("var count = 1", "print(total)"))
+        }
+        Assertions.assertEquals("variable total is not defined", error.message)
     }
 
     @Test

@@ -635,6 +635,25 @@ error: argument 1 of function add must be named: write `left = ...`
 - The underline covers the innermost construct responsible: an expression, an argument, a
   statement, or a declaration header such as `fn add`.
 - A span that continues onto later lines is underlined to the end of its first line.
+- Unknown names suggest a close match: ``variable cuont is not defined; did you mean `count`?``.
+- Common Java habits get a hint saying what to write in Vera instead:
+
+| Java | Hint |
+|------|------|
+| `!done`, `&&`, `\|\|` | use `not`, `and`, `or` |
+| `x++`, `x += 1` | write `x = x + 1` |
+| `;` | end the statement with a newline |
+| `new Point()` | call the class directly: `Point(...)` |
+| `extends`, `implements` | no inheritance; list traits with `has` |
+| `int count = 0`, `String name = ...` | declare with `var name: Type = ...` |
+| `public`, `private`, `static`, `final` | no modifiers; `val` for bindings that should not change |
+| `for (...)` | use `while` |
+| `int`, `boolean`, `void` as types | use `Int`, `Bool`, `Unit` |
+| `null`, `this` | not part of Vera |
+| `"a" + name` | use a string template: `"a\{name}"` |
+
+- Words such as `new`, `final`, or `for` are not reserved; the hints only appear where the code
+  would not compile anyway.
 
 ## Further reading
 

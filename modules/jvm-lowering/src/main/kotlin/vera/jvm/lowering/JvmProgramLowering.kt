@@ -215,7 +215,10 @@ object JvmProgramLowering {
             }
             if (traitName in JvmBuiltinTraits.names) return@forEach
             val trait = traitsByName[traitName]
-                ?: throw JvmLoweringException.UnknownTrait(traitName).at(veraClass.span)
+                ?: throw JvmLoweringException.UnknownTrait(
+                    traitName,
+                    JvmNameHints.closest(traitName, traitsByName.keys + JvmBuiltinTraits.names),
+                ).at(veraClass.span)
             trait.methods.forEach { traitMethod ->
                 val classMethod = veraClass.methods.firstOrNull { it.name == traitMethod.name }
                     ?: throw JvmLoweringException.MissingTraitMethod(

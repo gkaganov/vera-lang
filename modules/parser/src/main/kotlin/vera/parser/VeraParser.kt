@@ -70,6 +70,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             at(VeraTokenType.TRAIT) -> parseTraitDeclaration()
             else -> {
                 val token = current()
+                rejectJavaModifier(token)
                 throw VeraParseException.ExpectedDeclaration(token)
             }
         }
@@ -99,6 +100,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
             }
         }
+        rejectJavaInheritance(name)
         expect(VeraTokenType.LBRACE)
         skipEols()
         val fields = mutableListOf<VeraField>()
@@ -107,6 +109,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             if (at(VeraTokenType.FN)) {
                 methods += parseFunctionDeclaration()
             } else {
+                if (peek().type != VeraTokenType.COLON) {
+                    rejectJavaModifier(current())
+                }
                 val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
                 expect(VeraTokenType.COLON)
                 val fieldType = parseTypeRef()
@@ -222,6 +227,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     }
 
     private fun parseStatement(): VeraStatement {
+        rejectJavaStatement()
         val statement = when {
             at(VeraTokenType.VAR) || at(VeraTokenType.VAL) -> parseBindStatement()
             at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND -> parseRebindStatement()
@@ -444,6 +450,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             VeraTokenType.UNIT_TYPE -> VeraUnitLiteral(advance().span())
 
+            VeraTokenType.IDENTIFIER if current().text == "new" && peek().type == VeraTokenType.IDENTIFIER ->
+                throw javaNew()
+
             VeraTokenType.IDENTIFIER -> {
                 val token = advance()
                 VeraIdentifierAsExpression(Identifier(token.text), token.span())
@@ -507,6 +516,71 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         )
     }
 
+    // Java habits: these checks only run where the parser would otherwise fail, and turn the generic
+    // error into one that says what to write in Vera instead.
+
+    private fun rejectJavaModifier(token: VeraToken) {
+        if (token.type == VeraTokenType.IDENTIFIER && token.text in javaModifiers) {
+            throw VeraParseException.JavaSyntax(
+                token,
+                "Vera has no `${token.text}` modifier; declarations are written without modifiers",
+            )
+        }
+    }
+
+    private fun rejectJavaInheritance(className: VeraToken) {
+        val token = current()
+        if (token.type != VeraTokenType.IDENTIFIER) return
+        when (token.text) {
+            "extends" -> throw VeraParseException.JavaSyntax(
+                token,
+                "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
+            )
+            "implements" -> throw VeraParseException.JavaSyntax(
+                token,
+                "Vera lists traits with `has`: `class ${className.text} has Trait`",
+            )
+        }
+    }
+
+    /** Rejects Java statement forms: `int x = 1`, `Point p = ...`, `new Point()`, `final`, `for (...)`. */
+    private fun rejectJavaStatement() {
+        val token = current()
+        val next = peek()
+        val startsWithType = token.type in builtinTypeTokens || token.type == VeraTokenType.IDENTIFIER
+        when {
+            token.type == VeraTokenType.IDENTIFIER && token.text == "new" && next.type == VeraTokenType.IDENTIFIER ->
+                throw javaNew()
+
+            token.type == VeraTokenType.IDENTIFIER && token.text == "final" ->
+                throw VeraParseException.JavaSyntax(
+                    token,
+                    "Vera has no `final`; use `val` for a binding that should not change",
+                )
+
+            token.type == VeraTokenType.IDENTIFIER && token.text in javaModifiers &&
+                next.type == VeraTokenType.IDENTIFIER -> rejectJavaModifier(token)
+
+            token.type == VeraTokenType.IDENTIFIER && token.text == "for" && next.type == VeraTokenType.LPAREN ->
+                throw VeraParseException.JavaSyntax(token, "Vera has no `for` loop; use `while`")
+
+            startsWithType && next.type == VeraTokenType.IDENTIFIER ->
+                throw VeraParseException.JavaSyntax(
+                    token,
+                    "Vera declares variables with `var`: write `var ${next.text}: ${veraTypeName(token.text)} = ...`",
+                )
+        }
+    }
+
+    private fun veraTypeName(javaName: String): String = javaTypeNames[javaName] ?: javaName
+
+    /** `new Point(...)` at the current token. */
+    private fun javaNew(): VeraParseException.JavaSyntax =
+        VeraParseException.JavaSyntax(
+            current(),
+            "Vera has no `new`; call the class directly: `${peek().text}(...)`",
+        )
+
     private fun matchElseAfterOptionalEols(): Boolean {
         val positionBeforeEols = position
         skipEols()
@@ -556,6 +630,17 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             throw VeraParseException.ExpectedToken(what ?: type.describeExpected(), token)
         }
         return advance()
+    }
+
+    private companion object {
+        val javaModifiers = setOf("public", "private", "protected", "static", "final", "abstract")
+        val javaTypeNames = mapOf("int" to "Int", "Integer" to "Int", "boolean" to "Bool", "Boolean" to "Bool")
+        val builtinTypeTokens = setOf(
+            VeraTokenType.INT_TYPE,
+            VeraTokenType.STRING_TYPE,
+            VeraTokenType.BOOL_TYPE,
+            VeraTokenType.UNIT_TYPE,
+        )
     }
 
     /** How an expected token reads in an error message: `'{'` rather than `LBRACE`. */

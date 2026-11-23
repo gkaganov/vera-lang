@@ -17,8 +17,12 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "conditions must result in a bool, got ${actual.render()}",
     )
 
-    class UnknownVariable(val name: Identifier) : JvmLoweringException(
-        "variable ${name.value} is not defined",
+    class UnknownVariable(
+        val name: Identifier,
+        val suggestion: Identifier? = null,
+        val hint: String? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("variable ${name.value} is not defined", hint, suggestion),
     )
 
     class RebindTypeMismatch(
@@ -73,8 +77,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         },
     )
 
-    class UnknownFunction(val name: Identifier) : JvmLoweringException(
-        "function ${name.value} not found.",
+    class UnknownFunction(
+        val name: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("function ${name.value} is not defined", null, suggestion),
     )
 
     class FunctionNameConflictsWithBuiltin(val name: Identifier) : JvmLoweringException(
@@ -164,15 +171,20 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class field ${className.value}.${field.value} cannot have type $type",
     )
 
-    class UnknownClassType(val name: Identifier) : JvmLoweringException(
-        "class type ${name.value} is not defined",
+    class UnknownClassType(
+        val name: Identifier,
+        val suggestion: Identifier? = null,
+        val hint: String? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("class type ${name.value} is not defined", hint, suggestion),
     )
 
     class UnknownClassField(
         val className: Identifier,
         val field: Identifier,
+        val suggestion: Identifier? = null,
     ) : JvmLoweringException(
-        "class ${className.value} has no field ${field.value}",
+        JvmNameHints.withHelp("class ${className.value} has no field ${field.value}", null, suggestion),
     )
 
     class MemberAccessRequiresObject(val actual: JvmType) : JvmLoweringException(
@@ -213,8 +225,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class UnknownClassMethod(
         val className: Identifier,
         val method: Identifier,
+        val suggestion: Identifier? = null,
     ) : JvmLoweringException(
-        "class ${className.value} has no method ${method.value}",
+        JvmNameHints.withHelp("class ${className.value} has no method ${method.value}", null, suggestion),
     )
 
     class MethodArityMismatch(
@@ -296,8 +309,16 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "trait ${trait.value} has duplicate method ${method.value}",
     )
 
-    class UnknownTrait(val name: Identifier) : JvmLoweringException(
-        "trait ${name.value} is not defined",
+    class UnknownTrait(
+        val name: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("trait ${name.value} is not defined", null, suggestion),
+    )
+
+    /** `+` with a `String` operand; Vera builds strings with templates. */
+    class StringConcatenationNotSupported : JvmLoweringException(
+        "Vera builds strings with templates, not `+`; write \"text \\{value}\"",
     )
 
     class DuplicateTraitImplementation(

@@ -278,7 +278,7 @@ private class JvmFunctionLoweringState(
 
     private fun lowerRebindStatement(veraRebindStatement: VeraRebindStatement): JvmStatement {
         val jvmLocal = lookupLocal(veraRebindStatement.name)
-            ?: throw JvmLoweringException.UnknownVariable(veraRebindStatement.name)
+            ?: throw unknownVariable(veraRebindStatement.name)
         val jvmExpression = lowerExpression(veraRebindStatement.expression)
         if (jvmExpression.type != jvmLocal.type) {
             throw JvmLoweringException.RebindTypeMismatch(
@@ -354,6 +354,24 @@ private class JvmFunctionLoweringState(
         }
     }
 
+    private fun unknownVariable(name: Identifier): JvmLoweringException.UnknownVariable {
+        val candidates = scopes.flatMap { scope -> scope.keys } +
+            (receiverClass?.fields?.map { field -> field.name } ?: emptyList())
+        return JvmLoweringException.UnknownVariable(
+            name,
+            JvmNameHints.closest(name, candidates),
+            JvmNameHints.forJavaValue(name),
+        )
+    }
+
+    /** Names that can be called by a bare name here: functions, built-ins, classes, sibling methods. */
+    private fun callableNames(): Set<Identifier> = buildSet {
+        addAll(visibleFunctions.keys)
+        addAll(JvmFunctionLowering.builtinNames())
+        addAll(visibleClasses.keys)
+        receiverClass?.methods?.forEach { method -> add(method.name) }
+    }
+
     private fun lookupLocal(name: Identifier): JvmLocal? =
         scopes.asReversed().firstNotNullOfOrNull { scope -> scope[name] }
 
@@ -381,7 +399,7 @@ private class JvmFunctionLoweringState(
                     if (receiver != null && receiver.methods.any { it.name == resolution.identifier }) {
                         throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, resolution.identifier)
                     }
-                    throw JvmLoweringException.UnknownVariable(resolution.identifier)
+                    throw unknownVariable(resolution.identifier)
                 }
             }
         }
@@ -431,6 +449,9 @@ private class JvmFunctionLoweringState(
 
         val jvmLeft = lowerPrimaryExpression(veraOperation.left)
         val jvmRight = lowerPrimaryExpression(veraOperation.right)
+        if (veraOperation.operator == VeraOperator.ADD && (jvmLeft.type == JvmType.STRING || jvmRight.type == JvmType.STRING)) {
+            throw JvmLoweringException.StringConcatenationNotSupported()
+        }
         if (veraOperation.operator == VeraOperator.EQUALS || veraOperation.operator == VeraOperator.NOT_EQUALS) {
             validateEqualityOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
             return lowerEquality(veraOperation.operator, jvmLeft, jvmRight)
@@ -586,7 +607,7 @@ private class JvmFunctionLoweringState(
                     if (receiver != null && receiver.methods.any { it.name == veraName }) {
                         throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, veraName).at(nameSpan)
                     }
-                    throw JvmLoweringException.UnknownVariable(veraName).at(nameSpan)
+                    throw unknownVariable(veraName).at(nameSpan)
                 }
 
                 val loweredArguments = lowerForwardedArguments(
@@ -623,9 +644,17 @@ private class JvmFunctionLoweringState(
                         val veraMethod = veraClass.methods.firstOrNull { it.name == member }
                         if (veraMethod == null) {
                             if (nextData is VeraArguments) {
-                                throw JvmLoweringException.UnknownClassMethod(ownerType.name, member).at(chainedData.span)
+                                throw JvmLoweringException.UnknownClassMethod(
+                                    ownerType.name,
+                                    member,
+                                    JvmNameHints.closest(member, veraClass.methods.map { method -> method.name }),
+                                ).at(chainedData.span)
                             }
-                            throw JvmLoweringException.UnknownClassField(ownerType.name, member).at(chainedData.span)
+                            throw JvmLoweringException.UnknownClassField(
+                                ownerType.name,
+                                member,
+                                JvmNameHints.closest(member, veraClass.fields.map { field -> field.name }),
+                            ).at(chainedData.span)
                         }
                         if (nextData is VeraArguments) {
                             val loweredArguments = lowerForwardedArguments(
@@ -788,7 +817,10 @@ private class JvmFunctionLoweringState(
         }
 
         val veraFunctionDeclaration = visibleFunctions[veraFunctionName]
-            ?: throw JvmLoweringException.UnknownFunction(veraFunctionName)
+            ?: throw JvmLoweringException.UnknownFunction(
+                veraFunctionName,
+                JvmNameHints.closest(veraFunctionName, callableNames()),
+            )
         val jvmParameters = veraFunctionDeclaration.parameters.map { veraParameter ->
             JvmParameter(veraParameter.name, lowerType(veraParameter.type))
         }

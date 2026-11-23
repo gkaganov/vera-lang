@@ -7,6 +7,8 @@ import vera.shared.model.Identifier
 
 internal object JvmTypeLowering {
 
+    private val builtinTypeNames = listOf("Int", "String", "Bool", "Unit").map(::Identifier)
+
     fun lowerReturn(veraType: VeraType, classNames: Set<Identifier>): JvmType =
         if (veraType == VeraType.UNKNOWN) JvmUnitType else lower(veraType, classNames)
 
@@ -18,7 +20,11 @@ internal object JvmTypeLowering {
         VeraType.UNKNOWN -> JvmType.VOID
         is VeraType.ClassType -> {
             if (veraType.name !in classNames) {
-                throw JvmLoweringException.UnknownClassType(veraType.name)
+                throw JvmLoweringException.UnknownClassType(
+                    veraType.name,
+                    JvmNameHints.closest(veraType.name, classNames + builtinTypeNames),
+                    JvmNameHints.forJavaType(veraType.name),
+                )
             }
             JvmType.ClassType(veraType.name)
         }

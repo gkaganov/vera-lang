@@ -24,6 +24,13 @@ sealed class VeraLexException(message: String, val location: SourceLocation) : V
         location: SourceLocation,
     ) : VeraLexException("Vera does not use semicolons; end the statement with a newline", location)
 
+    /** A Java operator Vera spells differently, such as `!`, `&&`, `++`, or `+=`. */
+    class JavaOperator(
+        val operator: String,
+        val hint: String,
+        location: SourceLocation,
+    ) : VeraLexException("Vera does not use `$operator`; $hint", location)
+
     class UnterminatedString(
         location: SourceLocation,
     ) : VeraLexException("unterminated string literal", location)
@@ -63,6 +70,12 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
     class InvalidIntLiteral(
         val token: VeraToken,
     ) : VeraParseException("invalid Int literal '${token.text}'", token)
+
+    /** Java syntax with a different spelling, or no counterpart, in Vera. [hint] says what to write. */
+    class JavaSyntax(
+        val found: VeraToken,
+        val hint: String,
+    ) : VeraParseException(hint, found)
 
     class UnsupportedRebindUpdateBlock(
         val token: VeraToken,
