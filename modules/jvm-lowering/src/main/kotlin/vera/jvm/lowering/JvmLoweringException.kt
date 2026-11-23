@@ -324,6 +324,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "calling a value is not supported yet",
     )
 
+    /** A statement follows one that always leaves the block, such as `return` or `break`. */
+    class UnreachableStatement(val after: String) : JvmLoweringException(
+        "unreachable statement after $after",
+    )
+
     class BreakOutsideLoop : JvmLoweringException(
         "break is only allowed inside a loop",
     )

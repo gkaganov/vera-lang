@@ -109,6 +109,12 @@ class CompilerErrorTests {
                 VeraLexException.UnterminatedString::class,
                 "unterminated string literal",
             ),
+            CompileErrorCase(
+                "semicolons",
+                function("print(1);"),
+                VeraLexException.UnexpectedSemicolon::class,
+                "Vera does not use semicolons; end the statement with a newline at line 2, column 13",
+            ),
         )
 
         @JvmStatic
@@ -206,6 +212,37 @@ class CompilerErrorTests {
                 ),
                 JvmLoweringException.LoopJumpInsideExpression::class,
                 "continue cannot be used inside a nested expression",
+            ),
+            CompileErrorCase(
+                "statements after return",
+                function("return", "print(1)"),
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after return",
+            ),
+            CompileErrorCase(
+                "statements after break",
+                function("while True {", "    break", "    print(1)", "}"),
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after break",
+            ),
+            CompileErrorCase(
+                "statements after continue",
+                function("while True {", "    continue", "    print(1)", "}"),
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after continue",
+            ),
+            CompileErrorCase(
+                "block results after break",
+                function("while True {", "    var value = if True {", "        break", "        0", "    } else {", "        1", "    }", "}"),
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after break",
+            ),
+            CompileErrorCase(
+                "statements after an if that returns from every branch",
+                "fn pick(flag: Bool): Int {\n    if flag {\n        return 1\n    } else {\n        return 2\n    }\n" +
+                    "    return 3\n}",
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after an if whose branches all return",
             ),
             CompileErrorCase(
                 "undefined names",

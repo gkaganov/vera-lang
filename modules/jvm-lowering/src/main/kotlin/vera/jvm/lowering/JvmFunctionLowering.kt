@@ -125,7 +125,15 @@ private class JvmFunctionLoweringState(
         }
     }
 
-    private data class LoweredStatement(val jvmStatement: JvmStatement, val returns: Boolean)
+    /**
+     * A lowered statement, whether it always returns from the current function, and, when it always
+     * leaves its block, a description of how; any statement after it in the same block is unreachable.
+     */
+    private data class LoweredStatement(
+        val jvmStatement: JvmStatement,
+        val returns: Boolean,
+        val exit: String? = null,
+    )
 
     /** A lowered expression and whether evaluating it always returns from the current function. */
     private data class LoweredExpression(val jvmExpression: JvmExpression, val returns: Boolean)
@@ -157,14 +165,9 @@ private class JvmFunctionLoweringState(
                 JvmParameter(jvmLocal.name, jvmLocal.type)
             }
 
-        val jvmStatements = mutableListOf<JvmStatement>()
-        var explicitReturnOnAllBranches = false
-        veraFunction.body.statements.forEach { veraStatement ->
-            val loweredStatement = lowerStatement(veraStatement)
-            jvmStatements += loweredStatement.jvmStatement
-            explicitReturnOnAllBranches = explicitReturnOnAllBranches || loweredStatement.returns
-        }
-        if (!explicitReturnOnAllBranches) {
+        val loweredStatements = lowerStatementList(veraFunction.body.statements)
+        val jvmStatements = loweredStatements.map { loweredStatement -> loweredStatement.jvmStatement }.toMutableList()
+        if (loweredStatements.none { loweredStatement -> loweredStatement.returns }) {
             if (currentReturnType != JvmUnitType) {
                 throw JvmLoweringException.MissingReturnStatement(currentReturnType)
             }
@@ -190,6 +193,7 @@ private class JvmFunctionLoweringState(
                 LoweredStatement(
                     JvmExpressionStatement(loweredExpression.jvmExpression),
                     loweredExpression.returns,
+                    exit = if (loweredExpression.returns) "an if whose branches all return" else null,
                 )
             }
 
@@ -206,7 +210,7 @@ private class JvmFunctionLoweringState(
                         jvmReturnExpression.type,
                     )
                 }
-                LoweredStatement(JvmReturn(jvmReturnExpression), true)
+                LoweredStatement(JvmReturn(jvmReturnExpression), true, exit = "return")
             }
 
             is VeraWhileStatement -> LoweredStatement(lowerWhileStatement(veraStatement), false)
@@ -217,14 +221,14 @@ private class JvmFunctionLoweringState(
                 val loopDepth = loopExpressionDepths.lastOrNull()
                     ?: throw JvmLoweringException.BreakOutsideLoop()
                 requireLoopJumpDepth("break", loopDepth)
-                LoweredStatement(JvmBreak, false)
+                LoweredStatement(JvmBreak, false, exit = "break")
             }
 
             VeraContinueStatement -> {
                 val loopDepth = loopExpressionDepths.lastOrNull()
                     ?: throw JvmLoweringException.ContinueOutsideLoop()
                 requireLoopJumpDepth("continue", loopDepth)
-                LoweredStatement(JvmContinue, false)
+                LoweredStatement(JvmContinue, false, exit = "continue")
             }
         }
     }
@@ -816,13 +820,14 @@ private class JvmFunctionLoweringState(
     }
 
     private fun lowerBlock(veraBlock: VeraBlock): LoweredBlock = withScope {
-        val loweredStatements = veraBlock.statements.map { veraStatement -> lowerStatement(veraStatement) }
+        val loweredStatements = lowerStatementList(veraBlock.statements)
         val jvmStatements = loweredStatements.map { loweredStatement -> loweredStatement.jvmStatement }
         val statementsReturn = loweredStatements.any { loweredStatement -> loweredStatement.returns }
         when (veraBlock) {
             is VeraExplicitReturnBlock -> LoweredBlock(JvmExplicitReturnBlock(jvmStatements), statementsReturn)
 
             is VeraImplicitReturnBlock -> {
+                requireReachable(loweredStatements)
                 val loweredResult = lowerStatementExpression(veraBlock.result)
                 LoweredBlock(
                     JvmImplicitReturnBlock(jvmStatements, loweredResult.jvmExpression),
@@ -834,12 +839,22 @@ private class JvmFunctionLoweringState(
         }
     }
 
-    private fun lowerBlockStatements(veraStatements: List<VeraStatement>): List<JvmStatement> {
-        val jvmStatements = mutableListOf<JvmStatement>()
+    private fun lowerBlockStatements(veraStatements: List<VeraStatement>): List<JvmStatement> =
+        lowerStatementList(veraStatements).map { loweredStatement -> loweredStatement.jvmStatement }
+
+    /** Lowers a block's statements in order, rejecting any statement after one that always leaves it. */
+    private fun lowerStatementList(veraStatements: List<VeraStatement>): List<LoweredStatement> {
+        val loweredStatements = mutableListOf<LoweredStatement>()
         veraStatements.forEach { veraStatement ->
-            jvmStatements += lowerStatement(veraStatement).jvmStatement
+            requireReachable(loweredStatements)
+            loweredStatements += lowerStatement(veraStatement)
         }
-        return jvmStatements
+        return loweredStatements
+    }
+
+    private fun requireReachable(precedingStatements: List<LoweredStatement>) {
+        val exit = precedingStatements.lastOrNull()?.exit ?: return
+        throw JvmLoweringException.UnreachableStatement(exit)
     }
 
     private fun resolvePrimaryExpression(

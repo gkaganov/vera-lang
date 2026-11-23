@@ -105,6 +105,9 @@ fn name(parameter: Type, other: Type): ReturnType {
 - A function always returns when a top-level statement is a `return`, or an `if` with an `else`
   whose branches all always return (including `else if` chains). Returns inside `while` do not
   count.
+- A statement after `return`, `break`, `continue`, or an `if` whose branches all return, in the same
+  block, is a compile error (`unreachable statement`), as in Java. This includes the value expression
+  at the end of an `if` block.
 - Functions can only be declared at top level.
 
 ## Classes and objects
@@ -168,8 +171,8 @@ class Square has Shape {
 ```
 
 - `trait` declarations are top-level and contain method signatures only: `fn name(params): Type`.
-  Signatures are newline-terminated, except that the last one may share a line with the closing
-  brace: `trait Shape { fn area(): Int }`.
+  Signatures end at a newline or before the closing brace, so `trait Shape { fn area(): Int }` is
+  valid.
 - A class opts into traits with `has` after its name: `class Square has Shape`.
 - An implementing class must define every trait method with the same parameter types and return
   type; parameter names may differ.
@@ -373,9 +376,30 @@ while counter < 3 {
 - `break` exits the innermost `while`.
 - `continue` jumps to the next condition check of the innermost `while`.
 - `break` and `continue` are only valid inside a loop.
-- They may appear in statements, including inside an `if` whose value forms a whole statement
-  (`var x = if c { break } else { 1 }`), but not inside a nested expression such as a call
-  argument or operator operand, where the jump would abandon a partially evaluated expression.
+- They may appear in statements, including inside the branches of an `if` whose value forms a whole
+  statement, but not inside a nested expression such as a call argument or operator operand, where
+  the jump would abandon a partially evaluated expression:
+
+Allowed, because the outer `if` forms the whole `var` statement:
+
+```vera
+while True {
+    var next = if ready {
+        if done { break }
+        step()
+    } else {
+        0
+    }
+}
+```
+
+Rejected, because the `break` is nested in a call argument:
+
+```vera
+while True {
+    print(add(1, if done { break } else { 2 }))
+}
+```
 - `while` is a statement and produces no value.
 
 ## Built-in `print`
@@ -396,13 +420,29 @@ print(Point(1, 2))
 
 ## Newlines and blocks
 
-- Newlines terminate statements.
-- Semicolons are not used.
-- Blank lines are ignored.
-- Blank lines are allowed at block boundaries and before `else`.
-- Class fields are also newline-terminated.
+- A newline ends a statement, a class member, or a trait signature. A closing `}` also ends the
+  last one, so blocks fit on one line: `if c { 1 } else { 2 }`, `class Point { x: Int }`.
+- Semicolons are not used; writing one is a compile error that says so.
+- A statement continues on the next line only when that is visible on the line itself:
+  - inside an open `(`, newlines are ignored, so argument lists and grouped expressions can span
+    lines (a `{` block inside the parentheses still uses newline-terminated statements);
+  - a line that ends with a binary operator, `not`, `=`, `,`, or `.` continues;
+  - a line that starts with `|>` or `.` continues the previous line, for top-to-bottom pipelines and
+    member chains.
+- A line starting with `-` or `not` does not continue the previous line: it starts a new statement.
+  Put the operator at the end of the line instead.
+- Blank lines are ignored, including at block boundaries, before `else`, and inside continuations.
 - CRLF line endings are supported.
 - Comments are not implemented.
+
+```vera
+var report = orders
+    |> paidOnly()
+    |> summarize()
+
+var total = subtotal +
+    shipping
+```
 
 ## Grammar
 
@@ -422,13 +462,12 @@ function       = "fn" IDENT signature block
 signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]
 parameter      = IDENT ":" type
 
-class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member EOL } "}"
+class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member statementEnd } "}"
 member         = IDENT ":" type
                | function
 
-trait          = "trait" IDENT "{" { EOL } { traitMethod traitEnd } "}"
+trait          = "trait" IDENT "{" { EOL } { traitMethod statementEnd } "}"
 traitMethod    = "fn" IDENT signature
-traitEnd       = EOL                              (* may be omitted before the closing "}" *)
 
 type           = "Int" | "String" | "Bool" | "Unit" | IDENT
 ```
@@ -437,7 +476,7 @@ type           = "Int" | "String" | "Bool" | "Unit" | IDENT
 
 ```text
 block          = "{" { EOL } { statement statementEnd } "}"
-statementEnd   = EOL | EOF
+statementEnd   = EOL | EOF | (* nothing, before the closing "}" *)
 
 statement      = ( "var" | "val" ) IDENT [ ":" type ] "=" expression
                | IDENT "=" expression             (* rebinding; chosen when IDENT is followed by "=" *)
@@ -485,7 +524,9 @@ STRING         = '"' { character | escape } '"'               (* no line breaks 
 escape         = "\n" | "\t" | "\r" | '\"' | "\\"
 ```
 
-Spaces and tabs separate tokens and are otherwise ignored.
+Spaces and tabs separate tokens and are otherwise ignored. The lexer drops a newline (emits no
+`EOL`) inside an open `(`, after a trailing operator, `not`, `=`, `,`, or `.`, and before a line
+starting with `|>` or `.`. A `;` is rejected with a dedicated error.
 
 ## Example
 

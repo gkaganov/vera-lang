@@ -587,6 +587,111 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `newlines inside parentheses continue the statement`(testInfo: TestInfo) {
+        val source = """
+                    fn add(a: Int, b: Int): Int {
+                        return a + b
+                    }
+                    fn $TEST_MAIN() {
+                        print(add(
+                            1,
+                            add(2, 3)
+                        ))
+                        print((1
+                            + 2))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "6${EOL}3$EOL", testInfo)
+    }
+
+    @Test
+    fun `blocks inside parentheses keep newline-terminated statements`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(if True {
+                            var value = 2
+                            value * 3
+                        } else {
+                            0
+                        })
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "6$EOL", testInfo)
+    }
+
+    @Test
+    fun `a trailing operator continues the statement`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        var total =
+                            1 +
+                            2 *
+                            3
+                        var both = True and
+
+                            False
+                        print(total)
+                        print(both)
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "7${EOL}false$EOL", testInfo)
+    }
+
+    @Test
+    fun `a leading forward application or member access continues the statement`(testInfo: TestInfo) {
+        val source = """
+                    class Box {
+                        inner: Inner
+                    }
+                    class Inner {
+                        value: Int
+                        fn doubled(): Int {
+                            return value * 2
+                        }
+                    }
+                    fn increment(value: Int): Int {
+                        return value + 1
+                    }
+                    fn $TEST_MAIN() {
+                        var box = Box(Inner(20))
+                        box
+                            .inner
+                            .doubled()
+                            |> increment
+                            |> print
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "41$EOL", testInfo)
+    }
+
+    @Test
+    fun `a leading minus starts a new statement`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN(): Int {
+                        var value = 1
+                        -2
+                        return value
+                    }
+                """.trimIndent()
+        assertProgramReturns(source, 1, testInfo)
+    }
+
+    @Test
+    fun `blocks can be written on one line`(testInfo: TestInfo) {
+        val source = """
+                    class Point { x: Int }
+                    fn one(): Int { return 1 }
+                    fn $TEST_MAIN() {
+                        var counter = 0
+                        while counter < 3 { counter = counter + 1 }
+                        print(if counter == 3 { Point(5).x } else { 0 })
+                        print(one())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "5${EOL}1$EOL", testInfo)
+    }
+
+    @Test
     fun `while with a false condition skips its body`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
@@ -696,11 +801,13 @@ class VeraCompilerTests {
                         var last = 0
                         while True {
                             counter = counter + 1
-                            var value = if counter == 3 {
-                                break
-                                0
-                            } else {
+                            var value = if counter < 10 {
+                                if counter == 3 {
+                                    break
+                                }
                                 counter * 10
+                            } else {
+                                0
                             }
                             last = value
                         }

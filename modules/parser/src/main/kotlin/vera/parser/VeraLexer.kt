@@ -14,6 +14,9 @@ private class VeraLexerState(private val source: String) {
 
     private val tokens = mutableListOf<VeraToken>()
 
+    /** Open `(` and `{` brackets, innermost last. Newlines inside `(` do not end a statement. */
+    private val openBrackets = mutableListOf<VeraTokenType>()
+
     fun tokenize(): List<VeraToken> {
         while (index < source.length) {
             when (val char = source[index]) {
@@ -36,7 +39,7 @@ private class VeraLexerState(private val source: String) {
         val startLine = line
         val startColumn = column
         advance()
-        tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
+        lexLineEnd(startLine, startColumn)
     }
 
     private fun lexCarriageReturn() {
@@ -48,7 +51,26 @@ private class VeraLexerState(private val source: String) {
             index++
         }
         line++
+        lexLineEnd(startLine, startColumn)
+    }
+
+    /**
+     * Emits an `EOL` token unless the statement visibly continues on the next line: inside open
+     * parentheses, after a trailing operator, `=`, `,` or `.`, or before a line starting with `|>` or `.`.
+     */
+    private fun lexLineEnd(startLine: Int, startColumn: Int) {
+        val insideParentheses = openBrackets.lastOrNull() == VeraTokenType.LPAREN
+        val endsWithContinuation = tokens.lastOrNull()?.type in continuationEnders
+        if (insideParentheses || endsWithContinuation || nextLineStartsWithContinuation()) return
         tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
+    }
+
+    private fun nextLineStartsWithContinuation(): Boolean {
+        var lookahead = index
+        while (lookahead < source.length && source[lookahead] in " \t\r\n") {
+            lookahead++
+        }
+        return source.startsWith("|>", lookahead) || source.startsWith(".", lookahead)
     }
 
     private fun lexString() {
@@ -146,11 +168,21 @@ private class VeraLexerState(private val source: String) {
             '<' -> VeraTokenType.LT to 1
             '>' -> VeraTokenType.GT to 1
             '|' if next == '>' -> VeraTokenType.FORWARD_APPLICATION to 2
+            ';' -> throw VeraLexException.UnexpectedSemicolon(SourceLocation(startLine, startColumn))
             else -> throw VeraLexException.UnexpectedCharacter(char, SourceLocation(startLine, startColumn))
         }
 
         repeat(length) { advance() }
+        trackBracket(type)
         tokens += VeraToken(type, source.substring(index - length, index), startLine, startColumn)
+    }
+
+    private fun trackBracket(type: VeraTokenType) {
+        when (type) {
+            VeraTokenType.LPAREN, VeraTokenType.LBRACE -> openBrackets += type
+            VeraTokenType.RPAREN, VeraTokenType.RBRACE -> openBrackets.removeLastOrNull()
+            else -> {}
+        }
     }
 
     private fun advance() {
@@ -168,6 +200,15 @@ private class VeraLexerState(private val source: String) {
     private fun Char.isIdentifierPart(): Boolean = isIdentifierStart() || this in '0'..'9'
 
     private companion object {
+        /** Tokens that cannot end a statement, so a line ending with one continues on the next line. */
+        val continuationEnders: Set<VeraTokenType> = setOf(
+            VeraTokenType.PLUS, VeraTokenType.MINUS, VeraTokenType.STAR, VeraTokenType.SLASH,
+            VeraTokenType.PERCENT, VeraTokenType.EQ, VeraTokenType.NEQ, VeraTokenType.LT,
+            VeraTokenType.GT, VeraTokenType.LTE, VeraTokenType.GTE, VeraTokenType.AND,
+            VeraTokenType.OR, VeraTokenType.NOT, VeraTokenType.FORWARD_APPLICATION,
+            VeraTokenType.BIND, VeraTokenType.COMMA, VeraTokenType.DOT,
+        )
+
         val keywords: Map<String, VeraTokenType> = mapOf(
             "fn" to VeraTokenType.FN,
             "class" to VeraTokenType.CLASS,

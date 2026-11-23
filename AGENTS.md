@@ -94,6 +94,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- A statement after `return`, `break`, `continue`, or an always-returning `if` in the same block is
+  rejected as `UnreachableStatement`, including an `if` block's final value expression.
 - `value |> chain.call()` evaluates `value` into a compiler-generated local (`JvmLet`) before the
   receiver chain, keeping left-to-right evaluation order.
 - The flat instruction layer verifies stack discipline and resolves labels/jumps.
@@ -269,7 +271,12 @@ uncommitted changes:
   `VeraParser`.
 - The grammar is written out in EBNF in the Grammar section of [`docs/language.md`](docs/language.md).
   Update it whenever `VeraParser` changes.
-- Newlines terminate statements.
+- Newlines terminate statements; a closing `}` also ends the last statement or member in a block
+  (`VeraParserState.parseStatementTerminator`).
+- `VeraLexer` decides line continuation and emits no `EOL` inside an open `(` (tracked with a
+  bracket stack, so `{` blocks inside parentheses keep their `EOL`s), after a trailing operator,
+  `not`, `=`, `,`, or `.`, and before a line starting with `|>` or `.`. A leading `-` or `not` never
+  continues a line. `;` throws `VeraLexException.UnexpectedSemicolon`.
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,

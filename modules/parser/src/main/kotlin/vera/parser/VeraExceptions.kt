@@ -16,6 +16,10 @@ sealed class VeraLexException(message: String) : VeraException(message) {
         override val location: SourceLocation,
     ) : VeraLexException("invalid string escape '\\$escape' ${location.render()}")
 
+    class UnexpectedSemicolon(
+        override val location: SourceLocation,
+    ) : VeraLexException("Vera does not use semicolons; end the statement with a newline ${location.render()}")
+
     class UnterminatedString(
         override val location: SourceLocation,
     ) : VeraLexException("unterminated string literal ${location.render()}")

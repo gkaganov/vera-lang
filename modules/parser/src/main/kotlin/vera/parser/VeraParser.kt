@@ -120,10 +120,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
             expect(VeraTokenType.FN, "trait method")
             methods += parseTraitMethod()
-            // The last signature may share a line with the closing brace: `trait Shape { fn area(): Int }`.
-            if (!at(VeraTokenType.RBRACE)) {
-                parseStatementTerminator()
-            }
+            parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
@@ -276,10 +273,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return VeraContinueStatement
     }
 
+    /** Ends a statement or member at a newline, at the end of input, or before a closing `}`. */
     private fun parseStatementTerminator() {
         when {
             at(VeraTokenType.EOL) -> skipEols()
-            at(VeraTokenType.EOF) -> Unit
+            at(VeraTokenType.EOF) || at(VeraTokenType.RBRACE) -> Unit
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedEndOfLine(token, token.location())
