@@ -55,7 +55,7 @@ FlatProgram (flat instruction IR) → Bytecode Emitter → .class files
 
 | Stage | Module / package | Class naming | Method naming | Purpose |
 |---|---|---|---|---|
-| Shared model | `shared-model` / `vera.shared.model` | Shared concepts: `Identifier`, `SourceLocation`; base: `VeraException` | n/a | Identifiers, source locations, base exception |
+| Shared model | `shared-model` / `vera.shared.model` | Shared concepts: `Identifier`, `SourceLocation`, `SourceSpan`; base: `VeraException` | n/a | Identifiers, source locations, base exception |
 | Lexing | `parser` / `vera.parser` | `Vera*` (`VeraLexer`, `VeraToken`, `VeraLexException`) | `lex*` | Source → tokens |
 | Parsing | `parser`, `ast` / `vera.parser`, `vera.ast` | `Vera*` | `parse*` | Tokens → AST |
 | Structured IR | `jvm-ir` / `vera.jvm.ir` | `Jvm*` | n/a (data classes) | Resolved, nested JVM IR; no labels or slots |
@@ -165,7 +165,16 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - Each stage has a sealed hierarchy: `VeraLexException`, `VeraParseException`,
   `JvmLoweringException`, `FlatInstructionException`, `BytecodeEmitException`.
 - Exceptions carry structured fields and build a user-facing `render()` message.
+- User-facing messages name types with `VeraType.render()` / `JvmType.render()`, which use Vera's
+  spelling (`Int`, `Bool`, `() -> String`), and never mention compiler internals.
 - `VeraCompiler.compile` propagates exceptions; CLI and tests catch `VeraException`.
+- Errors carry a `SourceSpan` (`VeraException.span`). Lexer and parser errors attach their character
+  or token span. Every AST declaration, statement, and expression has a `span`; lowering attaches the
+  innermost one with `located(span) { ... }` (first span wins) or `throw error.at(span)` for a more
+  precise spot such as a single argument. Declaration spans cover the header (`fn add`).
+- `render()` returns the message plus `at line L, column C`. `VeraDiagnostics.render(exception,
+  source, fileName)` (compiler module) renders the message, `file:line:column`, and the source line
+  with the span underlined; the CLI uses it. Messages themselves never embed positions.
 - Do not use `error()`, `require`, `check`, `TODO()`, `!!`, or unsafe casts in compiler modules.
 - Unexpected JDK ClassFile API exceptions are compiler bugs and propagate unwrapped.
 - Arrow and `VeraResult` are not used.

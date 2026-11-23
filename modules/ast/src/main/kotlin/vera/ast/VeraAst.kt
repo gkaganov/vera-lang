@@ -1,45 +1,103 @@
 package vera.ast
 
 import vera.shared.model.Identifier
+import vera.shared.model.SourceSpan
+
+// Every declaration, statement, and expression carries the source span it was parsed from, so
+// later stages can report errors at the construct that caused them. Declaration spans cover the
+// header up to the name (`fn add`, `class Point`), not the whole body.
 
 data class VeraProgram(val declarations: List<VeraDeclaration>)
 
-sealed interface VeraDeclaration
-data class VeraFunctionDeclaration(val name: Identifier, val parameters: List<VeraParameter>, val returnType: VeraType, val body: VeraExplicitReturnBlock) : VeraDeclaration
+sealed interface VeraDeclaration {
+    val name: Identifier
+    val span: SourceSpan
+}
+
+data class VeraFunctionDeclaration(
+    override val name: Identifier,
+    val parameters: List<VeraParameter>,
+    val returnType: VeraType,
+    val body: VeraExplicitReturnBlock,
+    override val span: SourceSpan,
+) : VeraDeclaration
+
 data class VeraClassDeclaration(
-    val name: Identifier,
+    override val name: Identifier,
     val fields: List<VeraField>,
-    val methods: List<VeraFunctionDeclaration> = emptyList(),
-    val traits: List<Identifier> = emptyList(),
+    val methods: List<VeraFunctionDeclaration>,
+    val traits: List<Identifier>,
+    override val span: SourceSpan,
 ) : VeraDeclaration
-data class VeraField(val name: Identifier, val type: VeraType)
+
+data class VeraField(val name: Identifier, val type: VeraType, val span: SourceSpan)
+
 data class VeraTraitDeclaration(
-    val name: Identifier,
-    val methods: List<VeraTraitMethod> = emptyList(),
+    override val name: Identifier,
+    val methods: List<VeraTraitMethod>,
+    override val span: SourceSpan,
 ) : VeraDeclaration
+
 data class VeraTraitMethod(
     val name: Identifier,
     val parameters: List<VeraParameter>,
     val returnType: VeraType,
+    val span: SourceSpan,
 )
 
-sealed interface VeraStatement
-data class VeraBindStatement(val name: Identifier, val type: VeraType, val expression: VeraExpression) : VeraStatement
-data class VeraRebindStatement(val name: Identifier, val expression: VeraExpression) : VeraStatement
-data class VeraReturnStatement(val expression: VeraExpression?) : VeraStatement
-data class VeraWhileStatement(val condition: VeraPrimaryExpression, val body: VeraUnitReturnBlock) : VeraStatement
-data class VeraExpression(val expression: VeraPrimaryExpression) : VeraStatement
-data object VeraBreakStatement : VeraStatement
-data object VeraContinueStatement : VeraStatement
+sealed interface VeraStatement {
+    val span: SourceSpan
+}
 
-data class VeraChainedExpression(val primaryExpression: VeraPrimaryExpression, val data: List<VeraChainedExpressionData> = emptyList()) : VeraPrimaryExpression
+data class VeraBindStatement(
+    val name: Identifier,
+    val type: VeraType,
+    val expression: VeraExpression,
+    override val span: SourceSpan,
+) : VeraStatement
 
-sealed interface VeraChainedExpressionData
-data class VeraMemberAccess(val member: Identifier) : VeraChainedExpressionData
-data class VeraArguments(val arguments: List<VeraArgument>) : VeraChainedExpressionData
+data class VeraRebindStatement(
+    val name: Identifier,
+    val expression: VeraExpression,
+    override val span: SourceSpan,
+) : VeraStatement
+
+data class VeraReturnStatement(val expression: VeraExpression?, override val span: SourceSpan) : VeraStatement
+
+data class VeraWhileStatement(
+    val condition: VeraPrimaryExpression,
+    val body: VeraUnitReturnBlock,
+    override val span: SourceSpan,
+) : VeraStatement
+
+/** An expression used as a statement or as the value of a bind, rebind, or return. */
+data class VeraExpression(val expression: VeraPrimaryExpression) : VeraStatement {
+    override val span: SourceSpan get() = expression.span
+}
+
+data class VeraBreakStatement(override val span: SourceSpan) : VeraStatement
+
+data class VeraContinueStatement(override val span: SourceSpan) : VeraStatement
+
+data class VeraChainedExpression(
+    val primaryExpression: VeraPrimaryExpression,
+    val data: List<VeraChainedExpressionData>,
+    override val span: SourceSpan,
+) : VeraPrimaryExpression
+
+sealed interface VeraChainedExpressionData {
+    val span: SourceSpan
+}
+
+/** `.member`; the span covers the member name. */
+data class VeraMemberAccess(val member: Identifier, override val span: SourceSpan) : VeraChainedExpressionData
+
+/** `(arguments)`; the span covers the parentheses. */
+data class VeraArguments(val arguments: List<VeraArgument>, override val span: SourceSpan) :
+    VeraChainedExpressionData
 
 /** A call argument. [name] is set for `name = value`; a bare argument has no name. */
-data class VeraArgument(val name: Identifier?, val expression: VeraPrimaryExpression)
+data class VeraArgument(val name: Identifier?, val expression: VeraPrimaryExpression, val span: SourceSpan)
 
 enum class VeraOperator(val symbol: String) {
     FORWARD_APPLICATION("|>"),
@@ -56,29 +114,39 @@ enum class VeraUnaryOperator(val symbol: String) {
     NOT("not"),
 }
 
-sealed interface VeraPrimaryExpression
+sealed interface VeraPrimaryExpression {
+    val span: SourceSpan
+}
+
 data class VeraUnaryOperation(
     val operator: VeraUnaryOperator,
     val operand: VeraPrimaryExpression,
+    override val span: SourceSpan,
 ) : VeraPrimaryExpression
+
 data class VeraBinaryOperation(
     val left: VeraPrimaryExpression,
     val operator: VeraOperator,
     val right: VeraPrimaryExpression,
+    override val span: SourceSpan,
 ) : VeraPrimaryExpression
+
 sealed interface VeraLiteral : VeraPrimaryExpression
-data class VeraIntLiteral(val value: Int) : VeraLiteral
-data class VeraStringLiteral(val value: String) : VeraLiteral
+data class VeraIntLiteral(val value: Int, override val span: SourceSpan) : VeraLiteral
+data class VeraStringLiteral(val value: String, override val span: SourceSpan) : VeraLiteral
+data class VeraBoolLiteral(val value: Boolean, override val span: SourceSpan) : VeraLiteral
+data class VeraUnitLiteral(override val span: SourceSpan) : VeraLiteral
 
 /** A string with `\{expr}` placeholders, as text and value parts in source order. */
-data class VeraStringTemplate(val parts: List<VeraTemplatePart>) : VeraPrimaryExpression
+data class VeraStringTemplate(val parts: List<VeraTemplatePart>, override val span: SourceSpan) :
+    VeraPrimaryExpression
+
 sealed interface VeraTemplatePart
 data class VeraTemplateText(val text: String) : VeraTemplatePart
 data class VeraTemplateValue(val expression: VeraPrimaryExpression) : VeraTemplatePart
 
-enum class VeraBoolLiteral : VeraLiteral { TRUE, FALSE }
-data object VeraUnitLiteral : VeraLiteral
-data class VeraIdentifierAsExpression(val identifier: Identifier) : VeraPrimaryExpression
+data class VeraIdentifierAsExpression(val identifier: Identifier, override val span: SourceSpan) :
+    VeraPrimaryExpression
 
 sealed interface VeraBlock {
     val statements: List<VeraStatement>
@@ -100,9 +168,10 @@ data class VeraIfExpression(
     val condition: VeraPrimaryExpression,
     val thenBlock: VeraBlock,
     val elseBlock: VeraBlock?,
+    override val span: SourceSpan,
 ) : VeraPrimaryExpression
 
-data class VeraParameter(val name: Identifier, val type: VeraType)
+data class VeraParameter(val name: Identifier, val type: VeraType, val span: SourceSpan)
 
 sealed interface VeraType {
     data object INT : VeraType
@@ -113,7 +182,12 @@ sealed interface VeraType {
     data class ClassType(val name: Identifier) : VeraType
 }
 
+/** Renders the type as Vera source spells it, for user-facing messages. */
 fun VeraType.render(): String = when (this) {
+    VeraType.INT -> "Int"
+    VeraType.STRING -> "String"
+    VeraType.BOOL -> "Bool"
+    VeraType.UNIT -> "Unit"
+    VeraType.UNKNOWN -> "an inferred type"
     is VeraType.ClassType -> name.value
-    else -> toString()
 }

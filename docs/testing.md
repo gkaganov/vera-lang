@@ -12,8 +12,10 @@ Tests build Vera source inline, call `VeraCompiler.compile`, load the returned b
 `ByteArrayClassLoader`, and either invoke the compiled method or catch the rendered `VeraException`.
 Assertions compare printed stdout, returned values, or an error-message fragment.
 
-Error tests use parameterized cases per stage. Instruction-lowering and emitter diagnostics use
-hand-built IR because they cannot be reached through valid Vera source.
+Error tests use parameterized cases per stage. Every source-level error case must carry a source
+span (`assertCompilationFails` checks it), and the diagnostics tests compare the full rendered
+output of `VeraDiagnostics.render`. Instruction-lowering and emitter diagnostics use hand-built IR
+because they cannot be reached through valid Vera source.
 
 Run the suite with:
 

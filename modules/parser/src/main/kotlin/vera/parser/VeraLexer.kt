@@ -41,7 +41,7 @@ private class VeraLexerState(private val source: String) {
             }
         }
         requireNoOpenPlaceholder()
-        tokens += VeraToken(VeraTokenType.EOF, "", line, column)
+        tokens += VeraToken(VeraTokenType.EOF, "", line, column, column)
         return tokens
     }
 
@@ -74,7 +74,7 @@ private class VeraLexerState(private val source: String) {
         val insideParentheses = openBrackets.lastOrNull() == VeraTokenType.LPAREN
         val endsWithContinuation = tokens.lastOrNull()?.type in continuationEnders
         if (insideParentheses || endsWithContinuation || nextLineStartsWithContinuation()) return
-        tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn, startColumn + 1)
     }
 
     /** Looks past blank and comment-only lines for a line starting with `|>` or `.`. */
@@ -131,7 +131,7 @@ private class VeraLexerState(private val source: String) {
                     advance() // backslash
                     advance() // opening brace
                     val type = if (continuesTemplate) VeraTokenType.TEMPLATE_MIDDLE else VeraTokenType.TEMPLATE_START
-                    tokens += VeraToken(type, value.toString(), tokenStart.line, tokenStart.column)
+                    tokens += VeraToken(type, value.toString(), tokenStart.line, tokenStart.column, column)
                     templatePlaceholders += TemplatePlaceholder(stringStart, openBrackets.size)
                     return
                 }
@@ -155,7 +155,7 @@ private class VeraLexerState(private val source: String) {
         }
         advance() // closing quote
         val type = if (continuesTemplate) VeraTokenType.TEMPLATE_END else VeraTokenType.STRING_LITERAL
-        tokens += VeraToken(type, value.toString(), tokenStart.line, tokenStart.column)
+        tokens += VeraToken(type, value.toString(), tokenStart.line, tokenStart.column, column)
     }
 
     /** Ends the innermost placeholder at its closing `}` and resumes the template's text. */
@@ -193,7 +193,7 @@ private class VeraLexerState(private val source: String) {
         while (index < source.length && source[index] in '0'..'9') {
             advance()
         }
-        tokens += VeraToken(VeraTokenType.INT_LITERAL, source.substring(start, index), startLine, startColumn)
+        tokens += VeraToken(VeraTokenType.INT_LITERAL, source.substring(start, index), startLine, startColumn, column)
     }
 
     private fun lexIdentifierOrKeyword() {
@@ -205,7 +205,7 @@ private class VeraLexerState(private val source: String) {
         }
         val text = source.substring(start, index)
         val type = keywords[text] ?: VeraTokenType.IDENTIFIER
-        tokens += VeraToken(type, text, startLine, startColumn)
+        tokens += VeraToken(type, text, startLine, startColumn, column)
     }
 
     private fun lexSymbol(char: Char) {
@@ -240,7 +240,7 @@ private class VeraLexerState(private val source: String) {
 
         repeat(length) { advance() }
         trackBracket(type)
-        tokens += VeraToken(type, source.substring(index - length, index), startLine, startColumn)
+        tokens += VeraToken(type, source.substring(index - length, index), startLine, startColumn, column)
     }
 
     private fun trackBracket(type: VeraTokenType) {

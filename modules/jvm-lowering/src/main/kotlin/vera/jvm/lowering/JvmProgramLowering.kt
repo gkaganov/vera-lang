@@ -23,6 +23,7 @@ import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUnitType
 import vera.shared.model.Identifier
+import vera.shared.model.at
 
 object JvmProgramLowering {
 
@@ -36,55 +37,55 @@ object JvmProgramLowering {
         val topLevelNames = mutableSetOf<Identifier>()
         functionDeclarationList.forEach { declaration ->
             if (JvmFunctionLowering.isBuiltinName(declaration.name)) {
-                throw JvmLoweringException.FunctionNameConflictsWithBuiltin(declaration.name)
+                throw JvmLoweringException.FunctionNameConflictsWithBuiltin(declaration.name).at(declaration.span)
             }
             if (declaration.name in JvmBuiltinTraits.names) {
-                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name)
+                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name).at(declaration.span)
             }
             if (!topLevelNames.add(declaration.name)) {
-                throw JvmLoweringException.DuplicateFunction(declaration.name)
+                throw JvmLoweringException.DuplicateFunction(declaration.name).at(declaration.span)
             }
         }
         val functionDeclarations = functionDeclarationList.associateBy { it.name }
 
         val duplicateTrait = traitDeclarations
             .groupBy { it.name }
-            .entries
-            .firstOrNull { it.value.size > 1 }
-            ?.key
+            .values
+            .firstOrNull { it.size > 1 }
+            ?.get(1)
         if (duplicateTrait != null) {
-            throw JvmLoweringException.DuplicateTrait(duplicateTrait)
+            throw JvmLoweringException.DuplicateTrait(duplicateTrait.name).at(duplicateTrait.span)
         }
         traitDeclarations.forEach { declaration ->
             if (declaration.name in JvmBuiltinTraits.names) {
-                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name)
+                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name).at(declaration.span)
             }
             if (!topLevelNames.add(declaration.name)) {
-                throw JvmLoweringException.TopLevelNameConflict(declaration.name)
+                throw JvmLoweringException.TopLevelNameConflict(declaration.name).at(declaration.span)
             }
         }
 
         val duplicateClass = classDeclarations
             .groupBy { it.name }
-            .entries
-            .firstOrNull { it.value.size > 1 }
-            ?.key
+            .values
+            .firstOrNull { it.size > 1 }
+            ?.get(1)
         if (duplicateClass != null) {
-            throw JvmLoweringException.DuplicateClassType(duplicateClass)
+            throw JvmLoweringException.DuplicateClassType(duplicateClass.name).at(duplicateClass.span)
         }
         classDeclarations.forEach { declaration ->
             if (JvmFunctionLowering.isBuiltinName(declaration.name)) {
-                throw JvmLoweringException.ClassNameConflictsWithBuiltin(declaration.name)
+                throw JvmLoweringException.ClassNameConflictsWithBuiltin(declaration.name).at(declaration.span)
             }
             if (declaration.name in JvmBuiltinTraits.names) {
-                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name)
+                throw JvmLoweringException.NameConflictsWithBuiltinTrait(declaration.name).at(declaration.span)
             }
             if (!topLevelNames.add(declaration.name)) {
-                throw JvmLoweringException.TopLevelNameConflict(declaration.name)
+                throw JvmLoweringException.TopLevelNameConflict(declaration.name).at(declaration.span)
             }
         }
-        if (classDeclarations.any { it.name == mainClassName }) {
-            throw JvmLoweringException.ClassNameConflictsWithProgramClass(mainClassName)
+        classDeclarations.firstOrNull { it.name == mainClassName }?.let { conflicting ->
+            throw JvmLoweringException.ClassNameConflictsWithProgramClass(mainClassName).at(conflicting.span)
         }
         if (mainClassName == JvmUnitType.name) {
             throw JvmLoweringException.ProgramClassConflictsWithUnit(mainClassName)
@@ -94,17 +95,20 @@ object JvmProgramLowering {
         val classNames = classesByName.keys
         val traitsByName = traitDeclarations.associateBy { it.name }
         traitDeclarations.forEach { trait ->
-            validateTrait(trait, classNames)
+            located(trait.span) { validateTrait(trait, classNames) }
         }
 
         val jvmDeclaredClasses = classDeclarations.map { declaration ->
-            lowerClass(declaration, mainClassName, functionDeclarations, classesByName, traitsByName)
+            located(declaration.span) {
+                lowerClass(declaration, mainClassName, functionDeclarations, classesByName, traitsByName)
+            }
         }
 
         val jvmMethods = mutableListOf<JvmMethod>()
         functionDeclarationList.forEach { declaration ->
-            jvmMethods += JvmFunctionLowering
-                .lower(mainClassName, functionDeclarations, classesByName, declaration)
+            jvmMethods += located(declaration.span) {
+                JvmFunctionLowering.lower(mainClassName, functionDeclarations, classesByName, declaration)
+            }
         }
         lowerEntryPointAdapter(mainClassName, functionDeclarations, classNames)?.let { adapter ->
             jvmMethods += adapter
@@ -186,16 +190,16 @@ object JvmProgramLowering {
         val seenMethods = mutableSetOf<Identifier>()
         trait.methods.forEach { method ->
             if (!seenMethods.add(method.name)) {
-                throw JvmLoweringException.DuplicateTraitMethod(trait.name, method.name)
+                throw JvmLoweringException.DuplicateTraitMethod(trait.name, method.name).at(method.span)
             }
             val seenParameters = mutableSetOf<Identifier>()
             method.parameters.forEach { parameter ->
                 if (!seenParameters.add(parameter.name)) {
-                    throw JvmLoweringException.ShadowingNotAllowed(parameter.name)
+                    throw JvmLoweringException.ShadowingNotAllowed(parameter.name).at(parameter.span)
                 }
-                JvmTypeLowering.lower(parameter.type, classNames)
+                located(parameter.span) { JvmTypeLowering.lower(parameter.type, classNames) }
             }
-            JvmTypeLowering.lowerReturn(method.returnType, classNames)
+            located(method.span) { JvmTypeLowering.lowerReturn(method.returnType, classNames) }
         }
     }
 
@@ -207,22 +211,24 @@ object JvmProgramLowering {
         val seenTraits = mutableSetOf<Identifier>()
         veraClass.traits.forEach { traitName ->
             if (!seenTraits.add(traitName)) {
-                throw JvmLoweringException.DuplicateTraitImplementation(veraClass.name, traitName)
+                throw JvmLoweringException.DuplicateTraitImplementation(veraClass.name, traitName).at(veraClass.span)
             }
             if (traitName in JvmBuiltinTraits.names) return@forEach
             val trait = traitsByName[traitName]
-                ?: throw JvmLoweringException.UnknownTrait(traitName)
+                ?: throw JvmLoweringException.UnknownTrait(traitName).at(veraClass.span)
             trait.methods.forEach { traitMethod ->
                 val classMethod = veraClass.methods.firstOrNull { it.name == traitMethod.name }
                     ?: throw JvmLoweringException.MissingTraitMethod(
                         veraClass.name,
                         traitName,
                         traitMethod.name,
-                    )
+                    ).at(veraClass.span)
                 val expectedParameters = parameterTypes(traitMethod.parameters, classNames)
                 val expectedReturn = JvmTypeLowering.lowerReturn(traitMethod.returnType, classNames)
-                val actualParameters = parameterTypes(classMethod.parameters, classNames)
-                val actualReturn = JvmTypeLowering.lowerReturn(classMethod.returnType, classNames)
+                val actualParameters = located(classMethod.span) { parameterTypes(classMethod.parameters, classNames) }
+                val actualReturn = located(classMethod.span) {
+                    JvmTypeLowering.lowerReturn(classMethod.returnType, classNames)
+                }
                 if (expectedParameters != actualParameters || expectedReturn != actualReturn) {
                     throw JvmLoweringException.TraitMethodSignatureMismatch(
                         className = veraClass.name,
@@ -232,7 +238,7 @@ object JvmProgramLowering {
                         expectedReturn = expectedReturn,
                         actualParameters = actualParameters,
                         actualReturn = actualReturn,
-                    )
+                    ).at(classMethod.span)
                 }
                 traitMethod.parameters.zip(classMethod.parameters).forEach { (traitParameter, classParameter) ->
                     if (traitParameter.name != classParameter.name) {
@@ -242,7 +248,7 @@ object JvmProgramLowering {
                             method = traitMethod.name,
                             expected = traitParameter.name,
                             actual = classParameter.name,
-                        )
+                        ).at(classParameter.span)
                     }
                 }
             }
@@ -255,7 +261,7 @@ object JvmProgramLowering {
         classesByName: Map<Identifier, VeraClassDeclaration>,
         trait: Identifier,
     ) {
-        jvmFields.forEach { field ->
+        veraClass.fields.zip(jvmFields).forEach { (veraField, field) ->
             val fieldType = field.type
             if (fieldType !is JvmType.ClassType || fieldType == JvmUnitType) return@forEach
             val fieldClass = classesByName[fieldType.name] ?: return@forEach
@@ -265,7 +271,7 @@ object JvmProgramLowering {
                     field.name,
                     fieldType.name,
                     trait,
-                )
+                ).at(veraField.span)
             }
         }
     }
@@ -294,19 +300,19 @@ object JvmProgramLowering {
         val seenFields = mutableSetOf<Identifier>()
         val jvmFields = veraClass.fields.map { field ->
             if (!seenFields.add(field.name)) {
-                throw JvmLoweringException.DuplicateClassField(veraClass.name, field.name)
+                throw JvmLoweringException.DuplicateClassField(veraClass.name, field.name).at(field.span)
             }
             if (field.name in outerNames) {
-                throw JvmLoweringException.ShadowingNotAllowed(field.name)
+                throw JvmLoweringException.ShadowingNotAllowed(field.name).at(field.span)
             }
             if (field.type == VeraType.UNKNOWN) {
                 throw JvmLoweringException.ClassFieldTypeNotAllowed(
                     veraClass.name,
                     field.name,
                     field.type.render(),
-                )
+                ).at(field.span)
             }
-            JvmField(field.name, JvmTypeLowering.lower(field.type, classNames))
+            JvmField(field.name, located(field.span) { JvmTypeLowering.lower(field.type, classNames) })
         }
         if (hasEq) {
             requireFieldTraits(veraClass, jvmFields, classesByName, JvmBuiltinTraits.eq)
@@ -317,37 +323,39 @@ object JvmProgramLowering {
         val seenMethods = mutableSetOf<Identifier>()
         veraClass.methods.forEach { method ->
             if (!seenMethods.add(method.name)) {
-                throw JvmLoweringException.DuplicateClassMethod(veraClass.name, method.name)
+                throw JvmLoweringException.DuplicateClassMethod(veraClass.name, method.name).at(method.span)
             }
             if (method.name in seenFields) {
-                throw JvmLoweringException.ClassMethodConflictsWithField(veraClass.name, method.name)
+                throw JvmLoweringException.ClassMethodConflictsWithField(veraClass.name, method.name).at(method.span)
             }
             if (method.name in outerNames) {
-                throw JvmLoweringException.ShadowingNotAllowed(method.name)
+                throw JvmLoweringException.ShadowingNotAllowed(method.name).at(method.span)
             }
             if (hasEq && method.name == JvmObjectMethods.equalsName) {
                 throw JvmLoweringException.ClassMethodConflictsWithGeneratedMethod(
                     veraClass.name,
                     method.name,
                     JvmBuiltinTraits.eq,
-                )
+                ).at(method.span)
             }
             if (hasDisplay && method.name == JvmObjectMethods.toStringName) {
                 throw JvmLoweringException.ClassMethodConflictsWithGeneratedMethod(
                     veraClass.name,
                     method.name,
                     JvmBuiltinTraits.display,
-                )
+                ).at(method.span)
             }
         }
         val jvmMethods = veraClass.methods.map { method ->
-            JvmFunctionLowering.lower(
-                mainClassName,
-                functionDeclarations,
-                classesByName,
-                method,
-                receiverClass = veraClass,
-            )
+            located(method.span) {
+                JvmFunctionLowering.lower(
+                    mainClassName,
+                    functionDeclarations,
+                    classesByName,
+                    method,
+                    receiverClass = veraClass,
+                )
+            }
         } + buildList {
             if (hasEq) add(JvmObjectMethods.equalsMethod(veraClass.name, jvmFields))
             if (hasDisplay) add(JvmObjectMethods.toStringMethod(veraClass.name, jvmFields))

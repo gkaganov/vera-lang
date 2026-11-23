@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import vera.compiler.VeraCompiler
+import vera.compiler.VeraDiagnostics
 import vera.jvm.bytecode.emitter.BytecodeEmitter
 import vera.jvm.bytecode.emitter.BytecodeEmitException
 import vera.jvm.instruction.FlatClass
@@ -320,7 +321,7 @@ class CompilerErrorTests {
                 "bindings that contradict their declared type",
                 function("var value: Int = \"text\""),
                 JvmLoweringException.BindTypeMismatch::class,
-                "the type of the bind statement must either UNKNOWN",
+                "variable value is declared as Int but bound to a value of type String",
             ),
             CompileErrorCase(
                 "non-Bool logical operands",
@@ -374,7 +375,7 @@ class CompilerErrorTests {
                 "ordering Bool operands",
                 function("print(True < False)"),
                 JvmLoweringException.IntOperandsRequired::class,
-                "operator '<' is only defined for Int operands, got BOOL",
+                "operator '<' is only defined for Int operands, got Bool",
             ),
             CompileErrorCase(
                 "if branches with different types",
@@ -500,25 +501,25 @@ class CompilerErrorTests {
                 "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                     "fn testMain(): Int {\n    return add(left = 1, right = \"wrong\")\n}",
                 JvmLoweringException.FunctionArgumentTypeMismatch::class,
-                "function add parameter right requires INT, got STRING",
+                "function add parameter right requires Int, got String",
             ),
             CompileErrorCase(
                 "function return values with the wrong type",
                 "fn testMain(): Int {\n    return \"wrong\"\n}",
                 JvmLoweringException.ReturnTypeMismatch::class,
-                "return requires INT, got STRING",
+                "return requires Int, got String",
             ),
             CompileErrorCase(
                 "Unit functions returning a value",
                 "fn testMain() {\n    return 1\n}",
                 JvmLoweringException.ReturnTypeMismatch::class,
-                "return requires Unit, got INT",
+                "return requires Unit, got Int",
             ),
             CompileErrorCase(
                 "non-Unit functions without a return statement",
                 "fn testMain(): Int {\n}",
                 JvmLoweringException.MissingReturnStatement::class,
-                "missing return statement for type INT",
+                "missing return statement for type Int",
             ),
             CompileErrorCase(
                 "top-level functions conflicting with builtins",
@@ -575,7 +576,7 @@ class CompilerErrorTests {
                     "\nclass Square has Shape {\n    side: Int\n" +
                     "    fn area(): String {\n        return \"x\"\n    }\n}",
                 JvmLoweringException.TraitMethodSignatureMismatch::class,
-                "class Square method area does not match trait Shape: expected () -> INT, got () -> STRING",
+                "class Square method area does not match trait Shape: expected () -> Int, got () -> String",
             ),
             CompileErrorCase(
                 "traits listed more than once",
@@ -703,7 +704,7 @@ class CompilerErrorTests {
                 "class constructor arguments with the wrong type",
                 classDeclaration("Point", "x: Int") + function("var point = Point(\"wrong\")"),
                 JvmLoweringException.ClassConstructorArgumentTypeMismatch::class,
-                "class Point field x requires INT, got STRING",
+                "class Point field x requires Int, got String",
             ),
             CompileErrorCase(
                 "unknown class fields",
@@ -751,7 +752,7 @@ class CompilerErrorTests {
                     "}",
                 ) + function("print(Point(1).add(\"wrong\"))"),
                 JvmLoweringException.MethodArgumentTypeMismatch::class,
-                "class Point method add parameter other requires INT, got STRING",
+                "class Point method add parameter other requires Int, got String",
             ),
             CompileErrorCase(
                 "class method return values with the wrong type",
@@ -763,7 +764,7 @@ class CompilerErrorTests {
                     "}",
                 ),
                 JvmLoweringException.ReturnTypeMismatch::class,
-                "return requires INT, got STRING",
+                "return requires Int, got String",
             ),
             CompileErrorCase(
                 "duplicate class methods",
@@ -964,6 +965,126 @@ class CompilerErrorTests {
     }
 
     @Test
+    fun `diagnostics underline the expression that caused a lowering error`() {
+        assertRendersAs(
+            "fn testMain() {\n    print(1 + True)\n}\n",
+            """
+            error: operator '+' requires both operands to have the same type, got Int and Bool
+             --> main.vera:2:11
+              |
+            2 |     print(1 + True)
+              |           ^^^^^^^^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics underline the offending argument`() {
+        assertRendersAs(
+            "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
+                "fn testMain() {\n    print(add(1, right = 2))\n}\n",
+            """
+            error: argument 1 of function add must be named: write `left = ...`
+             --> main.vera:5:15
+              |
+            5 |     print(add(1, right = 2))
+              |               ^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics point at the unexpected token of a parse error`() {
+        assertRendersAs(
+            "fn testMain() {\n    var value =\n}\n",
+            """
+            error: expected an expression, found '}'
+             --> main.vera:3:1
+              |
+            3 | }
+              | ^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics point at the character of a lexer error`() {
+        assertRendersAs(
+            "fn testMain() {\n    print(1);\n}\n",
+            """
+            error: Vera does not use semicolons; end the statement with a newline
+             --> main.vera:2:13
+              |
+            2 |     print(1);
+              |             ^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics underline the header of a conflicting declaration`() {
+        assertRendersAs(
+            "fn helper() {\n}\nfn helper() {\n}\n",
+            """
+            error: function helper is declared more than once
+             --> main.vera:3:1
+              |
+            3 | fn helper() {
+              | ^^^^^^^^^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics underline a multi-line span to the end of its first line`() {
+        assertRendersAs(
+            "fn testMain() {\n    var value = if True {\n        1\n    } else {\n        \"a\"\n    }\n}\n",
+            """
+            error: if branches must have the same type, got Int and String
+             --> main.vera:2:17
+              |
+            2 |     var value = if True {
+              |                 ^^^^^^^^^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics widen the gutter for multi-digit line numbers`() {
+        assertRendersAs(
+            "fn testMain() {\n" + "    print(1)\n".repeat(8) + "    print(missing)\n}\n",
+            """
+            error: variable missing is not defined
+              --> main.vera:10:11
+               |
+            10 |     print(missing)
+               |           ^^^^^^^
+            """,
+        )
+    }
+
+    @Test
+    fun `diagnostics without a source location show only the message`() {
+        val error = Assertions.assertThrows(JvmLoweringException.ProgramClassConflictsWithUnit::class.java) {
+            VeraCompiler.compile(Identifier("Unit"), "fn main() {\n}\n")
+        }
+        Assertions.assertEquals(
+            "error: program class Unit conflicts with the built-in Unit class",
+            VeraDiagnostics.render(error, "fn main() {\n}\n", "main.vera"),
+        )
+    }
+
+    private fun assertRendersAs(source: String, expected: String) {
+        val error = try {
+            VeraCompiler.compile(Identifier("ErrorTest"), source)
+            throw AssertionError("Expected compilation to fail, but it succeeded")
+        } catch (exception: VeraException) {
+            exception
+        }
+        Assertions.assertEquals(expected.trimIndent(), VeraDiagnostics.render(error, source, "main.vera"))
+    }
+
+    @Test
     fun `instruction builder rejects stack underflow`() {
         assertCompilerError<FlatInstructionException.StackUnderflow>("stack underflow") {
             methodBuilder().addInstruction(FlatPop(JvmType.INT))
@@ -1088,6 +1209,7 @@ class CompilerErrorTests {
             exception
         }
         assertMatches(error, case.expectedType, case.messagePart)
+        Assertions.assertNotNull(error.span, "Expected a source location for: ${error.render()}")
     }
 
     private inline fun <reified T : VeraException> assertCompilerError(

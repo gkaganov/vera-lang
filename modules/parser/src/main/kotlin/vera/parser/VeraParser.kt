@@ -42,6 +42,7 @@ import vera.ast.VeraUnitLiteral
 import vera.ast.VeraUnitReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.shared.model.Identifier
+import vera.shared.model.SourceSpan
 
 object VeraParser {
     fun parse(tokens: List<VeraToken>): VeraProgram = VeraParserState(tokens).parse()
@@ -69,13 +70,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             at(VeraTokenType.TRAIT) -> parseTraitDeclaration()
             else -> {
                 val token = current()
-                throw VeraParseException.ExpectedDeclaration(token, token.location())
+                throw VeraParseException.ExpectedDeclaration(token)
             }
         }
     }
 
     private fun parseFunctionDeclaration(): VeraFunctionDeclaration {
-        expect(VeraTokenType.FN)
+        val fnToken = expect(VeraTokenType.FN)
         val name = expect(VeraTokenType.IDENTIFIER, "function name")
         val (parameters, returnType) = parseSignature()
         val body = parseBlock()
@@ -84,11 +85,12 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             parameters,
             returnType,
             VeraExplicitReturnBlock(body),
+            spanOf(fnToken, name),
         )
     }
 
     private fun parseClassDeclaration(): VeraClassDeclaration {
-        expect(VeraTokenType.CLASS)
+        val classToken = expect(VeraTokenType.CLASS)
         val name = expect(VeraTokenType.IDENTIFIER, "class name")
         val traits = mutableListOf<Identifier>()
         if (match(VeraTokenType.HAS)) {
@@ -107,35 +109,36 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             } else {
                 val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
                 expect(VeraTokenType.COLON)
-                fields += VeraField(Identifier(fieldName.text), parseTypeRef())
+                val fieldType = parseTypeRef()
+                fields += VeraField(Identifier(fieldName.text), fieldType, spanFrom(fieldName))
             }
             parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits)
+        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits, spanOf(classToken, name))
     }
 
     private fun parseTraitDeclaration(): VeraTraitDeclaration {
-        expect(VeraTokenType.TRAIT)
+        val traitToken = expect(VeraTokenType.TRAIT)
         val name = expect(VeraTokenType.IDENTIFIER, "trait name")
         expect(VeraTokenType.LBRACE)
         skipEols()
         val methods = mutableListOf<VeraTraitMethod>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
-            expect(VeraTokenType.FN, "trait method")
-            methods += parseTraitMethod()
+            val fnToken = expect(VeraTokenType.FN, "trait method")
+            methods += parseTraitMethod(fnToken)
             parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(Identifier(name.text), methods)
+        return VeraTraitDeclaration(Identifier(name.text), methods, spanOf(traitToken, name))
     }
 
-    private fun parseTraitMethod(): VeraTraitMethod {
+    private fun parseTraitMethod(fnToken: VeraToken): VeraTraitMethod {
         val name = expect(VeraTokenType.IDENTIFIER, "method name")
         val (parameters, returnType) = parseSignature()
-        return VeraTraitMethod(Identifier(name.text), parameters, returnType)
+        return VeraTraitMethod(Identifier(name.text), parameters, returnType, spanFrom(fnToken))
     }
 
     /** Parses `(params)` and an optional `: Type`; an omitted return type is [VeraType.UNKNOWN]. */
@@ -156,7 +159,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseParameter(): VeraParameter {
         val name = expect(VeraTokenType.IDENTIFIER, "parameter name")
         expect(VeraTokenType.COLON)
-        return VeraParameter(Identifier(name.text), parseTypeRef())
+        val type = parseTypeRef()
+        return VeraParameter(Identifier(name.text), type, spanFrom(name))
     }
 
     private fun parseTypeRef(): VeraType {
@@ -188,7 +192,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             else -> {
                 val token = current()
-                throw VeraParseException.ExpectedType(token, token.location())
+                throw VeraParseException.ExpectedType(token)
             }
         }
     }
@@ -223,8 +227,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND -> parseRebindStatement()
             at(VeraTokenType.RETURN) -> parseReturnStatement()
             at(VeraTokenType.WHILE) -> parseWhileStatement()
-            at(VeraTokenType.BREAK) -> parseBreakStatement()
-            at(VeraTokenType.CONTINUE) -> parseContinueStatement()
+            at(VeraTokenType.BREAK) -> VeraBreakStatement(advance().span())
+            at(VeraTokenType.CONTINUE) -> VeraContinueStatement(advance().span())
             else -> VeraExpression(parseExpression())
         }
         parseStatementTerminator()
@@ -232,12 +236,12 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     }
 
     private fun parseBindStatement(): VeraBindStatement {
-        advance() // var | val
+        val keyword = advance() // var | val
         val name = expect(VeraTokenType.IDENTIFIER, "variable name")
         val type = if (match(VeraTokenType.COLON)) parseTypeRef() else VeraType.UNKNOWN
         expect(VeraTokenType.BIND)
         val expression = parseExpression()
-        return VeraBindStatement(Identifier(name.text), type, VeraExpression(expression))
+        return VeraBindStatement(Identifier(name.text), type, VeraExpression(expression), spanFrom(keyword))
     }
 
     private fun parseRebindStatement(): VeraRebindStatement {
@@ -245,37 +249,27 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         expect(VeraTokenType.BIND)
         if (at(VeraTokenType.LBRACE)) {
             // The AST has no representation for update blocks yet.
-            throw VeraParseException.UnsupportedRebindUpdateBlock(current().location())
+            throw VeraParseException.UnsupportedRebindUpdateBlock(current())
         }
         val expression = parseExpression()
-        return VeraRebindStatement(Identifier(name.text), VeraExpression(expression))
+        return VeraRebindStatement(Identifier(name.text), VeraExpression(expression), spanFrom(name))
     }
 
     private fun parseReturnStatement(): VeraReturnStatement {
-        expect(VeraTokenType.RETURN)
+        val keyword = expect(VeraTokenType.RETURN)
         val expression = if (at(VeraTokenType.EOL) || at(VeraTokenType.EOF) || at(VeraTokenType.RBRACE)) {
             null
         } else {
             VeraExpression(parseExpression())
         }
-        return VeraReturnStatement(expression)
+        return VeraReturnStatement(expression, spanFrom(keyword))
     }
 
     private fun parseWhileStatement(): VeraWhileStatement {
-        expect(VeraTokenType.WHILE)
+        val keyword = expect(VeraTokenType.WHILE)
         val condition = parseExpression()
         val body = parseBlock()
-        return VeraWhileStatement(condition, VeraUnitReturnBlock(body))
-    }
-
-    private fun parseBreakStatement(): VeraBreakStatement {
-        expect(VeraTokenType.BREAK)
-        return VeraBreakStatement
-    }
-
-    private fun parseContinueStatement(): VeraContinueStatement {
-        expect(VeraTokenType.CONTINUE)
-        return VeraContinueStatement
+        return VeraWhileStatement(condition, VeraUnitReturnBlock(body), spanFrom(keyword))
     }
 
     /** Ends a statement or member at a newline, at the end of input, or before a closing `}`. */
@@ -285,7 +279,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             at(VeraTokenType.EOF) || at(VeraTokenType.RBRACE) -> Unit
             else -> {
                 val token = current()
-                throw VeraParseException.ExpectedEndOfLine(token, token.location())
+                throw VeraParseException.ExpectedEndOfLine(token)
             }
         }
     }
@@ -348,18 +342,21 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         )
 
     private fun parseUnary(): VeraPrimaryExpression {
+        val operatorToken = current()
         if (match(VeraTokenType.MINUS)) {
             if (at(VeraTokenType.INT_LITERAL)) {
                 // Fold the sign into the literal so `-2147483648` (Int.MIN_VALUE) is representable.
                 val token = advance()
                 val value = "-${token.text}".toIntOrNull()
-                    ?: throw VeraParseException.InvalidIntLiteral(token, token.location())
-                return VeraIntLiteral(value)
+                    ?: throw VeraParseException.InvalidIntLiteral(token)
+                return VeraIntLiteral(value, spanOf(operatorToken, token))
             }
-            return VeraUnaryOperation(VeraUnaryOperator.NEGATE, parseUnary())
+            val operand = parseUnary()
+            return VeraUnaryOperation(VeraUnaryOperator.NEGATE, operand, spanFrom(operatorToken))
         }
         if (match(VeraTokenType.NOT)) {
-            return VeraUnaryOperation(VeraUnaryOperator.NOT, parseUnary())
+            val operand = parseUnary()
+            return VeraUnaryOperation(VeraUnaryOperator.NOT, operand, spanFrom(operatorToken))
         }
         return parseChainedPrimary()
     }
@@ -373,7 +370,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             val operator = operators[current().type] ?: break
             advance()
             val right = operand()
-            left = VeraBinaryOperation(left, operator, right)
+            left = VeraBinaryOperation(left, operator, right, SourceSpan(left.span.start, right.span.end))
         }
         return left
     }
@@ -385,21 +382,22 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             when {
                 match(VeraTokenType.DOT) -> {
                     val name = expect(VeraTokenType.IDENTIFIER, "member name")
-                    data += VeraMemberAccess(Identifier(name.text))
+                    data += VeraMemberAccess(Identifier(name.text), name.span())
                 }
 
                 at(VeraTokenType.LPAREN) -> {
-                    data += VeraArguments(parseArgumentList())
+                    data += parseArgumentList()
                 }
 
                 else -> break
             }
         }
-        return if (data.isEmpty()) base else VeraChainedExpression(base, data)
+        if (data.isEmpty()) return base
+        return VeraChainedExpression(base, data, SourceSpan(base.span.start, data.last().span.end))
     }
 
-    private fun parseArgumentList(): List<VeraArgument> {
-        expect(VeraTokenType.LPAREN)
+    private fun parseArgumentList(): VeraArguments {
+        val openParenthesis = expect(VeraTokenType.LPAREN)
         val arguments = mutableListOf<VeraArgument>()
         if (!at(VeraTokenType.RPAREN)) {
             arguments += parseArgument()
@@ -408,7 +406,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             }
         }
         expect(VeraTokenType.RPAREN)
-        return arguments
+        return VeraArguments(arguments, spanFrom(openParenthesis))
     }
 
     /** Parses `name = value` or a bare `value`. */
@@ -416,9 +414,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         if (at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.BIND) {
             val name = advance()
             expect(VeraTokenType.BIND)
-            return VeraArgument(Identifier(name.text), parseExpression())
+            val expression = parseExpression()
+            return VeraArgument(Identifier(name.text), expression, spanFrom(name))
         }
-        return VeraArgument(null, parseExpression())
+        val expression = parseExpression()
+        return VeraArgument(null, expression, expression.span)
     }
 
     private fun parsePrimary(): VeraPrimaryExpression {
@@ -426,30 +426,27 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             VeraTokenType.INT_LITERAL -> {
                 val token = advance()
                 val value = token.text.toIntOrNull()
-                    ?: throw VeraParseException.InvalidIntLiteral(token, token.location())
-                VeraIntLiteral(value)
+                    ?: throw VeraParseException.InvalidIntLiteral(token)
+                VeraIntLiteral(value, token.span())
             }
 
             VeraTokenType.STRING_LITERAL -> {
                 val token = advance()
-                VeraStringLiteral(token.text)
+                VeraStringLiteral(token.text, token.span())
             }
 
             VeraTokenType.TEMPLATE_START -> parseStringTemplate()
 
             VeraTokenType.BOOL_LITERAL -> {
                 val token = advance()
-                if (token.text == "True") VeraBoolLiteral.TRUE else VeraBoolLiteral.FALSE
+                VeraBoolLiteral(token.text == "True", token.span())
             }
 
-            VeraTokenType.UNIT_TYPE -> {
-                advance()
-                VeraUnitLiteral
-            }
+            VeraTokenType.UNIT_TYPE -> VeraUnitLiteral(advance().span())
 
             VeraTokenType.IDENTIFIER -> {
                 val token = advance()
-                VeraIdentifierAsExpression(Identifier(token.text))
+                VeraIdentifierAsExpression(Identifier(token.text), token.span())
             }
 
             VeraTokenType.LPAREN -> {
@@ -463,14 +460,15 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             else -> {
                 val token = current()
-                throw VeraParseException.ExpectedExpression(token, token.location())
+                throw VeraParseException.ExpectedExpression(token)
             }
         }
     }
 
     /** Parses `TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLATE_END`. */
     private fun parseStringTemplate(): VeraStringTemplate {
-        val parts = mutableListOf<VeraTemplatePart>(VeraTemplateText(advance().text))
+        val startToken = advance()
+        val parts = mutableListOf<VeraTemplatePart>(VeraTemplateText(startToken.text))
         while (true) {
             parts += VeraTemplateValue(parseExpression())
             val token = current()
@@ -478,15 +476,15 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 VeraTokenType.TEMPLATE_MIDDLE -> parts += VeraTemplateText(advance().text)
                 VeraTokenType.TEMPLATE_END -> {
                     parts += VeraTemplateText(advance().text)
-                    return VeraStringTemplate(parts)
+                    return VeraStringTemplate(parts, spanFrom(startToken))
                 }
-                else -> throw VeraParseException.ExpectedToken("`}` to close the template placeholder", token, token.location())
+                else -> throw VeraParseException.ExpectedToken("`}` to close the template placeholder", token)
             }
         }
     }
 
     private fun parseIfExpression(): VeraIfExpression {
-        expect(VeraTokenType.IF)
+        val keyword = expect(VeraTokenType.IF)
         val condition = parseExpression()
         val thenBlock = parseBranchBlock()
         val elseBlock = if (matchElseAfterOptionalEols()) {
@@ -505,6 +503,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             condition = condition,
             thenBlock = thenBlock,
             elseBlock = elseBlock,
+            span = spanFrom(keyword),
         )
     }
 
@@ -524,6 +523,12 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             advance()
         }
     }
+
+    /** The span from the start of [first] to the end of [last]. */
+    private fun spanOf(first: VeraToken, last: VeraToken): SourceSpan = SourceSpan(first.span().start, last.span().end)
+
+    /** The span from the start of [first] to the end of the most recently consumed token. */
+    private fun spanFrom(first: VeraToken): SourceSpan = spanOf(first, tokens[maxOf(position - 1, 0)])
 
     private fun current(): VeraToken = tokens[position]
 
@@ -548,8 +553,21 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun expect(type: VeraTokenType, what: String? = null): VeraToken {
         if (!at(type)) {
             val token = current()
-            throw VeraParseException.ExpectedToken(what ?: type.name, token, token.location())
+            throw VeraParseException.ExpectedToken(what ?: type.describeExpected(), token)
         }
         return advance()
+    }
+
+    /** How an expected token reads in an error message: `'{'` rather than `LBRACE`. */
+    private fun VeraTokenType.describeExpected(): String = when (this) {
+        VeraTokenType.LPAREN -> "'('"
+        VeraTokenType.RPAREN -> "')'"
+        VeraTokenType.LBRACE -> "'{'"
+        VeraTokenType.RBRACE -> "'}'"
+        VeraTokenType.COLON -> "':'"
+        VeraTokenType.COMMA -> "','"
+        VeraTokenType.BIND -> "'='"
+        VeraTokenType.IDENTIFIER -> "a name"
+        else -> "'${name.lowercase()}'"
     }
 }

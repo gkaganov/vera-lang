@@ -62,9 +62,11 @@ enum class VeraTokenType {
     EOF,
 }
 
+/** A token from [line]:[column] up to, but not including, [endColumn] on the same line. */
 data class VeraToken(
     val type: VeraTokenType,
     val text: String,
     val line: Int,
     val column: Int,
+    val endColumn: Int,
 )

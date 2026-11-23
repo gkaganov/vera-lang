@@ -4,6 +4,7 @@ import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.render
 import vera.shared.model.Identifier
+import vera.shared.model.SourceSpan
 import vera.shared.model.VeraException
 
 enum class JvmForwardApplicationIssue {
@@ -28,8 +29,12 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "cannot rebind variable ${name.value} of type ${declared.render()} to ${actual.render()}",
     )
 
-    class BindTypeMismatch(val declared: String, val actual: JvmType) : JvmLoweringException(
-        "the type of the bind statement must either UNKNOWN (to be inferred) or the same as the containing expression",
+    class BindTypeMismatch(
+        val name: Identifier,
+        val declared: String,
+        val actual: JvmType,
+    ) : JvmLoweringException(
+        "variable ${name.value} is declared as $declared but bound to a value of type ${actual.render()}",
     )
 
     class BoolOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
@@ -394,3 +399,16 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
 
 private fun renderSignature(parameters: List<JvmType>, returnType: JvmType): String =
     "(${parameters.joinToString(", ") { it.render() }}) -> ${returnType.render()}"
+
+/**
+ * Runs [lowering] and attaches [span] to any compiler error raised inside it that has no location
+ * yet. Nested calls therefore report the innermost declaration, statement, or expression.
+ */
+internal inline fun <T> located(span: SourceSpan, lowering: () -> T): T {
+    try {
+        return lowering()
+    } catch (exception: VeraException) {
+        exception.attachSpan(span)
+        throw exception
+    }
+}

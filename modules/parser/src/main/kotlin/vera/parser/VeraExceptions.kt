@@ -1,69 +1,81 @@
 package vera.parser
 
 import vera.shared.model.SourceLocation
+import vera.shared.model.SourceSpan
 import vera.shared.model.VeraException
 
-sealed class VeraLexException(message: String) : VeraException(message) {
-    abstract val location: SourceLocation
+/** A lexing error at a single source position; the position is attached as a one-character span. */
+sealed class VeraLexException(message: String, val location: SourceLocation) : VeraException(message) {
+    init {
+        attachSpan(SourceSpan(location, SourceLocation(location.line, location.column + 1)))
+    }
 
     class UnexpectedCharacter(
         val character: Char,
-        override val location: SourceLocation,
-    ) : VeraLexException("unexpected character '$character' ${location.render()}")
+        location: SourceLocation,
+    ) : VeraLexException("unexpected character '$character'", location)
 
     class InvalidStringEscape(
         val escape: Char,
-        override val location: SourceLocation,
-    ) : VeraLexException("invalid string escape '\\$escape' ${location.render()}")
+        location: SourceLocation,
+    ) : VeraLexException("invalid string escape '\\$escape'", location)
 
     class UnexpectedSemicolon(
-        override val location: SourceLocation,
-    ) : VeraLexException("Vera does not use semicolons; end the statement with a newline ${location.render()}")
+        location: SourceLocation,
+    ) : VeraLexException("Vera does not use semicolons; end the statement with a newline", location)
 
     class UnterminatedString(
-        override val location: SourceLocation,
-    ) : VeraLexException("unterminated string literal ${location.render()}")
+        location: SourceLocation,
+    ) : VeraLexException("unterminated string literal", location)
 }
 
-sealed class VeraParseException(message: String) : VeraException(message) {
-    abstract val location: SourceLocation
+/** A parsing error, located at the offending token. */
+sealed class VeraParseException(message: String, val location: SourceLocation, span: SourceSpan) :
+    VeraException(message) {
+
+    init {
+        attachSpan(span)
+    }
+
+    constructor(message: String, token: VeraToken) : this(message, token.location(), token.span())
 
     class ExpectedDeclaration(
         val found: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("expected a function, class, or trait declaration ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected a function, class, or trait declaration, found ${found.describe()}", found)
 
     class ExpectedToken(
         val expected: String,
         val found: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("expected $expected ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected $expected, found ${found.describe()}", found)
 
     class ExpectedType(
         val found: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("expected a type ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected a type, found ${found.describe()}", found)
 
     class ExpectedExpression(
         val found: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("expected an expression ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected an expression, found ${found.describe()}", found)
 
     class ExpectedEndOfLine(
         val found: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("expected end of line ${location.render()} (found '${found.text}')")
+    ) : VeraParseException("expected end of line, found ${found.describe()}", found)
 
     class InvalidIntLiteral(
         val token: VeraToken,
-        override val location: SourceLocation,
-    ) : VeraParseException("invalid Int literal '${token.text}' ${location.render()}")
+    ) : VeraParseException("invalid Int literal '${token.text}'", token)
 
     class UnsupportedRebindUpdateBlock(
-        override val location: SourceLocation,
-    ) : VeraParseException("rebind update blocks are not supported ${location.render()}")
+        val token: VeraToken,
+    ) : VeraParseException("rebind update blocks are not supported", token)
 }
 
 internal fun VeraToken.location(): SourceLocation = SourceLocation(line, column)
 
-internal fun SourceLocation.render(): String = "at line $line, column $column"
+internal fun VeraToken.span(): SourceSpan = SourceSpan(location(), SourceLocation(line, endColumn))
+
+/** Describes a token for an error message, naming layout tokens instead of printing a raw newline. */
+private fun VeraToken.describe(): String = when (type) {
+    VeraTokenType.EOL -> "end of line"
+    VeraTokenType.EOF -> "end of input"
+    else -> "'$text'"
+}

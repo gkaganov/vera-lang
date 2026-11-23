@@ -43,10 +43,15 @@ sealed interface JvmType {
 /** The generated built-in `Unit` class. */
 val JvmUnitType: JvmType.ClassType = JvmType.ClassType(Identifier("Unit"))
 
+/** Renders the type with Vera's names (`Int`, not `INT`), for user-facing messages. */
 fun JvmType.render(): String = when (this) {
+    JvmType.INT -> "Int"
+    JvmType.STRING -> "String"
+    JvmType.BOOL -> "Bool"
+    JvmType.OBJECT -> "Object"
+    JvmType.VOID -> "void"
     is JvmType.ClassType -> name.value
     is JvmType.Array -> "${elementType.render()}[]"
-    else -> toString()
 }
 
 sealed interface JvmExpression {

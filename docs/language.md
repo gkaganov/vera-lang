@@ -620,6 +620,22 @@ fn main() {
 }
 ```
 
+## Compiler errors
+
+Errors name the problem in source terms and point at the code that caused it:
+
+```text
+error: argument 1 of function add must be named: write `left = ...`
+ --> main.vera:5:15
+  |
+5 |     print(add(1, right = 2))
+  |               ^
+```
+
+- The underline covers the innermost construct responsible: an expression, an argument, a
+  statement, or a declaration header such as `fn add`.
+- A span that continues onto later lines is underlined to the end of its first line.
+
 ## Further reading
 
 - [Design Philosophy](design-philosophy.md) — long-term direction and compiler principles

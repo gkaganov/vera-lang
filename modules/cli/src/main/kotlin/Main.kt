@@ -1,4 +1,5 @@
 import vera.compiler.VeraCompiler
+import vera.compiler.VeraDiagnostics
 import vera.shared.model.Identifier
 import vera.shared.model.VeraException
 import java.nio.file.Path
@@ -25,7 +26,7 @@ fun main() {
             outputPath.writeBytes(bytes)
         }
     } catch (exception: VeraException) {
-        System.err.println(exception.render())
+        System.err.println(VeraDiagnostics.render(exception, sourcecode, inputPath.toString()))
         exitProcess(1)
     }
 }
