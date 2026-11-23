@@ -26,6 +26,7 @@ Implemented:
 - Top-level `trait` declarations and `class ... has ...` clauses.
 - Structural object equality through the built-in `Eq` trait.
 - Object printing through the built-in `Display` trait.
+- `//` line comments and `///` doc comments.
 
 Not implemented:
 
@@ -35,7 +36,7 @@ Not implemented:
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
-- Comments.
+- Attaching `///` doc comments to declarations (they are currently skipped like `//`).
 - Custom entry-point names (only `main` gets a JVM adapter).
 
 See [`roadmap.md`](roadmap.md) for planned work and acceptance criteria.
@@ -418,6 +419,24 @@ print(Point(1, 2))
   trait; nested objects print recursively through their own `Display` implementations.
 - Returns `Unit`.
 
+## Comments
+
+```vera
+/// Returns the total of all paid orders.
+fn total(orders: Orders): Int {
+    // Refunds are already excluded upstream.
+    return orders |> paidOnly() |> sum()
+}
+```
+
+- `//` starts a comment that runs to the end of the line.
+- `///` starts a Markdown doc comment, the same form as Java 23 (JEP 467). Doc comments are
+  currently skipped like `//`; attaching them to the following declaration is planned.
+- There are no block comments (`/* */`). Comment out several lines with `//` on each line.
+- `//` inside a string literal is part of the string.
+- A comment never affects line continuation: `a +  // note` still continues, and a trailing
+  comment still ends the statement.
+
 ## Newlines and blocks
 
 - A newline ends a statement, a class member, or a trait signature. A closing `}` also ends the
@@ -433,7 +452,8 @@ print(Point(1, 2))
   Put the operator at the end of the line instead.
 - Blank lines are ignored, including at block boundaries, before `else`, and inside continuations.
 - CRLF line endings are supported.
-- Comments are not implemented.
+- A comment-only line behaves like a blank line, including between the lines of a continued
+  statement.
 
 ```vera
 var report = orders
@@ -522,11 +542,13 @@ IDENT          = ( letter | "_" ) { letter | digit | "_" }   (* ASCII; keywords 
 INT            = digit { digit }                              (* must fit in a 32-bit Int *)
 STRING         = '"' { character | escape } '"'               (* no line breaks inside *)
 escape         = "\n" | "\t" | "\r" | '\"' | "\\"
+COMMENT        = "//" { character }                         (* to end of line; includes "///" *)
 ```
 
-Spaces and tabs separate tokens and are otherwise ignored. The lexer drops a newline (emits no
-`EOL`) inside an open `(`, after a trailing operator, `not`, `=`, `,`, or `.`, and before a line
-starting with `|>` or `.`. A `;` is rejected with a dedicated error.
+Spaces, tabs, and comments separate tokens and are otherwise ignored. The lexer drops a newline
+(emits no `EOL`) inside an open `(`, after a trailing operator, `not`, `=`, `,`, or `.`, and before a
+line starting with `|>` or `.`, looking past blank and comment-only lines. A `;` is rejected with a
+dedicated error.
 
 ## Example
 

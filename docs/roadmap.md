@@ -24,12 +24,6 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Acceptance: mutation works through object methods and is rejected for immutable objects and
   fields where appropriate.
 
-### Comments
-
-- Status: not implemented.
-- Area: lexer.
-- Acceptance: comments are skipped and covered by tests.
-
 ### Numeric edge-case semantics
 
 - Status: undecided.
@@ -57,6 +51,7 @@ Larger design work and features that are not required for a usable basic languag
 - Persistent collections.
 - String concatenation and other string operations.
 - Trait default method bodies and trait-typed values with dynamic dispatch.
+- Doc comments: attach `///` comments to the following declaration and render them as documentation.
 - A universal `Any` top type with `java.lang.Object`-like behavior. Deferred: it requires boxing
   for primitives, `instanceof`/`checkcast`, `invokeinterface`, and a heterogeneous `equals`.
   `Any` is deliberately not a root trait yet, so `Eq` and `Display` stay opt-in.

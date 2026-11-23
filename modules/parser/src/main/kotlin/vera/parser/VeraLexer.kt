@@ -24,6 +24,7 @@ private class VeraLexerState(private val source: String) {
                 '\n' -> lexLineFeed()
                 '\r' -> lexCarriageReturn()
                 '"' -> lexString()
+                '/' if source.startsWith("//", index) -> skipComment()
                 else -> when {
                     char in '0'..'9' -> lexInt()
                     char.isIdentifierStart() -> lexIdentifierOrKeyword()
@@ -65,12 +66,36 @@ private class VeraLexerState(private val source: String) {
         tokens += VeraToken(VeraTokenType.EOL, "\n", startLine, startColumn)
     }
 
+    /** Looks past blank and comment-only lines for a line starting with `|>` or `.`. */
     private fun nextLineStartsWithContinuation(): Boolean {
         var lookahead = index
-        while (lookahead < source.length && source[lookahead] in " \t\r\n") {
-            lookahead++
+        while (lookahead < source.length) {
+            lookahead = when {
+                source[lookahead] in " \t\r\n" -> lookahead + 1
+                source.startsWith("//", lookahead) -> commentEnd(lookahead)
+                else -> break
+            }
         }
         return source.startsWith("|>", lookahead) || source.startsWith(".", lookahead)
+    }
+
+    /**
+     * Skips a `//` comment or `///` doc comment up to, but not including, the line break, so the
+     * newline still ends the statement and comments never affect line continuation.
+     */
+    private fun skipComment() {
+        val end = commentEnd(index)
+        while (index < end) {
+            advance()
+        }
+    }
+
+    private fun commentEnd(start: Int): Int {
+        var end = start
+        while (end < source.length && source[end] != '\n' && source[end] != '\r') {
+            end++
+        }
+        return end
     }
 
     private fun lexString() {

@@ -279,6 +279,9 @@ uncommitted changes:
   continues a line. `;` throws `VeraLexException.UnexpectedSemicolon`.
 - Blank lines and extra `EOL` tokens are ignored at block boundaries and before `else`.
 - CRLF is normalized to a single `EOL` token.
+- `VeraLexer` skips `//` comments and `///` doc comments up to the line break, so comments never
+  change line continuation; the leading-`|>`/`.` lookahead skips comment-only lines. There are no
+  block comments.
 - String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
   and `\r` escapes.
 - Constructs: `fn`, `class`, `trait`, `has`, `var`, rebinding with `=`, `if` / `else if` /

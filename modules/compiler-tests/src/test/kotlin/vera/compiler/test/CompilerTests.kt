@@ -692,6 +692,70 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `line and doc comments are ignored`(testInfo: TestInfo) {
+        val source = """
+                    // A leading comment.
+                    /// Documents the trait.
+                    trait Shape {
+                        /// Documents a trait method.
+                        fn area(): Int // trailing comment on a signature
+                    }
+                    /// Documents the class.
+                    class Square has Shape {
+                        side: Int // trailing comment on a field
+
+                        /// Documents a method.
+                        fn area(): Int {
+                            return side * side
+                        }
+                    }
+                    /// Documents the function.
+                    fn $TEST_MAIN() {
+                        // A comment-only line.
+                        print(Square(3).area()) // trailing comment
+                        print("not // a comment")
+                        print(10 / 2)
+                    }
+                    // A comment at the end of the file without a newline.
+                """.trimIndent()
+        assertProgramPrints(source, "9${EOL}not // a comment${EOL}5$EOL", testInfo)
+    }
+
+    @Test
+    fun `comments do not change line continuation`(testInfo: TestInfo) {
+        val source = """
+                    fn increment(value: Int): Int {
+                        return value + 1
+                    }
+                    fn $TEST_MAIN() {
+                        var total = 1 + // continues after a trailing operator
+                            2
+                        print(total)
+                        total
+                            // a comment between pipeline stages
+                            |> increment
+
+                            // and after a blank line
+                            |> print
+                        print(4) // a trailing comment still ends the statement
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "3${EOL}4${EOL}4$EOL", testInfo)
+    }
+
+    @Test
+    fun `comments work with crlf line endings`(testInfo: TestInfo) {
+        val source = """
+                    fn $TEST_MAIN() {
+                        print(1) // first
+                        // second
+                        print(2)
+                    }
+                """.trimIndent().replace("\n", "\r\n")
+        assertProgramPrints(source, "1${EOL}2$EOL", testInfo)
+    }
+
+    @Test
     fun `while with a false condition skips its body`(testInfo: TestInfo) {
         val source = """
                     fn $TEST_MAIN() {
