@@ -29,7 +29,8 @@ data class VeraExpressionBody(val expression: VeraPrimaryExpression) : VeraFunct
 
 /**
  * A class. A case declared inside a trait's block has that trait as its [owner], is named
- * `Owner$Case`, and lists the owner first in [traits].
+ * `Owner$Case`, and lists the owner first in [traits]. [interfaces] are the interfaces it states
+ * with `implements`; it fits other interfaces without stating them.
  */
 data class VeraClassDeclaration(
     override val name: Identifier,
@@ -38,13 +39,16 @@ data class VeraClassDeclaration(
     val traits: List<Identifier>,
     override val span: SourceSpan,
     val owner: Identifier? = null,
+    val interfaces: List<Identifier> = emptyList(),
 ) : VeraDeclaration
 
 data class VeraField(val name: Identifier, val type: VeraType, val span: SourceSpan)
 
 /**
- * A trait. Traits are closed: their classes are all known, so `match` can be exhaustive. A trait in
- * block form owns its [cases]; otherwise classes join it with `has`.
+ * A trait or, by [kind], an interface. Traits are closed: their classes are all known, so `match`
+ * can be exhaustive. A trait in block form owns its [cases]; otherwise classes join it with `has`.
+ * Interfaces are open and structural: every class with their members fits them, and they have no
+ * cases.
  */
 data class VeraTraitDeclaration(
     override val name: Identifier,
@@ -55,7 +59,14 @@ data class VeraTraitDeclaration(
     val requirements: List<Identifier> = emptyList(),
     /** Fields every member must declare itself (`val timestamp: Int`); a requirement, not storage. */
     val fields: List<VeraField> = emptyList(),
+    val kind: VeraTraitKind = VeraTraitKind.TRAIT,
 ) : VeraDeclaration
+
+/** A closed `trait`, which classes join with `has`, or an open `interface`, which classes fit. */
+enum class VeraTraitKind(val keyword: String, val joinKeyword: String) {
+    TRAIT("trait", "has"),
+    INTERFACE("interface", "implements"),
+}
 
 data class VeraTraitMethod(
     val name: Identifier,

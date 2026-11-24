@@ -31,6 +31,7 @@ import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraStringTemplate
 import vera.ast.VeraTraitDeclaration
+import vera.ast.VeraTraitKind
 import vera.ast.VeraTraitMethod
 import vera.ast.VeraTemplateText
 import vera.ast.VeraTemplateValue
@@ -491,6 +492,9 @@ private class JvmFunctionLoweringState(
     private fun matchCases(jvmType: JvmType, veraScrutinee: VeraPrimaryExpression): List<VeraClassDeclaration> =
         when (jvmType) {
             is JvmType.InterfaceType -> {
+                if (visibleTraits[jvmType.name]?.kind == VeraTraitKind.INTERFACE) {
+                    throw JvmLoweringException.MatchOnInterface(jvmType.name).at(veraScrutinee.span)
+                }
                 // Traits are closed, so the classes that have the trait are all of its cases.
                 visibleClasses.values.filter { veraClass -> jvmType.name in veraClass.traits }
             }
@@ -540,19 +544,25 @@ private class JvmFunctionLoweringState(
     }
 
     /**
-     * The single type that branch values of [jvmTypes] share: their common type, or else the one user
-     * trait that all of them have, so `if c { Circle(...) } else { Empty() }` is a `Shape`.
+     * The single type that branch values of [jvmTypes] share: their common type, a branch type every
+     * other branch converts to, or else the one trait that all of them have, so
+     * `if c { Circle(...) } else { Empty }` is a `Shape`. Interfaces are not inferred this way, because
+     * a class fits them by its members alone; a branch typed as an interface, or a declared type,
+     * selects one.
      */
     private fun unifyTypes(jvmTypes: List<JvmType>): JvmType? {
         val distinctTypes = jvmTypes.distinct()
         distinctTypes.singleOrNull()?.let { jvmType -> return jvmType }
+        distinctTypes.singleOrNull { target -> distinctTypes.all { jvmType -> isAssignable(jvmType, target) } }
+            ?.let { jvmType -> return jvmType }
         val traitSets = distinctTypes.map { jvmType ->
-            when (jvmType) {
+            val traits = when (jvmType) {
                 is JvmType.InterfaceType -> setOf(jvmType.name) + traitRequirements.userTraitsOf(jvmType.name)
                 is JvmType.ClassType -> visibleClasses[jvmType.name]?.traits?.filter { it in visibleTraits }?.toSet()
                     ?: return null
                 else -> return null
             }
+            traits.filter { trait -> visibleTraits[trait]?.kind == VeraTraitKind.TRAIT }.toSet()
         }
         val commonTraits = traitSets.reduce { left, right -> left intersect right }
         return commonTraits.singleOrNull()?.let { trait -> JvmType.InterfaceType(trait) }
@@ -606,22 +616,25 @@ private class JvmFunctionLoweringState(
 
     /**
      * Returns [jvmExpression] as a value of [expectedType], or `null` when it is not assignable. A class
-     * value is assignable to each user trait it has, through a [JvmUpcast].
+     * value is assignable to each user trait it has and each interface it fits, through a [JvmUpcast].
      */
     private fun coerce(jvmExpression: JvmExpression, expectedType: JvmType): JvmExpression? {
         val actualType = jvmExpression.type
         if (actualType == expectedType) return jvmExpression
-        if (actualType is JvmType.ClassType && expectedType is JvmType.InterfaceType) {
-            val veraClass = visibleClasses[actualType.name] ?: return null
-            if (expectedType.name in veraClass.traits) return JvmUpcast(jvmExpression, expectedType)
-        }
-        // A trait value is also a value of every trait it requires.
-        if (actualType is JvmType.InterfaceType && expectedType is JvmType.InterfaceType &&
-            traitRequirements.satisfies(actualType.name, expectedType.name)
-        ) {
-            return JvmUpcast(jvmExpression, expectedType)
-        }
-        return null
+        if (!isAssignable(actualType, expectedType) || expectedType !is JvmType.InterfaceType) return null
+        return JvmUpcast(jvmExpression, expectedType)
+    }
+
+    /**
+     * Whether a value of [actualType] can be used as [expectedType]: a class value as one of its traits or
+     * interfaces, and a trait value as a trait or interface it requires or fits.
+     */
+    private fun isAssignable(actualType: JvmType, expectedType: JvmType): Boolean = when {
+        actualType == expectedType -> true
+        expectedType !is JvmType.InterfaceType -> false
+        actualType is JvmType.ClassType -> visibleClasses[actualType.name]?.traits?.contains(expectedType.name) == true
+        actualType is JvmType.InterfaceType -> traitRequirements.satisfies(actualType.name, expectedType.name)
+        else -> false
     }
 
     private fun lookupLocal(name: Identifier): JvmLocal? = lookupBinding(name)?.jvmLocal
@@ -840,7 +853,12 @@ private class JvmFunctionLoweringState(
     /** A trait-typed value can be [action] only when its trait requires the built-in trait [builtin]. */
     private fun requireTraitBuiltin(trait: Identifier, builtin: Identifier, action: String) {
         if (!traitRequirements.satisfies(trait, builtin)) {
-            throw JvmLoweringException.TraitRequirementMissing(trait, builtin, action)
+            throw JvmLoweringException.TraitRequirementMissing(
+                trait,
+                builtin,
+                action,
+                visibleTraits[trait]?.kind ?: VeraTraitKind.TRAIT,
+            )
         }
     }
 
@@ -983,6 +1001,7 @@ private class JvmFunctionLoweringState(
                                 receiverType.name,
                                 member,
                                 JvmNameHints.closest(member, declaringTraits.flatMap { trait -> trait.fields.map { it.name } }),
+                                veraTrait.kind,
                             ).at(chainedData.span)
                         }
                         if (declaringTrait == null) {
@@ -990,6 +1009,7 @@ private class JvmFunctionLoweringState(
                                 receiverType.name,
                                 member,
                                 JvmNameHints.closest(member, declaringTraits.flatMap { trait -> trait.methods.map { it.name } }),
+                                veraTrait.kind,
                             ).at(chainedData.span)
                         }
                         val traitMethod = declaringTrait.methods.first { method -> method.name == member }

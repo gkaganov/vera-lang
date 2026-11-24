@@ -86,8 +86,17 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
     class CaseTraitsWithoutBody(
         val found: VeraToken,
         val caseName: String,
+        val keyword: String = "has",
     ) : VeraParseException(
-        "a case with `has` needs a body to end its trait list: write `$caseName has ... { }`, found ${found.describe()}",
+        "a case with `$keyword` needs a body to end its list: write `$caseName $keyword ... { }`, found ${found.describe()}",
+        found,
+    )
+
+    /** A case inside an interface; interfaces are open, so only traits list their cases. */
+    class InterfaceCase(
+        val found: VeraToken,
+    ) : VeraParseException(
+        "interfaces are open and cannot list cases; declare a `trait` for a closed set of cases",
         found,
     )
 

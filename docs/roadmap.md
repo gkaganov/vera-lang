@@ -10,11 +10,9 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Closed traits, trait cases, and structural interfaces (design in progress)
+### Closed traits, trait cases, and structural interfaces
 
-- Status: design settled; implementing in steps. Done: trait-typed values with dynamic dispatch,
-  steps 1 (every trait closed and matchable), 2 (field-less singletons), 3
-  (block-form cases), and 4 (trait requirements).
+- Status: implementation steps 1–6 done. Remaining: the items under *Remaining* below.
 - Area: parser, AST, lowering, emitter.
 - Model:
   - `trait` is closed: only classes in its module can join it. Traits compile to sealed interfaces
@@ -78,7 +76,6 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   13. A `match` on an interface-typed value is not possible: an interface is open, so its cases can
       never all be known, and Vera's `match` has no catch-all arm. Code that receives an interface
       uses its members instead.
-- Later: sugar against long trait lists on classes, such as a named bundle of traits.
 - Implementation steps:
   1. Every trait closed (drop `sealed`), and `match` on any trait. Done.
   2. Field-less classes as singletons, with `Unit` as one of them. Done.
@@ -87,7 +84,16 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values. Done; a
      matching `hashCode` for Java collections is still missing.
   5. Required fields in traits. Done.
-  6. Structural `interface`s with `implements`.
+  6. Structural `interface`s with `implements`. Done. Traits whose values fit an interface extend
+     it; traits and interfaces cannot require each other.
+- Remaining:
+  - `Bool` as a block-form trait with default-imported cases, so `match` covers `True` and `False`
+    (decision 9).
+  - `hashCode` alongside the generated `equals(Object)`, for Java collections.
+  - Branch types from the expected type: `val named: Named = if c { Dog } else { User(...) }` is
+    rejected today, because branches of different classes unify only to a shared trait.
+  - Generic singletons (decision 7) and sugar against long trait lists.
+  - Adapters for classes compiled separately, once there are modules (decision 10).
 - Acceptance: a non-exhaustive `match` is rejected and names the missing cases; interfaces cannot
   be matched; a block-form trait cannot be joined with `has`; field-less classes are singletons; a
   class with an interface's members is accepted where the interface is expected.

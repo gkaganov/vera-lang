@@ -51,7 +51,7 @@ Reserved words cannot be used as identifiers:
 
 | Category | Keywords |
 |----------|----------|
-| Declarations | `fn`, `class`, `trait`, `has`, `requires`, `val`, `mut` |
+| Declarations | `fn`, `class`, `trait`, `interface`, `has`, `implements`, `requires`, `val`, `mut` |
 | Control flow | `if`, `else`, `match`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or`, `not` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
@@ -233,10 +233,11 @@ class Square has Shape {
 - Traits cannot declare default method bodies or overloads.
 - Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
   follow the function rules, so a `Unit` method leaves its return type out.
-- Trait names share the top-level namespace with functions and classes.
+- Trait and interface names share the top-level namespace with functions and classes.
 - Traits are closed: only classes in the same module can have them, and a program is one module
   for now. A trait's cases are therefore always known, so a `match` on a `Shape` can check that it
   covers every one. Each trait compiles to a JVM sealed interface that permits exactly its classes.
+  For open contracts, see [Interfaces](#interfaces).
   Writing `sealed trait` is an error with a hint, since every trait is already closed.
 ### Trait cases
 
@@ -294,6 +295,58 @@ fn name(color: Color): String = match color {
 - `Unit` implicitly has `Eq` and `Display`, so `Unit == Unit` holds and `print(Unit)` works.
 - A class that declares `Eq` or `Display` cannot define the corresponding `equals` or `toString`
   method itself.
+
+## Interfaces
+
+A trait is closed: its classes are all known, so it can be matched. An interface is open and
+structural: every class with its members fits it, without declaring anything. Use interfaces for
+contracts that any class may meet, such as the parameters of an API.
+
+```vera
+interface Named {
+    fn name(): String
+}
+
+class Dog {
+    fn name(): String = "Rex"
+}
+
+class User implements Named {
+    val login: String
+    fn name(): String = login
+}
+
+fn greet(named: Named) = print("hello \{named.name()}")
+
+greet(Dog)                     // hello Rex
+greet(User("ada"))             // hello ada
+```
+
+- An interface declares methods and required fields, like a trait, but has no cases.
+- A class fits an interface when it has every field with the same type and every method with the
+  same parameter types, parameter names, and return type. Fields fit fields and methods fit
+  methods. A fitting object can be used wherever the interface is expected, and an interface-typed
+  value exposes only the interface's fields and methods.
+- `implements Named` after a class's traits (`class User has Shape implements Named`) states that
+  the class fits, and the compiler reports what is missing where the class is declared. It is
+  optional and changes nothing else. Trait cases can state interfaces too
+  (`Square implements Named { ... }`).
+- `has` is only for traits and `implements` only for interfaces; using the wrong one is an error
+  with a hint.
+- An interface can require other interfaces and the built-in traits: `interface Pet requires Named,
+  Display`. A class fits `Pet` when it fits `Named`, has `Display`, and has `Pet`'s own members. A
+  `Pet` value is also a `Named` value, and it can be printed.
+- A trait value fits an interface when its trait, with the traits it requires, has the interface's
+  members: a `Shape` value can be passed as `Named` when `Shape` declares `fn name(): String`.
+  Traits cannot require interfaces, and interfaces cannot require traits.
+- An interface value cannot be matched: any class may fit the interface, so its cases are never all
+  known. Use its members, or match on a trait.
+- `if` and `match` branches of different classes are not inferred to be an interface, because a
+  class fits one by its members alone. They unify only to a shared trait, or to a branch's type when
+  every other branch converts to it.
+- On the JVM, an interface is an ordinary, non-sealed interface. The compiler adds it to every
+  fitting class in the program, and Java classes can implement it explicitly. A trait whose values
+  fit an interface extends it.
 
 ## Variables and rebinding
 
@@ -672,22 +725,28 @@ Notation: `"text"` is a keyword or symbol, `UPPER` is a token class, and `EOL` i
 
 ```text
 program        = { EOL } { declaration { EOL } } EOF
-declaration    = function | class | trait
+declaration    = function | class | trait | interface
 
 function       = "fn" IDENT signature ( block | "=" expression )
 signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]   (* type is not "Unit" *)
 parameter      = IDENT ":" type
 
-class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member statementEnd } "}"
+class          = "class" IDENT [ hasList ] [ implementsList ] "{" { EOL } { member statementEnd } "}"
+hasList        = "has" IDENT { "," IDENT }
+implementsList = "implements" IDENT { "," IDENT }
 member         = "val" IDENT ":" type
                | function
 
-trait          = "trait" IDENT [ "requires" IDENT { "," IDENT } ] "{" { EOL } { traitItem } "}"
+trait          = "trait" IDENT [ requiresList ] "{" { EOL } { traitItem } "}"
+requiresList   = "requires" IDENT { "," IDENT }
 traitItem      = traitMethod statementEnd | traitField statementEnd | case ( "," | statementEnd )
 traitMethod    = "fn" IDENT signature
 traitField     = "val" IDENT ":" type
-case           = IDENT [ [ "has" IDENT { "," IDENT } ] classBody ]   (* `has` needs a body *)
+case           = IDENT [ [ hasList ] [ implementsList ] classBody ]   (* a list needs a body *)
 classBody      = "{" { EOL } { member statementEnd } "}"
+
+interface      = "interface" IDENT [ requiresList ] "{" { EOL } { interfaceItem } "}"
+interfaceItem  = ( traitMethod | traitField ) statementEnd
 
 type           = "Int" | "String" | "Bool" | "Unit" | typeName
 ```

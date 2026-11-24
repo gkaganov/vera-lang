@@ -115,6 +115,17 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   field, and each class gets `JvmObjectMethods.fieldAccessorMethod` for it. Reading a field on a
   trait value lowers to a `JvmInstanceCall` of that accessor on the declaring trait (the trait or
   one it requires); an unknown, uncalled member is `UnknownTraitField`.
+- Interfaces: `interface` parses to a `VeraTraitDeclaration` with `kind = VeraTraitKind.INTERFACE`
+  and no cases; `implements` fills `VeraClassDeclaration.interfaces`. Trait exceptions take the
+  `kind` so messages say `interface` and `implements`. `has` naming an interface is
+  `InterfaceJoinedWithHas`, `implements` naming a trait is `TraitImplemented`, and traits and
+  interfaces cannot require each other. `JvmInterfaceConformance` holds the member checks
+  (`memberMismatch`, also used for traits), reports what a stated interface lacks
+  (`requireStatedInterfaces`), and finds every interface a class or trait fits
+  (`interfacesFittedBy`). `JvmProgramLowering` then adds fitted interfaces to each class's `traits`
+  and each trait's `requirements`, so coercion, member access, accessors, and JVM superinterfaces
+  treat them like traits. Interface `JvmClass`es have no `permittedSubclasses`, so they stay open.
+  `unifyTypes` never infers an interface, and `match` on one is `MatchOnInterface`.
 - Trait cases: `VeraParserState.parseTraitCase` turns each case in a trait block into a
   `VeraClassDeclaration` named `Owner$Case` (its JVM binary name; `Identifier.display` shows
   `Owner.Case`), with `owner` set and the owner first in `traits`; `VeraTraitDeclaration.cases`
@@ -127,7 +138,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   is untested (`JvmBlockExpression`) because exhaustiveness rules out every other case. The scrutinee
   must be a trait (cases: the classes that have it, since traits are closed) or a single class. Arms bind fields from a
   `JvmCheckCast` of the temporary in their own scope. `if` and `match` branch types unify through
-  `unifyTypes` (equal types, or the single user trait they share) and `coerceBlock`.
+  `unifyTypes` (equal types, a branch type the others convert to, or the single trait they share) and
+  `coerceBlock`.
 - Bindings: `val` is immutable and `mut val` (`VeraBindStatement.mutable`) can be rebound; the lowering
   scope stack records each local's mutability. Rebinding a `val` is `ImmutableBindingRebound` and
   rebinding a parameter is `ParameterRebound`; parameters cannot be marked `mut` in a signature.
@@ -185,7 +197,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - Object method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
   verification.
 - `JvmInstanceOf`/`FlatInstanceOf` emit `instanceof` and `JvmCheckCast`/`FlatCheckCast` emit `checkcast`.
-  Every trait's interface is sealed through `permittedSubclasses` (`PermittedSubclasses` attribute). The
+  Every trait's interface is sealed through `permittedSubclasses` (`PermittedSubclasses` attribute);
+  interfaces are not. The
   emitter gives the ClassFile API a class hierarchy resolver for the program's own classes, which
   stack maps need when branch types merge.
 - Trait method calls use `FlatInvokeInterface` (`invokeinterface`). `FlatUpcast` retypes a class
@@ -323,7 +336,8 @@ uncommitted changes:
 - Class and object types are `VeraClassDeclaration`/`VeraField`, `JvmField`/`JvmConstructor`/
   `JvmObjectConstruction`/`JvmGetField`/`JvmInstanceCall`, and `FlatNew`/`FlatGetField`/
   `FlatPutField`/`FlatInvokeSpecial`/`FlatInvokeVirtual`.
-- Trait types are `VeraTraitDeclaration`/`VeraTraitMethod` and `VeraClassDeclaration.traits`;
+- Trait types are `VeraTraitDeclaration`/`VeraTraitMethod`/`VeraTraitKind` and
+  `VeraClassDeclaration.traits`/`interfaces`;
   built-in traits live in `JvmBuiltinTraits` (`eq`, `display`, `names`), and generated trait
   implementations live in `JvmObjectMethods`.
 - `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
@@ -364,7 +378,8 @@ uncommitted changes:
 - Class fields are `val name: Type` (`VeraParserState.parseField`); a bare `name: Type` is
   `VeraParseException.FieldWithoutVal`, and `mut val` fields are `MutableFieldNotSupported` until
   `mut fn` exists. Required fields in a trait body follow the same rules.
-- Constructs: `fn`, `class`, `trait` (closed; `sealed trait` gets a hint), `has`, `val`, `mut val`, rebinding with `=`,
+- Constructs: `fn`, `class`, `trait` (closed; `sealed trait` gets a hint), `interface` (open,
+  structural; no cases), `has`, `implements`, `val`, `mut val`, rebinding with `=`,
   `if` / `else if` / `else`, `match` with `Pattern -> body` arms, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
@@ -388,7 +403,7 @@ uncommitted changes:
 - The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling
   object method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
-- Trait names share the top-level namespace with functions and classes; the built-in trait names
+- Trait and interface names share the top-level namespace with functions and classes; the built-in trait names
   `Eq` and `Display` are reserved.
 
 ## Name Resolution

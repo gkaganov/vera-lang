@@ -41,6 +41,7 @@ import vera.ast.VeraTemplatePart
 import vera.ast.VeraTemplateText
 import vera.ast.VeraTemplateValue
 import vera.ast.VeraTraitDeclaration
+import vera.ast.VeraTraitKind
 import vera.ast.VeraTraitMethod
 import vera.ast.VeraType
 import vera.ast.VeraUnaryOperation
@@ -74,7 +75,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return when {
             at(VeraTokenType.FN) -> parseFunctionDeclaration()
             at(VeraTokenType.CLASS) -> parseClassDeclaration()
-            at(VeraTokenType.TRAIT) -> parseTraitDeclaration(advance())
+            at(VeraTokenType.TRAIT) -> parseTraitDeclaration(advance(), VeraTraitKind.TRAIT)
+            at(VeraTokenType.INTERFACE) -> parseTraitDeclaration(advance(), VeraTraitKind.INTERFACE)
             else -> {
                 val token = current()
                 rejectJavaModifier(token)
@@ -98,22 +100,30 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseClassDeclaration(): VeraClassDeclaration {
         val classToken = expect(VeraTokenType.CLASS)
         val name = expect(VeraTokenType.IDENTIFIER, "class name")
-        val traits = parseHasClause()
-        rejectJavaInheritance(name)
+        val traits = parseNameList(VeraTokenType.HAS, "trait name")
+        val interfaces = parseNameList(VeraTokenType.IMPLEMENTS, "interface name")
+        rejectJavaInheritance()
         val (fields, methods) = parseClassBody()
-        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits, spanOf(classToken, name))
+        return VeraClassDeclaration(
+            name = Identifier(name.text),
+            fields = fields,
+            methods = methods,
+            traits = traits,
+            span = spanOf(classToken, name),
+            interfaces = interfaces,
+        )
     }
 
-    /** Parses an optional `has Trait, Trait` clause. */
-    private fun parseHasClause(): List<Identifier> {
-        val traits = mutableListOf<Identifier>()
-        if (match(VeraTokenType.HAS)) {
-            traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
+    /** Parses an optional clause such as `has Trait, Trait` or `implements Interface`, led by [keyword]. */
+    private fun parseNameList(keyword: VeraTokenType, what: String): List<Identifier> {
+        val names = mutableListOf<Identifier>()
+        if (match(keyword)) {
+            names += Identifier(expect(VeraTokenType.IDENTIFIER, what).text)
             while (match(VeraTokenType.COMMA)) {
-                traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
+                names += Identifier(expect(VeraTokenType.IDENTIFIER, what).text)
             }
         }
-        return traits
+        return names
     }
 
     /** Parses `{ ... }` with `val` fields and `fn` methods, one per line. */
@@ -150,17 +160,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return VeraField(Identifier(name.text), type, spanFrom(keyword))
     }
 
-    /** Parses a trait after its `trait` keyword, [startToken]. */
-    private fun parseTraitDeclaration(startToken: VeraToken): VeraTraitDeclaration {
-        val name = expect(VeraTokenType.IDENTIFIER, "trait name")
+    /** Parses a trait or interface after its keyword, [startToken]. */
+    private fun parseTraitDeclaration(startToken: VeraToken, kind: VeraTraitKind): VeraTraitDeclaration {
+        val name = expect(VeraTokenType.IDENTIFIER, "${kind.keyword} name")
         val owner = Identifier(name.text)
-        val requirements = mutableListOf<Identifier>()
-        if (match(VeraTokenType.REQUIRES)) {
-            requirements += Identifier(expect(VeraTokenType.IDENTIFIER, "required trait").text)
-            while (match(VeraTokenType.COMMA)) {
-                requirements += Identifier(expect(VeraTokenType.IDENTIFIER, "required trait").text)
-            }
-        }
+        val requirements = parseNameList(VeraTokenType.REQUIRES, "required ${kind.keyword}")
         expect(VeraTokenType.LBRACE)
         skipEols()
         val methods = mutableListOf<VeraTraitMethod>()
@@ -174,6 +178,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 throw VeraParseException.MutableFieldNotSupported(current())
             } else if (at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.COLON) {
                 throw VeraParseException.FieldWithoutVal(current())
+            } else if (at(VeraTokenType.IDENTIFIER) && kind == VeraTraitKind.INTERFACE) {
+                throw VeraParseException.InterfaceCase(current())
             } else if (at(VeraTokenType.IDENTIFIER)) {
                 cases += parseTraitCase(owner)
                 // Cases are separated by commas or newlines: `trait Color { Red, Green, Blue }`.
@@ -181,26 +187,32 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                     parseStatementTerminator()
                 }
             } else {
-                val fnToken = expect(VeraTokenType.FN, "a trait method (`fn`), field (`val`), or case")
+                val expected = when (kind) {
+                    VeraTraitKind.TRAIT -> "a trait method (`fn`), field (`val`), or case"
+                    VeraTraitKind.INTERFACE -> "an interface method (`fn`) or field (`val`)"
+                }
+                val fnToken = expect(VeraTokenType.FN, expected)
                 methods += parseTraitMethod(fnToken)
                 parseStatementTerminator()
             }
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases, requirements, fields)
+        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases, requirements, fields, kind)
     }
 
     /**
-     * Parses a case in a trait's block: `Name [has Traits] [{ fields and methods }]`. The case is a class
-     * owned by the trait, named `Owner$Case` and displayed as `Owner.Case`.
+     * Parses a case in a trait's block: `Name [has Traits] [implements Interfaces] [{ fields and methods }]`.
+     * The case is a class owned by the trait, named `Owner$Case` and displayed as `Owner.Case`.
      */
     private fun parseTraitCase(owner: Identifier): VeraClassDeclaration {
         val name = expect(VeraTokenType.IDENTIFIER, "case name")
-        val traits = parseHasClause()
-        // Commas also separate cases, so a `has` list must end at a body to stay unambiguous.
-        if (traits.isNotEmpty() && !at(VeraTokenType.LBRACE)) {
-            throw VeraParseException.CaseTraitsWithoutBody(current(), name.text)
+        val traits = parseNameList(VeraTokenType.HAS, "trait name")
+        val interfaces = parseNameList(VeraTokenType.IMPLEMENTS, "interface name")
+        // Commas also separate cases, so a `has` or `implements` list must end at a body to stay unambiguous.
+        if ((traits.isNotEmpty() || interfaces.isNotEmpty()) && !at(VeraTokenType.LBRACE)) {
+            val keyword = if (interfaces.isNotEmpty()) "implements" else "has"
+            throw VeraParseException.CaseTraitsWithoutBody(current(), name.text, keyword)
         }
         val (fields, methods) = if (at(VeraTokenType.LBRACE)) parseClassBody() else emptyList<VeraField>() to emptyList()
         return VeraClassDeclaration(
@@ -210,6 +222,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             traits = listOf(owner) + traits,
             span = name.span(),
             owner = owner,
+            interfaces = interfaces,
         )
     }
 
@@ -612,6 +625,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         if (token.type == VeraTokenType.IDENTIFIER && token.text == "sealed" && peek().type == VeraTokenType.TRAIT) {
             throw VeraParseException.JavaSyntax(token, "traits are closed by default; remove `sealed`")
         }
+        if (token.type == VeraTokenType.IDENTIFIER && token.text == "sealed" && peek().type == VeraTokenType.INTERFACE) {
+            throw VeraParseException.JavaSyntax(token, "interfaces are open; declare a `trait` for a closed set of classes")
+        }
         if (token.type == VeraTokenType.IDENTIFIER && token.text in javaModifiers) {
             throw VeraParseException.JavaSyntax(
                 token,
@@ -620,18 +636,16 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         }
     }
 
-    private fun rejectJavaInheritance(className: VeraToken) {
+    private fun rejectJavaInheritance() {
         val token = current()
-        if (token.type != VeraTokenType.IDENTIFIER) return
-        when (token.text) {
-            "extends" -> throw VeraParseException.JavaSyntax(
+        if (token.type == VeraTokenType.IDENTIFIER && token.text == "extends") {
+            throw VeraParseException.JavaSyntax(
                 token,
                 "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
             )
-            "implements" -> throw VeraParseException.JavaSyntax(
-                token,
-                "Vera lists traits with `has`: `class ${className.text} has Trait`",
-            )
+        }
+        if (token.type == VeraTokenType.HAS) {
+            throw VeraParseException.JavaSyntax(token, "write `has` before `implements`: `has Trait implements Interface`")
         }
     }
 

@@ -205,10 +205,28 @@ class CompilerErrorTests {
                 "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
             ),
             CompileErrorCase(
-                "Java interfaces with implements",
-                "class Square implements Shape {\n}",
+                "has written after implements",
+                "class Square implements Named has Shape {\n}",
                 VeraParseException.JavaSyntax::class,
-                "Vera lists traits with `has`: `class Square has Trait`",
+                "write `has` before `implements`: `has Trait implements Interface`",
+            ),
+            CompileErrorCase(
+                "cases in interfaces",
+                "interface Named { Red }",
+                VeraParseException.InterfaceCase::class,
+                "interfaces are open and cannot list cases; declare a `trait` for a closed set of cases",
+            ),
+            CompileErrorCase(
+                "sealed interfaces",
+                "sealed interface Named {}",
+                VeraParseException.JavaSyntax::class,
+                "interfaces are open; declare a `trait` for a closed set of classes",
+            ),
+            CompileErrorCase(
+                "trait cases with interfaces but no body",
+                "interface Named {}\ntrait Color { Red implements Named, Green }",
+                VeraParseException.CaseTraitsWithoutBody::class,
+                "a case with `implements` needs a body to end its list: write `Red implements ... { }`, found '}'",
             ),
             CompileErrorCase(
                 "Java-style declarations with primitive types",
@@ -322,7 +340,7 @@ class CompilerErrorTests {
                 "trait cases with traits but no body",
                 "trait Printable {\n    fn label(): String\n}\ntrait Color { Red has Printable, Green }",
                 VeraParseException.CaseTraitsWithoutBody::class,
-                "a case with `has` needs a body to end its trait list: write `Red has ... { }`, found '}'",
+                "a case with `has` needs a body to end its list: write `Red has ... { }`, found '}'",
             ),
             CompileErrorCase(
                 "missing statement terminators",
@@ -769,6 +787,118 @@ class CompilerErrorTests {
                 "trait Shape requires Display, Display {}",
                 JvmLoweringException.DuplicateRequirement::class,
                 "trait Shape requires Display more than once",
+            ),
+            CompileErrorCase(
+                "interfaces joined with has",
+                "interface Named {}\nclass Dog has Named {}",
+                JvmLoweringException.InterfaceJoinedWithHas::class,
+                "Named is an interface, which Dog fits by having its members; write `implements Named` to check that, not `has`",
+            ),
+            CompileErrorCase(
+                "traits named with implements",
+                "trait Shape {}\nclass Square implements Shape {}",
+                JvmLoweringException.TraitImplemented::class,
+                "Shape is a trait, not an interface; write `Square has Shape`",
+            ),
+            CompileErrorCase(
+                "built-in traits named with implements",
+                "class Square implements Eq {}",
+                JvmLoweringException.TraitImplemented::class,
+                "Eq is a trait, not an interface; write `Square has Eq`",
+            ),
+            CompileErrorCase(
+                "unknown stated interfaces",
+                "interface Named {}\nclass Dog implements Nmaed {}",
+                JvmLoweringException.UnknownInterface::class,
+                "interface Nmaed is not defined; did you mean `Named`?",
+            ),
+            CompileErrorCase(
+                "interfaces stated twice",
+                "interface Named {}\nclass Dog implements Named, Named {}",
+                JvmLoweringException.DuplicateTraitImplementation::class,
+                "class Dog implements interface Named more than once",
+            ),
+            CompileErrorCase(
+                "stated interfaces without a required method",
+                "interface Named {\n    fn name(): String\n}\nclass Dog implements Named {}",
+                JvmLoweringException.MissingTraitMethod::class,
+                "class Dog implements interface Named but has no method name",
+            ),
+            CompileErrorCase(
+                "stated interfaces without a required field",
+                "interface Timed {\n    val timestamp: Int\n}\nclass Tick implements Timed {\n    val time: Int\n}",
+                JvmLoweringException.MissingTraitField::class,
+                "class Tick implements interface Timed but has no field timestamp; declare `val timestamp: Int`",
+            ),
+            CompileErrorCase(
+                "stated interfaces with renamed parameters",
+                "interface Scaled {\n    fn scale(by: Int): Int\n}\n" +
+                    "class Counter implements Scaled {\n    fn scale(factor: Int): Int = factor\n}",
+                JvmLoweringException.TraitMethodParameterNameMismatch::class,
+                "class Counter method scale names a parameter factor, but interface Scaled names it by; " +
+                    "parameter names are part of the interface",
+            ),
+            CompileErrorCase(
+                "stated interfaces whose required built-in trait is missing",
+                "interface Named requires Display {}\nclass Dog implements Named {}",
+                JvmLoweringException.MissingRequiredTrait::class,
+                "Dog implements Named, which requires Display; add `has Display`",
+            ),
+            CompileErrorCase(
+                "classes passed where an interface they do not fit is expected",
+                "interface Named {\n    fn name(): String\n}\nclass Dog {}\n" +
+                    "fn greet(named: Named) = print(named.name())\n" + function("greet(Dog)"),
+                JvmLoweringException.FunctionArgumentTypeMismatch::class,
+                "function greet parameter named requires Named, got Dog",
+            ),
+            CompileErrorCase(
+                "interfaces requiring traits",
+                "trait Shape {}\ninterface Named requires Shape {}",
+                JvmLoweringException.InterfaceRequiresTrait::class,
+                "interface Named cannot require trait Shape, because any class can fit an interface but only " +
+                    "Shape's classes have it; require an interface instead",
+            ),
+            CompileErrorCase(
+                "traits requiring interfaces",
+                "interface Named {}\ntrait Shape requires Named {}",
+                JvmLoweringException.TraitRequiresInterface::class,
+                "trait Shape cannot require interface Named; Shape values fit Named automatically when Shape has its members",
+            ),
+            CompileErrorCase(
+                "unknown required interfaces",
+                "interface Named {}\ninterface Pet requires Nmaed {}",
+                JvmLoweringException.UnknownInterface::class,
+                "interface Nmaed is not defined; did you mean `Named`?",
+            ),
+            CompileErrorCase(
+                "interface requirement cycles",
+                "interface First requires Second {}\ninterface Second requires First {}",
+                JvmLoweringException.RequirementCycle::class,
+                "interface requirements form a cycle: First requires Second requires First",
+            ),
+            CompileErrorCase(
+                "duplicate interfaces",
+                "interface Named {}\ninterface Named {}",
+                JvmLoweringException.DuplicateTrait::class,
+                "interface Named is declared more than once",
+            ),
+            CompileErrorCase(
+                "match on interface values",
+                "interface Named {}\nclass Dog {}\nfn kind(named: Named): Int = match named {\n    Dog -> 1\n}",
+                JvmLoweringException.MatchOnInterface::class,
+                "interface Named cannot be matched, because any class with its members fits it; use its members, or match on a trait",
+            ),
+            CompileErrorCase(
+                "printing interface values whose interface does not require Display",
+                "interface Named {}\nfn show(named: Named) = print(named)\n",
+                JvmLoweringException.TraitRequirementMissing::class,
+                "interface Named does not require Display, so its values cannot be printed; add `requires Display`",
+            ),
+            CompileErrorCase(
+                "unknown methods on interface values",
+                "interface Named {\n    fn name(): String\n}\nfn read(named: Named): String = named.nmae()\n",
+                JvmLoweringException.UnknownTraitMethod::class,
+                "interface Named has no method nmae; did you mean `name`?",
             ),
             CompileErrorCase(
                 "requirement cycles",

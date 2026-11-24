@@ -1,5 +1,6 @@
 package vera.jvm.lowering
 
+import vera.ast.VeraTraitKind
 import vera.ast.VeraType
 import vera.ast.render
 import vera.jvm.ir.JvmBuiltin
@@ -230,22 +231,31 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "match arms must have the same type or share one trait, got ${types.joinToString(" and ") { it.render() }}",
     )
 
-    class DuplicateTraitField(val trait: Identifier, val field: Identifier) : JvmLoweringException(
-        "trait ${trait.display} has duplicate field ${field.display}",
+    class DuplicateTraitField(
+        val trait: Identifier,
+        val field: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+    ) : JvmLoweringException(
+        "${kind.keyword} ${trait.display} has duplicate field ${field.display}",
     )
 
-    class TraitFieldConflictsWithMethod(val trait: Identifier, val name: Identifier) : JvmLoweringException(
-        "trait ${trait.display} has both a field and a method named ${name.display}",
+    class TraitFieldConflictsWithMethod(
+        val trait: Identifier,
+        val name: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+    ) : JvmLoweringException(
+        "${kind.keyword} ${trait.display} has both a field and a method named ${name.display}",
     )
 
-    /** A member class that does not declare a field its trait requires. */
+    /** A member class that does not declare a field its trait or interface requires. */
     class MissingTraitField(
         val className: Identifier,
         val trait: Identifier,
         val field: Identifier,
         val fieldType: VeraType,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} has trait ${trait.display} but no field ${field.display}; " +
+        "${memberOwner(className, trait, kind)} no field ${field.display}; " +
             "declare `val ${field.display}: ${fieldType.render()}`",
     )
 
@@ -255,28 +265,39 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val field: Identifier,
         val expected: JvmType,
         val actual: JvmType,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} field ${field.display} has type ${actual.render()}, but trait ${trait.display} " +
-            "requires ${expected.render()}",
+        "class ${className.display} field ${field.display} has type ${actual.render()}, but ${kind.keyword} " +
+            "${trait.display} requires ${expected.render()}",
     )
 
-    class DuplicateRequirement(val trait: Identifier, val required: Identifier) : JvmLoweringException(
-        "trait ${trait.display} requires ${required.display} more than once",
+    class DuplicateRequirement(
+        val trait: Identifier,
+        val required: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+    ) : JvmLoweringException(
+        "${kind.keyword} ${trait.display} requires ${required.display} more than once",
     )
 
     /** Requirements that lead back to their own trait, such as `A requires B` and `B requires A`. */
-    class RequirementCycle(val traits: List<Identifier>) : JvmLoweringException(
-        "trait requirements form a cycle: ${traits.joinToString(" requires ") { it.display }}; " +
-            "traits that require each other have the same members, so merge them or make only one require the other",
+    class RequirementCycle(
+        val traits: List<Identifier>,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+    ) : JvmLoweringException(
+        "${kind.keyword} requirements form a cycle: ${traits.joinToString(" requires ") { it.display }}; " +
+            "${kind.keyword}s that require each other have the same members, so merge them or make only one " +
+            "require the other",
     )
 
-    /** A class joining a trait without listing a trait it requires. */
+    /** A class with a trait or interface that does not list a built-in or trait it requires. */
     class MissingRequiredTrait(
         val className: Identifier,
         val trait: Identifier,
         val required: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "${className.display} has ${trait.display}, which requires ${required.display}; add `has ${required.display}`",
+        "${className.display} ${kind.joinKeyword} ${trait.display}, which requires ${required.display}; " +
+            "add `has ${required.display}`",
     )
 
     /** Printing, interpolating, or comparing a trait-typed value whose trait does not require the built-in. */
@@ -284,9 +305,46 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val trait: Identifier,
         val builtin: Identifier,
         val action: String,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "trait ${trait.display} does not require ${builtin.display}, so its values cannot be $action; " +
+        "${kind.keyword} ${trait.display} does not require ${builtin.display}, so its values cannot be $action; " +
             "add `requires ${builtin.display}`",
+    )
+
+    /** `has` naming an interface; classes fit interfaces by their members, and `implements` checks it. */
+    class InterfaceJoinedWithHas(val className: Identifier, val interfaceName: Identifier) : JvmLoweringException(
+        "${interfaceName.display} is an interface, which ${className.display} fits by having its members; " +
+            "write `implements ${interfaceName.display}` to check that, not `has`",
+    )
+
+    /** `implements` naming a trait or built-in trait, which classes join with `has`. */
+    class TraitImplemented(val className: Identifier, val trait: Identifier) : JvmLoweringException(
+        "${trait.display} is a trait, not an interface; write `${className.display} has ${trait.display}`",
+    )
+
+    class UnknownInterface(
+        val name: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("interface ${name.display} is not defined", null, suggestion),
+    )
+
+    /** An interface requiring a trait; any class can fit an interface, but only a trait's classes have it. */
+    class InterfaceRequiresTrait(val interfaceName: Identifier, val trait: Identifier) : JvmLoweringException(
+        "interface ${interfaceName.display} cannot require trait ${trait.display}, because any class can fit " +
+            "an interface but only ${trait.display}'s classes have it; require an interface instead",
+    )
+
+    /** A trait requiring an interface, which its values already fit when it has the interface's members. */
+    class TraitRequiresInterface(val trait: Identifier, val interfaceName: Identifier) : JvmLoweringException(
+        "trait ${trait.display} cannot require interface ${interfaceName.display}; ${trait.display} values fit " +
+            "${interfaceName.display} automatically when ${trait.display} has its members",
+    )
+
+    /** A `match` on an interface value, whose cases can never all be known. */
+    class MatchOnInterface(val interfaceName: Identifier) : JvmLoweringException(
+        "interface ${interfaceName.display} cannot be matched, because any class with its members fits it; " +
+            "use its members, or match on a trait",
     )
 
     /** A class joining a block-form trait, whose cases are all declared inside it. */
@@ -314,9 +372,10 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val field: Identifier,
         val fieldType: Identifier,
         val trait: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} has ${trait.display}, but field ${field.display} has trait type ${fieldType.display}, " +
-            "which does not require ${trait.display}",
+        "class ${className.display} has ${trait.display}, but field ${field.display} has ${kind.keyword} type " +
+            "${fieldType.display}, which does not require ${trait.display}",
     )
 
     /** A trait-typed value has only the trait's fields and methods. */
@@ -324,8 +383,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val trait: Identifier,
         val field: Identifier,
         val suggestion: Identifier? = null,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        JvmNameHints.withHelp("trait ${trait.display} has no field ${field.display}", null, suggestion),
+        JvmNameHints.withHelp("${kind.keyword} ${trait.display} has no field ${field.display}", null, suggestion),
     )
 
     /** A trait-typed value has only the trait's fields and methods. */
@@ -333,13 +393,17 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val trait: Identifier,
         val method: Identifier,
         val suggestion: Identifier? = null,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        JvmNameHints.withHelp("trait ${trait.display} has no method ${method.display}", null, suggestion),
+        JvmNameHints.withHelp("${kind.keyword} ${trait.display} has no method ${method.display}", null, suggestion),
     )
 
-    /** A trait name that is also the name of the program class. */
-    class TraitNameConflictsWithProgramClass(val name: Identifier) : JvmLoweringException(
-        "trait ${name.display} conflicts with the program class ${name.display}",
+    /** A trait or interface name that is also the name of the program class. */
+    class TraitNameConflictsWithProgramClass(
+        val name: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+    ) : JvmLoweringException(
+        "${kind.keyword} ${name.display} conflicts with the program class ${name.display}",
     )
 
     class UnknownClassField(
@@ -461,8 +525,8 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${className.display} method ${method.display} conflicts with the generated method for trait ${trait.display}",
     )
 
-    class DuplicateTrait(val name: Identifier) : JvmLoweringException(
-        "trait ${name.display} is declared more than once",
+    class DuplicateTrait(val name: Identifier, val kind: VeraTraitKind = VeraTraitKind.TRAIT) : JvmLoweringException(
+        "${kind.keyword} ${name.display} is declared more than once",
     )
 
     /** A function, class, or trait reuses a built-in trait name such as `Eq` or `Display`. */
@@ -473,8 +537,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class DuplicateTraitMethod(
         val trait: Identifier,
         val method: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "trait ${trait.display} has duplicate method ${method.display}",
+        "${kind.keyword} ${trait.display} has duplicate method ${method.display}",
     )
 
     class UnknownTrait(
@@ -492,16 +557,18 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class DuplicateTraitImplementation(
         val className: Identifier,
         val trait: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} has trait ${trait.display} more than once",
+        "class ${className.display} ${kind.joinKeyword} ${kind.keyword} ${trait.display} more than once",
     )
 
     class MissingTraitMethod(
         val className: Identifier,
         val trait: Identifier,
         val method: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} has trait ${trait.display} but no method ${method.display}",
+        "${memberOwner(className, trait, kind)} no method ${method.display}",
     )
 
     class TraitMethodSignatureMismatch(
@@ -512,8 +579,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val expectedReturn: JvmType,
         val actualParameters: List<JvmType>,
         val actualReturn: JvmType,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} method ${method.display} does not match trait ${trait.display}: " +
+        "class ${className.display} method ${method.display} does not match ${kind.keyword} ${trait.display}: " +
             "expected ${renderSignature(expectedParameters, expectedReturn)}, " +
             "got ${renderSignature(actualParameters, actualReturn)}",
     )
@@ -564,9 +632,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val method: Identifier,
         val expected: Identifier,
         val actual: Identifier,
+        val kind: VeraTraitKind = VeraTraitKind.TRAIT,
     ) : JvmLoweringException(
-        "class ${className.display} method ${method.display} names a parameter ${actual.display}, but trait " +
-            "${trait.display} names it ${expected.display}; parameter names are part of the trait",
+        "class ${className.display} method ${method.display} names a parameter ${actual.display}, but " +
+            "${kind.keyword} ${trait.display} names it ${expected.display}; parameter names are part of the " +
+            kind.keyword,
     )
 
     /** A statement follows one that always leaves the block, such as `return` or `break`. */
@@ -594,6 +664,12 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
 
 private fun renderSignature(parameters: List<JvmType>, returnType: JvmType): String =
     "(${parameters.joinToString(", ") { it.render() }}) -> ${returnType.render()}"
+
+/** How a message about a member missing from a class starts: `class Login has trait Event but`. */
+private fun memberOwner(className: Identifier, trait: Identifier, kind: VeraTraitKind): String = when (kind) {
+    VeraTraitKind.TRAIT -> "class ${className.display} has trait ${trait.display} but"
+    VeraTraitKind.INTERFACE -> "class ${className.display} implements interface ${trait.display} but has"
+}
 
 /**
  * Runs [lowering] and attaches [span] to any compiler error raised inside it that has no location
