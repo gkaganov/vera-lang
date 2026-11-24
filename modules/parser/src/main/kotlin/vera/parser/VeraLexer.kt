@@ -220,6 +220,7 @@ private class VeraLexerState(private val source: String) {
             '+' if next == '+' -> throw javaOperator("++", "write `x = x + 1` instead")
             '+' if next == '=' -> throw compoundAssignment(char)
             '-' if next == '=' -> throw compoundAssignment(char)
+            '-' if next == '>' -> VeraTokenType.ARROW to 2
             '*' if next == '=' -> throw compoundAssignment(char)
             '/' if next == '=' -> throw compoundAssignment(char)
             '%' if next == '=' -> throw compoundAssignment(char)
@@ -287,13 +288,14 @@ private class VeraLexerState(private val source: String) {
             VeraTokenType.PERCENT, VeraTokenType.EQ, VeraTokenType.NEQ, VeraTokenType.LT,
             VeraTokenType.GT, VeraTokenType.LTE, VeraTokenType.GTE, VeraTokenType.AND,
             VeraTokenType.OR, VeraTokenType.NOT, VeraTokenType.FORWARD_APPLICATION,
-            VeraTokenType.BIND, VeraTokenType.COMMA, VeraTokenType.DOT,
+            VeraTokenType.BIND, VeraTokenType.COMMA, VeraTokenType.DOT, VeraTokenType.ARROW,
         )
 
         val keywords: Map<String, VeraTokenType> = mapOf(
             "fn" to VeraTokenType.FN,
             "class" to VeraTokenType.CLASS,
             "trait" to VeraTokenType.TRAIT,
+            "match" to VeraTokenType.MATCH,
             "has" to VeraTokenType.HAS,
             "if" to VeraTokenType.IF,
             "else" to VeraTokenType.ELSE,

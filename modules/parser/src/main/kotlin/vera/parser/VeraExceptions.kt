@@ -76,6 +76,12 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         val found: VeraToken,
     ) : VeraParseException("leave out the return type for a function that returns `Unit`; remove `: Unit`", found)
 
+    /** `ClassName()` in a pattern; a pattern that binds no fields is written without parentheses. */
+    class EmptyPatternParentheses(
+        val found: VeraToken,
+        val className: String,
+    ) : VeraParseException("a pattern that binds no fields has no parentheses: write `$className`", found)
+
     /** A class field written without `val`. */
     class FieldWithoutVal(
         val found: VeraToken,

@@ -18,6 +18,8 @@ import vera.jvm.instruction.FlatIntComparisonJump
 import vera.jvm.instruction.FlatIntUnaryOperation
 import vera.jvm.instruction.FlatInvokeInterface
 import vera.jvm.instruction.FlatUpcast
+import vera.jvm.instruction.FlatCheckCast
+import vera.jvm.instruction.FlatInstanceOf
 import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
@@ -41,9 +43,11 @@ import java.lang.classfile.ClassFile.ACC_FINAL
 import java.lang.classfile.ClassFile.ACC_INTERFACE
 import java.lang.classfile.ClassFile.ACC_PUBLIC
 import java.lang.classfile.ClassFile.ACC_STATIC
+import java.lang.classfile.ClassHierarchyResolver
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.Label
 import java.lang.classfile.TypeKind
+import java.lang.classfile.attribute.PermittedSubclassesAttribute
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs.CD_Object
 import java.lang.constant.ConstantDescs.CD_boolean
@@ -64,7 +68,7 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
 
     /** @return a map of classnames to their bytecode */
     fun emit(): Map<Identifier, ByteArray> {
-        val classFile = ClassFile.of()
+        val classFile = ClassFile.of(ClassFile.ClassHierarchyResolverOption.of(programClassHierarchy()))
         val bytecode = mutableMapOf<Identifier, ByteArray>()
 
         flatProgram.classes.forEach { clazz ->
@@ -77,6 +81,11 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 classBuilder.withSuperclass(CD_Object)
                 if (clazz.interfaces.isNotEmpty()) {
                     classBuilder.withInterfaceSymbols(clazz.interfaces.map { name -> ClassDesc.of(name.value) })
+                }
+                if (clazz.permittedSubclasses.isNotEmpty()) {
+                    classBuilder.with(
+                        PermittedSubclassesAttribute.ofSymbols(clazz.permittedSubclasses.map { name -> ClassDesc.of(name.value) }),
+                    )
                 }
                 clazz.abstractMethods.forEach { abstractMethod ->
                     classBuilder.withMethod(
@@ -114,6 +123,17 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
         }
 
         return bytecode
+    }
+
+    /**
+     * Stack maps merge types at branch joins, such as two classes that meet as their shared interface,
+     * so the ClassFile API needs the program's own classes and interfaces, not only the JDK's.
+     */
+    private fun programClassHierarchy(): ClassHierarchyResolver {
+        val interfaces = flatProgram.classes.filter { clazz -> clazz.isInterface }.map { clazz -> ClassDesc.of(clazz.name.value) }
+        val superclasses = flatProgram.classes.filterNot { clazz -> clazz.isInterface }
+            .associate { clazz -> ClassDesc.of(clazz.name.value) to CD_Object }
+        return ClassHierarchyResolver.of(interfaces, superclasses).orElse(ClassHierarchyResolver.defaultResolver())
     }
 
     private fun emitInstruction(codeBuilder: CodeBuilder, instructionWithDebugInfo: FlatInstructionWithDebugInfo) {
@@ -221,6 +241,10 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                     instruction.methodSignature.toMethodTypeDesc(),
                 )
             }
+
+            is FlatInstanceOf -> codeBuilder.instanceOf(ClassDesc.of(instruction.className.value))
+
+            is FlatCheckCast -> codeBuilder.checkcast(ClassDesc.of(instruction.to.name.value))
 
             is FlatUpcast -> {} // An interface accepts its implementing class; nothing to emit.
 

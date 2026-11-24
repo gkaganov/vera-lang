@@ -17,6 +17,7 @@ data class FlatClass(
     val interfaces: List<Identifier> = emptyList(),
     val isInterface: Boolean = false,
     val abstractMethods: List<FlatAbstractMethod> = emptyList(),
+    val permittedSubclasses: List<Identifier> = emptyList(),
 )
 
 data class FlatAbstractMethod(val name: Identifier, val signature: JvmMethodSignature)
@@ -164,6 +165,16 @@ data class FlatInvokeVirtual(
         stackPops = listOf(receiverType) + methodSignature.parameters.map { it.type },
         stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
     )
+}
+
+/** Replaces the object on top of the stack with whether it is an instance of [className]. */
+data class FlatInstanceOf(val operandType: JvmType, val className: Identifier) : FlatInstruction {
+    override val effect = FlatInstructionEffect(stackPops = listOf(operandType), stackPushes = listOf(JvmType.BOOL))
+}
+
+/** Casts the object on top of the stack to [to]; the JVM checks the cast at run time. */
+data class FlatCheckCast(val from: JvmType, val to: JvmType.ClassType) : FlatInstruction {
+    override val effect = FlatInstructionEffect(stackPops = listOf(from), stackPushes = listOf(to))
 }
 
 /** Calls a trait method through its interface (`invokeinterface`). */

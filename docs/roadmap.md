@@ -10,18 +10,84 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
-### Sealed traits, `match`, and `enum`
+### Closed traits, trait cases, and structural interfaces (design in progress)
 
-- Status: in progress; trait-typed values and dynamic dispatch (phase A) are implemented.
-- Area: parser, AST, lowering, structured IR, flat IR, emitter.
-- Phase B: `sealed trait` (implementing classes in the same file), `match` with `->` arms and
-  named-field patterns (`Rect(width, height)`, `Rect(width = w)`), exhaustiveness without `else`,
-  and `if`/`match` branches of different classes unifying to their sealed trait.
-- Phase C: `enum Shape has Display { Circle(radius: Int) Empty }` as shorthand for a sealed trait plus
-  classes, so a variant can later become a full class without changing callers; classes without
-  fields become singletons written by name (`Empty`), with `Unit` as one of them.
-- Acceptance: sealed traits compile to JVM sealed interfaces; a non-exhaustive `match` is rejected;
-  converting an enum variant to a hand-written class needs no changes at call sites or patterns.
+- Status: design settled; implementing in steps. Done: trait-typed values with dynamic dispatch,
+  and step 1 (every trait closed and matchable).
+- Area: parser, AST, lowering, emitter.
+- Model:
+  - `trait` is closed: only classes in its module can join it. Traits compile to sealed interfaces
+    and can be matched. Open contracts are structural `interface`s (decision 10). There is no
+    separate `enum` construct.
+  - A trait takes one of two forms, never both. Separate form: the trait declares only
+    requirements (method signatures and fields), and classes join it with `has`. Block form: the
+    trait lists its own cases, which no other class can join.
+  - A class has at most one owner (the block that declares it) and can join any number of traits
+    with `has`, including other closed traits.
+  - Inside a block, a case is `Name [has Traits] [{ val fields and fn methods }]`, without
+    `class`; cases are separated by commas or newlines (`trait Color { Red, Green, Blue }`). A case
+    without a body in a trait that requires methods or fields is an error. A class without fields,
+    nested or not, is a singleton written by name.
+  - Nested cases compile to nested JVM classes (`Color$Red`), seen from Java as `Color.Red`.
+- Decisions:
+  1. Constructing a case is always qualified: `Color.Red`, `Shape.Circle(radius = 2)`. An
+     explicit import shorthand (`import Color.{Red, Green}`) may come with modules.
+  2. Cases use the body-optional form above; no `class` keyword inside a block.
+  3. Sibling cases are qualified even inside their own block (`Tree.Leaf`). The only unqualified
+     form is a pattern in a `match` on the owning trait, which can only name that trait's cases.
+     In a `match` on any other trait, owned cases are written qualified (`Color.Red`).
+  4. `Display` prints nested cases qualified (`Color.Red`, `Shape.Circle(radius: 2)`); separately
+     declared classes print their plain name.
+  5. "Closed" means the same module: classes in the trait's module may join it, and every `match`
+     sees the full case list, including in other modules. Vera has no file scope, so files never
+     bound closedness; until modules exist, a program is one module.
+  6. A top-level class may share a name with a nested case (`Leaf` and `Tree.Leaf`): nested names
+     are always qualified, so they never meet. An import that would bring them together is a
+     shadowing error.
+  7. Deferred to the generics design: the type of a field-less case of a generic trait
+     (`Option.None`). It needs either a bottom type (`Never`) with covariance, or typing from
+     context. Owned cases share their owner's type parameters
+     (`trait Option<T> { Some { val value: T } None }`).
+  8. Trait requirements: `trait Shape requires Display, Eq` means every member of `Shape` has
+     those traits, so a `Shape` value can be printed, compared, or used where a required trait is
+     expected. This is interface inheritance only: traits carry no fields or code. In the separate
+     form, a joining class lists the required traits explicitly
+     (`class Circle has Shape, Display, Eq`), and a missing one is an error naming it; block-form
+     cases get them automatically.
+  9. `Bool` is a built-in closed trait in block form, `trait Bool { True, False }`, whose cases are
+     imported by default so they stay written `True` and `False`; a `match` on a `Bool` covers
+     `True` and `False`. It stays a JVM `boolean`. `Unit` is a built-in field-less class, so its
+     single value is written `Unit`.
+  10. Open contracts are structural `interface`s instead of `open trait`. An interface is open: any
+      class with matching members fits it, without declaring anything; parameter names are part of
+      a member's signature, so `fn scale(by: Int)` does not fit `fn scale(factor: Int)`. Interfaces
+      cannot be matched and have no block form. They compile to plain JVM interfaces: the compiler
+      adds `implements` to every fitting class in the program, and Java classes implement them
+      explicitly. Classes compiled separately (later modules) will need adapters.
+  11. A class may state conformance explicitly with `implements` (`class User has Shape implements
+      Named`), which checks the fit at the class declaration. `has` is only for traits and
+      `implements` only for interfaces; using the wrong one is an error with a hint.
+  12. Traits and interfaces may require fields as well as methods (`val timestamp: Int`). A
+      required field is a requirement, not storage: each member class declares the field itself, so
+      nothing is inherited. On a trait- or interface-typed value the field can be read
+      (`event.timestamp`), compiled to an accessor method on the JVM interface. Block-form cases
+      declare required fields in their bodies, so a trait with required fields has no body-less
+      cases.
+  13. A `match` on an interface-typed value is not possible: an interface is open, so its cases can
+      never all be known, and Vera's `match` has no catch-all arm. Code that receives an interface
+      uses its members instead.
+- Later: sugar against long trait lists on classes, such as a named bundle of traits.
+- Implementation steps:
+  1. Every trait closed (drop `sealed`), and `match` on any trait. Done.
+  2. Field-less classes as singletons, with `Unit` as one of them.
+  3. Block-form cases: qualified names, nested JVM classes, unqualified patterns, qualified
+     `Display`.
+  4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values.
+  5. Required fields in traits.
+  6. Structural `interface`s with `implements`.
+- Acceptance: a non-exhaustive `match` is rejected and names the missing cases; interfaces cannot
+  be matched; a block-form trait cannot be joined with `has`; field-less classes are singletons; a
+  class with an interface's members is accepted where the interface is expected.
 
 ### Object mutation
 

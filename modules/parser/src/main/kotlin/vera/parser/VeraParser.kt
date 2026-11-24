@@ -17,15 +17,19 @@ import vera.ast.VeraExplicitReturnBlock
 import vera.ast.VeraExpression
 import vera.ast.VeraExpressionBody
 import vera.ast.VeraField
+import vera.ast.VeraFieldPattern
 import vera.ast.VeraFunctionDeclaration
 import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
 import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
+import vera.ast.VeraMatchArm
+import vera.ast.VeraMatchExpression
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraMutableParameter
 import vera.ast.VeraOperator
 import vera.ast.VeraParameter
+import vera.ast.VeraPattern
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraProgram
 import vera.ast.VeraRebindStatement
@@ -70,7 +74,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return when {
             at(VeraTokenType.FN) -> parseFunctionDeclaration()
             at(VeraTokenType.CLASS) -> parseClassDeclaration()
-            at(VeraTokenType.TRAIT) -> parseTraitDeclaration()
+            at(VeraTokenType.TRAIT) -> parseTraitDeclaration(advance())
             else -> {
                 val token = current()
                 rejectJavaModifier(token)
@@ -134,8 +138,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return VeraField(Identifier(name.text), type, spanFrom(keyword))
     }
 
-    private fun parseTraitDeclaration(): VeraTraitDeclaration {
-        val traitToken = expect(VeraTokenType.TRAIT)
+    /** Parses a trait after its `trait` keyword, [startToken]. */
+    private fun parseTraitDeclaration(startToken: VeraToken): VeraTraitDeclaration {
         val name = expect(VeraTokenType.IDENTIFIER, "trait name")
         expect(VeraTokenType.LBRACE)
         skipEols()
@@ -147,7 +151,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(Identifier(name.text), methods, spanOf(traitToken, name))
+        return VeraTraitDeclaration(Identifier(name.text), methods, spanOf(startToken, name))
     }
 
     private fun parseTraitMethod(fnToken: VeraToken): VeraTraitMethod {
@@ -494,6 +498,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
 
             VeraTokenType.IF -> parseIfExpression()
 
+            VeraTokenType.MATCH -> parseMatchExpression()
+
             else -> {
                 val token = current()
                 throw VeraParseException.ExpectedExpression(token)
@@ -547,6 +553,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     // error into one that says what to write in Vera instead.
 
     private fun rejectJavaModifier(token: VeraToken) {
+        if (token.type == VeraTokenType.IDENTIFIER && token.text == "sealed" && peek().type == VeraTokenType.TRAIT) {
+            throw VeraParseException.JavaSyntax(token, "traits are closed by default; remove `sealed`")
+        }
         if (token.type == VeraTokenType.IDENTIFIER && token.text in javaModifiers) {
             throw VeraParseException.JavaSyntax(
                 token,
@@ -613,6 +622,63 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             current(),
             "Vera has no `new`; call the class directly: `${peek().text}(...)`",
         )
+
+    /** Parses `match scrutinee { Pattern -> body ... }`, one arm per line. */
+    private fun parseMatchExpression(): VeraMatchExpression {
+        val keyword = expect(VeraTokenType.MATCH)
+        val scrutinee = parseExpression()
+        expect(VeraTokenType.LBRACE, "`{` to start the match arms")
+        skipEols()
+        val arms = mutableListOf<VeraMatchArm>()
+        while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
+            arms += parseMatchArm()
+            parseStatementTerminator()
+        }
+        expect(VeraTokenType.RBRACE)
+        if (arms.isEmpty()) {
+            throw VeraParseException.ExpectedToken("a match arm", tokens[position - 1])
+        }
+        return VeraMatchExpression(scrutinee, arms, spanFrom(keyword))
+    }
+
+    /** Parses `Pattern -> expression`, `Pattern -> { block }`, or `Pattern -> return / break / continue`. */
+    private fun parseMatchArm(): VeraMatchArm {
+        val pattern = parsePattern()
+        expect(VeraTokenType.ARROW, "`->` after the pattern")
+        val body = when {
+            at(VeraTokenType.LBRACE) -> parseBranchBlock()
+            // `Quit -> return "quit"`: a jump on its own needs no braces.
+            at(VeraTokenType.RETURN) -> VeraUnitReturnBlock(listOf(parseReturnStatement()))
+            at(VeraTokenType.BREAK) -> VeraUnitReturnBlock(listOf(VeraBreakStatement(advance().span())))
+            at(VeraTokenType.CONTINUE) -> VeraUnitReturnBlock(listOf(VeraContinueStatement(advance().span())))
+            else -> VeraImplicitReturnBlock(emptyList(), parseExpression())
+        }
+        return VeraMatchArm(pattern, body, SourceSpan(pattern.span.start, tokens[position - 1].span().end))
+    }
+
+    /** Parses `ClassName` or `ClassName(field, field = binding)`. */
+    private fun parsePattern(): VeraPattern {
+        val className = expect(VeraTokenType.IDENTIFIER, "a class name in the pattern")
+        val fields = mutableListOf<VeraFieldPattern>()
+        if (match(VeraTokenType.LPAREN)) {
+            if (at(VeraTokenType.RPAREN)) {
+                throw VeraParseException.EmptyPatternParentheses(current(), className.text)
+            }
+            fields += parseFieldPattern()
+            while (match(VeraTokenType.COMMA)) {
+                fields += parseFieldPattern()
+            }
+            expect(VeraTokenType.RPAREN)
+        }
+        return VeraPattern(Identifier(className.text), fields, spanFrom(className))
+    }
+
+    /** Parses `field` (binds the field to a local of the same name) or `field = binding`. */
+    private fun parseFieldPattern(): VeraFieldPattern {
+        val field = expect(VeraTokenType.IDENTIFIER, "a field name")
+        val binding = if (match(VeraTokenType.BIND)) expect(VeraTokenType.IDENTIFIER, "a binding name") else field
+        return VeraFieldPattern(Identifier(field.text), Identifier(binding.text), spanFrom(field))
+    }
 
     private fun matchElseAfterOptionalEols(): Boolean {
         val positionBeforeEols = position

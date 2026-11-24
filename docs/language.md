@@ -53,7 +53,7 @@ Reserved words cannot be used as identifiers:
 | Category | Keywords |
 |----------|----------|
 | Declarations | `fn`, `class`, `trait`, `has`, `val`, `mut` |
-| Control flow | `if`, `else`, `while`, `break`, `continue`, `return` |
+| Control flow | `if`, `else`, `match`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or`, `not` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
 | Boolean literals | `True`, `False` |
@@ -203,6 +203,12 @@ class Square has Shape {
 - Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
   follow the function rules, so a `Unit` method leaves its return type out.
 - Trait names share the top-level namespace with functions and classes.
+- Traits are closed: only classes in the same module can have them, and a program is one module
+  for now. A trait's cases are therefore always known, so a `match` on a `Shape` can check that it
+  covers every one. Each trait compiles to a JVM sealed interface that permits exactly its classes.
+  Writing `sealed trait` is an error with a hint, since every trait is already closed.
+- When `if` or `match` branches produce objects of different classes, the result has the one user
+  trait they all share: `if big { Circle(5) } else { Empty() }` is a `Shape`.
 - Two built-in traits are always available and are implemented by the compiler:
   - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
   - `Display` generates a `toString`, enabling `print` of the class's objects.
@@ -438,6 +444,40 @@ val result = if count > 10 {
 }
 ```
 
+### `match`
+
+```vera
+trait Shape {}
+class Circle has Shape {
+    val radius: Int
+}
+class Rect has Shape {
+    val width: Int
+    val height: Int
+}
+class Empty has Shape {}
+
+fn area(shape: Shape): Int = match shape {
+    Circle(radius) -> 3 * radius * radius
+    Rect(width = w, height) -> w * height
+    Empty -> 0
+}
+```
+
+- `match` selects the arm whose class matches the object. The value matched must be a trait
+  or a single class (which destructures it).
+- Every case must be covered exactly once. There is no catch-all arm, so adding a class to a
+  trait makes every `match` that misses it a compile error that names the missing cases.
+- A pattern names a class and, optionally, fields to bind: `Rect(width, height)` binds the fields to
+  locals of the same names, and `Rect(width = w)` binds `width` to `w`. Fields may be left out. A
+  pattern that binds nothing has no parentheses: `Empty`.
+- Bindings are local to their arm and follow the no-shadowing rule.
+- An arm is `Pattern -> expression`, `Pattern -> { block }`, or `Pattern -> return / break /
+  continue`, one arm per line.
+- `match` is an expression. Arms must have the same type or share one user trait. A `match` used as a
+  statement may have `Unit` arms, and one whose arms all return ends the function like an `if`.
+- The matched expression is evaluated once.
+
 ### `while`
 
 ```vera
@@ -608,9 +648,14 @@ argument       = [ IDENT "=" ] expression      (* names required for 2+ written 
 primary        = INT | STRING | template | "True" | "False" | "Unit" | IDENT
                | "(" expression ")"
                | if
+               | match
 template       = TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLATE_END
 
 if             = "if" expression block [ { EOL } "else" ( if | block ) ]
+match          = "match" expression "{" { EOL } arm statementEnd { arm statementEnd } "}"
+arm            = pattern "->" ( block | expression | "return" [ expression ] | "break" | "continue" )
+pattern        = IDENT [ "(" fieldPattern { "," fieldPattern } ")" ]
+fieldPattern   = IDENT [ "=" IDENT ]
 ```
 
 - In an `if` block, a final expression statement becomes the block's value.
@@ -683,6 +728,7 @@ error: argument 1 of function add must be named: write `left = ...`
 | `;` | end the statement with a newline |
 | `new Point()` | call the class directly: `Point(...)` |
 | `extends`, `implements` | no inheritance; list traits with `has` |
+| `sealed trait` (Kotlin) | traits are closed by default |
 | `var count = 0`, `int count = 0`, `String name = ...` | declare with `val name: Type = ...` (or `mut val`) |
 | `public`, `private`, `static`, `final` | no modifiers; bindings are immutable by default |
 | `for (...)` | use `while` |

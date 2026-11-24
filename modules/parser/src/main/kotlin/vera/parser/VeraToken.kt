@@ -5,6 +5,7 @@ enum class VeraTokenType {
     FN,
     CLASS,
     TRAIT,
+    MATCH,
     HAS,
     IF,
     ELSE,
@@ -56,6 +57,7 @@ enum class VeraTokenType {
     LTE,
     GTE,
     FORWARD_APPLICATION,
+    ARROW,
 
     // Layout
     EOL,

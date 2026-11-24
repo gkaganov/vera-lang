@@ -41,6 +41,9 @@ import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmUpcast
+import vera.jvm.ir.JvmBlockExpression
+import vera.jvm.ir.JvmCheckCast
+import vera.jvm.ir.JvmInstanceOf
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.ir.JvmBreak
 import vera.jvm.ir.JvmContinue
@@ -48,6 +51,8 @@ import vera.jvm.instruction.FlatBindLabel
 import vera.jvm.instruction.FlatAbstractMethod
 import vera.jvm.instruction.FlatInvokeInterface
 import vera.jvm.instruction.FlatUpcast
+import vera.jvm.instruction.FlatCheckCast
+import vera.jvm.instruction.FlatInstanceOf
 import vera.jvm.instruction.FlatBoolEqualityJump
 import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatCreateLabel
@@ -130,6 +135,7 @@ private class FlatInstructionLoweringState {
             abstractMethods = jvmClass.abstractMethods.map { jvmAbstractMethod ->
                 FlatAbstractMethod(jvmAbstractMethod.name, jvmAbstractMethod.signature)
             },
+            permittedSubclasses = jvmClass.permittedSubclasses,
         )
     }
 
@@ -424,6 +430,23 @@ private class FlatInstructionLoweringState {
                     )
                 }
                 jvmExpression.signature.returnType
+            }
+
+            is JvmInstanceOf -> {
+                val operandType = lowerExpression(jvmExpression.expression)
+                append(FlatInstanceOf(operandType, jvmExpression.className))
+                JvmType.BOOL
+            }
+
+            is JvmCheckCast -> {
+                val fromType = lowerExpression(jvmExpression.expression)
+                append(FlatCheckCast(fromType, jvmExpression.type))
+                jvmExpression.type
+            }
+
+            is JvmBlockExpression -> {
+                lowerBlock(jvmExpression.block, discardResult = false)
+                jvmExpression.type
             }
 
             is JvmUpcast -> {

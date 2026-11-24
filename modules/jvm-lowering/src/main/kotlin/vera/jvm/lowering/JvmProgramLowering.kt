@@ -118,17 +118,27 @@ object JvmProgramLowering {
             jvmMethods += adapter
         }
 
-        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames) }
+        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames, classDeclarations) }
         val jvmClasses = listOf(lowerUnitClass()) + jvmInterfaces + jvmDeclaredClasses +
             JvmClass(mainClassName, jvmMethods)
         return JvmProgram(jvmClasses)
     }
 
-    /** A user trait becomes a JVM interface declaring its methods, so trait-typed values can call them. */
-    private fun lowerTraitInterface(trait: VeraTraitDeclaration, typeNames: JvmTypeNames): JvmClass = JvmClass(
+    /**
+     * A user trait becomes a JVM interface declaring its methods, so trait-typed values can call them.
+     * Traits are closed, so each becomes a sealed interface that permits exactly the classes that have it.
+     */
+    private fun lowerTraitInterface(
+        trait: VeraTraitDeclaration,
+        typeNames: JvmTypeNames,
+        classDeclarations: List<VeraClassDeclaration>,
+    ): JvmClass = JvmClass(
         name = trait.name,
         methods = emptyList(),
         isInterface = true,
+        permittedSubclasses = classDeclarations
+            .filter { veraClass -> trait.name in veraClass.traits }
+            .map { veraClass -> veraClass.name },
         abstractMethods = trait.methods.map { method ->
             JvmAbstractMethod(
                 method.name,

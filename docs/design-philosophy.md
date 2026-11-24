@@ -42,7 +42,7 @@
 | Variables | `val` immutable, `mut val` mutable; rebind with `=`                                 | Implemented; parameters are immutable        |
 | Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and class types                   |
 | Classes   | Data-oriented structured objects                                                    | Fields, access, methods, and `Eq`/`Display` traits work; updates do not |
-| Traits    | Shared behavior and composition without inheritance                                 | Required methods, trait-typed values, dynamic dispatch, and `Eq`/`Display` work; default methods do not |
+| Traits    | Shared behavior and composition without inheritance                                 | Required methods, trait-typed values, dynamic dispatch, closed traits with `match`, and `Eq`/`Display` work; default methods do not |
 | Functions | Pure by default; side effects declared as capabilities                              | `fn` exists; effects do not                  |
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
 | Services  | Separate abstraction for external interaction                                       | Not implemented                              |
@@ -110,6 +110,8 @@ details into lower-level modules.
 
 ## Constraints
 
+- Keep the language independent of the file system: there is no file scope, and files or directories
+  never determine visibility, closedness, or meaning. Such boundaries come from modules.
 - Keep the AST independent of the JVM.
 - Resolve language constructs before the emitter.
 - Keep structured IR and instruction IR focused on their own concerns.

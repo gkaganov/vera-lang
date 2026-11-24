@@ -17,6 +17,8 @@ import vera.ast.VeraIdentifierAsExpression
 import vera.ast.VeraIfExpression
 import vera.ast.VeraImplicitReturnBlock
 import vera.ast.VeraIntLiteral
+import vera.ast.VeraMatchArm
+import vera.ast.VeraMatchExpression
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraMutableParameter
 import vera.ast.VeraOperator
@@ -79,8 +81,12 @@ import vera.jvm.ir.JvmUnitLiteral
 import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmUpcast
+import vera.jvm.ir.JvmBlockExpression
+import vera.jvm.ir.JvmCheckCast
+import vera.jvm.ir.JvmInstanceOf
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
+import vera.jvm.ir.render
 import vera.shared.model.Identifier
 import vera.shared.model.SourceSpan
 import vera.shared.model.at
@@ -259,7 +265,11 @@ private class JvmFunctionLoweringState(
                 LoweredStatement(
                     JvmExpressionStatement(loweredExpression.jvmExpression),
                     loweredExpression.returns,
-                    exit = if (loweredExpression.returns) "an if whose branches all return" else null,
+                    exit = when {
+                        !loweredExpression.returns -> null
+                        veraStatement.expression is VeraMatchExpression -> "a match whose arms all return"
+                        else -> "an if whose branches all return"
+                    },
                 )
             }
 
@@ -389,6 +399,8 @@ private class JvmFunctionLoweringState(
     private fun lowerStatementExpression(veraExpression: VeraPrimaryExpression): LoweredExpression =
         if (veraExpression is VeraIfExpression) {
             located(veraExpression.span) { lowerIfExpression(veraExpression) }
+        } else if (veraExpression is VeraMatchExpression) {
+            located(veraExpression.span) { lowerMatchExpression(veraExpression) }
         } else {
             LoweredExpression(nested { lowerPrimaryExpression(veraExpression) }, returns = false)
         }
@@ -400,13 +412,151 @@ private class JvmFunctionLoweringState(
         }
         val loweredThen = lowerBlock(veraIfExpression.thenBlock)
         val loweredElse = veraIfExpression.elseBlock?.let { veraElseBlock -> lowerBlock(veraElseBlock) }
-        if (loweredElse != null && loweredThen.jvmBlock.type != loweredElse.jvmBlock.type) {
-            throw JvmLoweringException.IfBranchTypeMismatch(loweredThen.jvmBlock.type, loweredElse.jvmBlock.type)
+            ?: return LoweredExpression(JvmIfExpression(jvmCondition, loweredThen.jvmBlock, null), returns = false)
+        val thenType = loweredThen.jvmBlock.type
+        val elseType = loweredElse.jvmBlock.type
+        val jvmType = unifyTypes(listOf(thenType, elseType))
+            ?: throw JvmLoweringException.IfBranchTypeMismatch(thenType, elseType)
+        return LoweredExpression(
+            JvmIfExpression(
+                jvmCondition,
+                coerceBlock(loweredThen.jvmBlock, jvmType),
+                coerceBlock(loweredElse.jvmBlock, jvmType),
+            ),
+            returns = loweredThen.returns && loweredElse.returns,
+        )
+    }
+
+    /**
+     * Lowers `match` to a chain of `instanceof` tests on the scrutinee, evaluated once into a temporary.
+     * The scrutinee must be a trait (or a single class), every case must be covered exactly once,
+     * and the last arm needs no test because the earlier arms rule out every other case.
+     */
+    private fun lowerMatchExpression(veraMatch: VeraMatchExpression): LoweredExpression {
+        val jvmScrutinee = nested { lowerPrimaryExpression(veraMatch.scrutinee) }
+        val cases = matchCases(jvmScrutinee.type, veraMatch.scrutinee)
+        val scrutineeName = Identifier(jvmScrutinee.type.render())
+        val jvmTemporary = JvmLocal(Identifier("<match${temporaryCount++}>"), jvmScrutinee.type)
+
+        val coveredClasses = mutableSetOf<Identifier>()
+        val loweredArms = veraMatch.arms.map { veraArm ->
+            val pattern = veraArm.pattern
+            val veraClass = visibleClasses[pattern.className]
+            if (veraClass == null || veraClass !in cases) {
+                throw JvmLoweringException.MatchPatternNotACase(
+                    pattern.className,
+                    scrutineeName,
+                    JvmNameHints.closest(pattern.className, cases.map { case -> case.name }),
+                ).at(pattern.span)
+            }
+            if (!coveredClasses.add(veraClass.name)) {
+                throw JvmLoweringException.MatchArmRepeated(veraClass.name).at(pattern.span)
+            }
+            veraClass to lowerMatchArm(veraArm, veraClass, jvmTemporary)
+        }
+        val missing = cases.map { case -> case.name }.filterNot { name -> name in coveredClasses }
+        if (missing.isNotEmpty()) {
+            throw JvmLoweringException.MatchNotExhaustive(scrutineeName, missing).at(veraMatch.span)
+        }
+
+        val armTypes = loweredArms.map { (_, loweredArm) -> loweredArm.jvmBlock.type }
+        val jvmType = unifyTypes(armTypes)
+            ?: throw JvmLoweringException.MatchArmTypeMismatch(armTypes.distinct()).at(veraMatch.span)
+        val jvmArms = loweredArms.map { (veraClass, loweredArm) -> veraClass to coerceBlock(loweredArm.jvmBlock, jvmType) }
+
+        val (_, lastBlock) = jvmArms.last()
+        val jvmChain = jvmArms.dropLast(1).foldRight(JvmBlockExpression(lastBlock) as JvmExpression) { (veraClass, jvmBlock), rest ->
+            JvmIfExpression(
+                JvmInstanceOf(JvmLocalRead(jvmTemporary), veraClass.name),
+                jvmBlock,
+                JvmImplicitReturnBlock(emptyList(), rest),
+            )
         }
         return LoweredExpression(
-            JvmIfExpression(jvmCondition, loweredThen.jvmBlock, loweredElse?.jvmBlock),
-            returns = loweredElse != null && loweredThen.returns && loweredElse.returns,
+            JvmLet(jvmTemporary, jvmScrutinee, jvmChain),
+            returns = loweredArms.all { (_, loweredArm) -> loweredArm.returns },
         )
+    }
+
+    /** The classes a `match` on a value of [jvmType] must cover. */
+    private fun matchCases(jvmType: JvmType, veraScrutinee: VeraPrimaryExpression): List<VeraClassDeclaration> =
+        when (jvmType) {
+            is JvmType.InterfaceType -> {
+                // Traits are closed, so the classes that have the trait are all of its cases.
+                visibleClasses.values.filter { veraClass -> jvmType.name in veraClass.traits }
+            }
+
+            is JvmType.ClassType -> listOf(
+                visibleClasses[jvmType.name]
+                    ?: throw JvmLoweringException.MatchScrutineeNotAnObject(jvmType).at(veraScrutinee.span),
+            )
+
+            else -> throw JvmLoweringException.MatchScrutineeNotAnObject(jvmType).at(veraScrutinee.span)
+        }
+
+    /**
+     * Lowers one arm: casts the scrutinee to the arm's class, binds the pattern's fields as locals in
+     * the arm's own scope, then lowers the body.
+     */
+    private fun lowerMatchArm(veraArm: VeraMatchArm, veraClass: VeraClassDeclaration, jvmTemporary: JvmLocal): LoweredBlock =
+        withScope {
+            val classType = JvmType.ClassType(veraClass.name)
+            val jvmBindings = mutableListOf<JvmStatement>()
+            if (veraArm.pattern.fields.isNotEmpty()) {
+                val jvmCase = JvmLocal(Identifier("<case${temporaryCount++}>"), classType)
+                jvmBindings += JvmVarDeclaration(jvmCase, JvmCheckCast(JvmLocalRead(jvmTemporary), classType))
+                veraArm.pattern.fields.forEach { veraFieldPattern ->
+                    val veraField = veraClass.fields.firstOrNull { field -> field.name == veraFieldPattern.field }
+                        ?: throw JvmLoweringException.UnknownClassField(
+                            veraClass.name,
+                            veraFieldPattern.field,
+                            JvmNameHints.closest(veraFieldPattern.field, veraClass.fields.map { field -> field.name }),
+                        ).at(veraFieldPattern.span)
+                    val fieldType = lowerType(veraField.type)
+                    val jvmLocal = located(veraFieldPattern.span) { declareLocal(veraFieldPattern.binding, fieldType) }
+                    jvmBindings += JvmVarDeclaration(
+                        jvmLocal,
+                        JvmGetField(JvmLocalRead(jvmCase), veraClass.name, veraField.name, fieldType),
+                    )
+                }
+            }
+            val loweredBody = lowerBlock(veraArm.body)
+            LoweredBlock(prependStatements(jvmBindings, loweredBody.jvmBlock), loweredBody.returns)
+        }
+
+    private fun prependStatements(jvmStatements: List<JvmStatement>, jvmBlock: JvmBlock): JvmBlock = when (jvmBlock) {
+        is JvmImplicitReturnBlock -> JvmImplicitReturnBlock(jvmStatements + jvmBlock.statements, jvmBlock.result)
+        is JvmUnitReturnBlock -> JvmUnitReturnBlock(jvmStatements + jvmBlock.statements)
+        is JvmExplicitReturnBlock -> JvmExplicitReturnBlock(jvmStatements + jvmBlock.statements)
+    }
+
+    /**
+     * The single type that branch values of [jvmTypes] share: their common type, or else the one user
+     * trait that all of them have, so `if c { Circle(...) } else { Empty() }` is a `Shape`.
+     */
+    private fun unifyTypes(jvmTypes: List<JvmType>): JvmType? {
+        val distinctTypes = jvmTypes.distinct()
+        distinctTypes.singleOrNull()?.let { jvmType -> return jvmType }
+        val traitSets = distinctTypes.map { jvmType ->
+            when (jvmType) {
+                is JvmType.InterfaceType -> setOf(jvmType.name)
+                is JvmType.ClassType -> visibleClasses[jvmType.name]?.traits?.filter { it in visibleTraits }?.toSet()
+                    ?: return null
+                else -> return null
+            }
+        }
+        val commonTraits = traitSets.reduce { left, right -> left intersect right }
+        return commonTraits.singleOrNull()?.let { trait -> JvmType.InterfaceType(trait) }
+    }
+
+    /** Converts a branch block's value to [jvmType], which [unifyTypes] guarantees it is assignable to. */
+    private fun coerceBlock(jvmBlock: JvmBlock, jvmType: JvmType): JvmBlock {
+        if (jvmBlock.type == jvmType) return jvmBlock
+        val jvmResultBlock = jvmBlock as? JvmImplicitReturnBlock
+            ?: throw JvmLoweringException.InternalInvariant("branch of type ${jvmBlock.type.render()} has no value to convert")
+        val jvmResult = coerce(jvmResultBlock.result, jvmType)
+            ?: throw JvmLoweringException.InternalInvariant("branch value is not assignable to ${jvmType.render()}")
+        return JvmImplicitReturnBlock(jvmResultBlock.statements, jvmResult)
     }
 
     private inline fun <T> nested(lowering: () -> T): T {
@@ -1159,6 +1309,8 @@ private class JvmFunctionLoweringState(
             is VeraUnaryOperation -> PrimaryResolution.Resolved(lowerUnaryOperation(veraPrimaryExpression))
 
             is VeraIfExpression -> PrimaryResolution.Resolved(lowerIfExpression(veraPrimaryExpression).jvmExpression)
+
+            is VeraMatchExpression -> PrimaryResolution.Resolved(lowerMatchExpression(veraPrimaryExpression).jvmExpression)
 
             is VeraIdentifierAsExpression -> {
                 val veraIdentifier = veraPrimaryExpression.identifier

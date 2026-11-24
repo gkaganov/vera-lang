@@ -289,6 +289,24 @@ class CompilerErrorTests {
                 "expected a field (`val`) or method (`fn`), found 'print'",
             ),
             CompileErrorCase(
+                "empty parentheses in match patterns",
+                function("match value {", "    Empty() -> 0", "}"),
+                VeraParseException.EmptyPatternParentheses::class,
+                "a pattern that binds no fields has no parentheses: write `Empty`",
+            ),
+            CompileErrorCase(
+                "match arms without an arrow",
+                function("match value {", "    Empty 0", "}"),
+                VeraParseException.ExpectedToken::class,
+                "expected `->` after the pattern, found '0'",
+            ),
+            CompileErrorCase(
+                "Kotlin sealed traits",
+                "sealed trait Shape {}",
+                VeraParseException.JavaSyntax::class,
+                "traits are closed by default; remove `sealed`",
+            ),
+            CompileErrorCase(
                 "missing statement terminators",
                 function("print(1) print(2)"),
                 VeraParseException.ExpectedEndOfLine::class,
@@ -554,6 +572,71 @@ class CompilerErrorTests {
                 traitDeclaration("ErrorTest"),
                 JvmLoweringException.TraitNameConflictsWithProgramClass::class,
                 "trait ErrorTest conflicts with the program class ErrorTest",
+            ),
+            CompileErrorCase(
+                "match arms that miss cases",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    classDeclaration("Rect has Shape", "val width: Int") + classDeclaration("Empty has Shape") +
+                    "fn area(shape: Shape): Int = match shape {\n    Circle(radius) -> radius\n}",
+                JvmLoweringException.MatchNotExhaustive::class,
+                "match on Shape does not cover Rect, Empty",
+            ),
+            CompileErrorCase(
+                "match arms repeated",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    "fn area(shape: Shape): Int = match shape {\n    Circle -> 1\n    Circle(radius) -> radius\n}",
+                JvmLoweringException.MatchArmRepeated::class,
+                "Circle is matched more than once",
+            ),
+            CompileErrorCase(
+                "match patterns that are not cases",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    classDeclaration("Point", "val x: Int") +
+                    "fn area(shape: Shape): Int = match shape {\n    Point(x) -> x\n}",
+                JvmLoweringException.MatchPatternNotACase::class,
+                "Point is not a case of Shape",
+            ),
+            CompileErrorCase(
+                "misspelled match patterns",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    "fn area(shape: Shape): Int = match shape {\n    Circel(radius) -> radius\n}",
+                JvmLoweringException.MatchPatternNotACase::class,
+                "Circel is not a case of Shape; did you mean `Circle`?",
+            ),
+            CompileErrorCase(
+                "match patterns with unknown fields",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    "fn area(shape: Shape): Int = match shape {\n    Circle(radus) -> radus\n}",
+                JvmLoweringException.UnknownClassField::class,
+                "class Circle has no field radus; did you mean `radius`?",
+            ),
+            CompileErrorCase(
+                "match bindings that shadow locals",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    "fn area(shape: Shape, radius: Int): Int = match shape {\n    Circle(radius) -> radius\n}",
+                JvmLoweringException.ShadowingNotAllowed::class,
+                "name radius is already in scope; shadowing is not allowed",
+            ),
+            CompileErrorCase(
+                "match arms of unrelated types",
+                "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                    classDeclaration("Empty has Shape") +
+                    "fn label(shape: Shape) = print(match shape {\n    Circle(radius) -> radius\n    Empty -> \"empty\"\n})",
+                JvmLoweringException.MatchArmTypeMismatch::class,
+                "match arms must have the same type or share one trait, got Int and String",
+            ),
+            CompileErrorCase(
+                "match on values that are not objects",
+                function("print(match 1 {", "    Point -> 1", "})"),
+                JvmLoweringException.MatchScrutineeNotAnObject::class,
+                "match needs an object of a class or trait, got Int",
+            ),
+            CompileErrorCase(
+                "statements after a match whose arms all return",
+                "trait Shape {}\n" + classDeclaration("Empty has Shape") +
+                    "fn area(shape: Shape): Int {\n    match shape {\n        Empty -> return 0\n    }\n    return 1\n}",
+                JvmLoweringException.UnreachableStatement::class,
+                "unreachable statement after a match whose arms all return",
             ),
             CompileErrorCase(
                 "undefined names",

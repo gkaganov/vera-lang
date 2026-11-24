@@ -201,6 +201,32 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         JvmNameHints.withHelp("class type ${name.value} is not defined", hint, suggestion),
     )
 
+    class MatchScrutineeNotAnObject(val actual: JvmType) : JvmLoweringException(
+        "match needs an object of a class or trait, got ${actual.render()}",
+    )
+
+    /** A pattern class that is not one of the scrutinee type's cases. */
+    class MatchPatternNotACase(
+        val className: Identifier,
+        val scrutinee: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("${className.value} is not a case of ${scrutinee.value}", null, suggestion),
+    )
+
+    class MatchArmRepeated(val className: Identifier) : JvmLoweringException(
+        "${className.value} is matched more than once",
+    )
+
+    /** A `match` that leaves cases uncovered; Vera has no catch-all arm, so each case is listed. */
+    class MatchNotExhaustive(val scrutinee: Identifier, val missing: List<Identifier>) : JvmLoweringException(
+        "match on ${scrutinee.value} does not cover ${missing.joinToString(", ") { it.value }}",
+    )
+
+    class MatchArmTypeMismatch(val types: List<JvmType>) : JvmLoweringException(
+        "match arms must have the same type or share one trait, got ${types.joinToString(" and ") { it.render() }}",
+    )
+
     /** A built-in trait such as `Eq` named as a type; only user traits are types. */
     class BuiltinTraitUsedAsType(val name: Identifier) : JvmLoweringException(
         "built-in trait ${name.value} cannot be used as a type",

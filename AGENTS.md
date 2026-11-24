@@ -101,6 +101,12 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- `match` (`JvmFunctionLoweringState.lowerMatchExpression`) evaluates the scrutinee once into a
+  `JvmLet` temporary and lowers to a chain of `JvmIfExpression`s testing `JvmInstanceOf`; the last arm
+  is untested (`JvmBlockExpression`) because exhaustiveness rules out every other case. The scrutinee
+  must be a trait (cases: the classes that have it, since traits are closed) or a single class. Arms bind fields from a
+  `JvmCheckCast` of the temporary in their own scope. `if` and `match` branch types unify through
+  `unifyTypes` (equal types, or the single user trait they share) and `coerceBlock`.
 - Bindings: `val` is immutable and `mut val` (`VeraBindStatement.mutable`) can be rebound; the lowering
   scope stack records each local's mutability. Rebinding a `val` is `ImmutableBindingRebound` and
   rebinding a parameter is `ParameterRebound`; parameters cannot be marked `mut` in a signature.
@@ -153,6 +159,10 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   initialize fields with `FlatPutField`.
 - Object method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
   verification.
+- `JvmInstanceOf`/`FlatInstanceOf` emit `instanceof` and `JvmCheckCast`/`FlatCheckCast` emit `checkcast`.
+  Every trait's interface is sealed through `permittedSubclasses` (`PermittedSubclasses` attribute). The
+  emitter gives the ClassFile API a class hierarchy resolver for the program's own classes, which
+  stack maps need when branch types merge.
 - Trait method calls use `FlatInvokeInterface` (`invokeinterface`). `FlatUpcast` retypes a class
   value to an interface on the simulated stack and emits no bytecode.
 - `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
@@ -329,8 +339,8 @@ uncommitted changes:
 - Class fields are `val name: Type` (`VeraParserState.parseField`); a bare `name: Type` is
   `VeraParseException.FieldWithoutVal`, and `mut val` fields are `MutableFieldNotSupported` until
   `mut fn` exists.
-- Constructs: `fn`, `class`, `trait`, `has`, `val`, `mut val`, rebinding with `=`, `if` / `else if` /
-  `else`, `while`, `break`, `continue`, `print`.
+- Constructs: `fn`, `class`, `trait` (closed; `sealed trait` gets a hint), `has`, `val`, `mut val`, rebinding with `=`,
+  `if` / `else if` / `else`, `match` with `Pattern -> body` arms, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary
   expression grouping.
 - `break` and `continue` target the innermost `while`; using either outside a loop or inside a

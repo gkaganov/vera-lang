@@ -37,6 +37,7 @@ data class VeraClassDeclaration(
 
 data class VeraField(val name: Identifier, val type: VeraType, val span: SourceSpan)
 
+/** A trait. Traits are closed: their classes are all known, so `match` can be exhaustive. */
 data class VeraTraitDeclaration(
     override val name: Identifier,
     val methods: List<VeraTraitMethod>,
@@ -180,6 +181,21 @@ data class VeraIfExpression(
     val elseBlock: VeraBlock?,
     override val span: SourceSpan,
 ) : VeraPrimaryExpression
+
+/** `match scrutinee { Pattern -> body ... }`; each arm's body is a block or a single expression. */
+data class VeraMatchExpression(
+    val scrutinee: VeraPrimaryExpression,
+    val arms: List<VeraMatchArm>,
+    override val span: SourceSpan,
+) : VeraPrimaryExpression
+
+data class VeraMatchArm(val pattern: VeraPattern, val body: VeraBlock, val span: SourceSpan)
+
+/** `ClassName` or `ClassName(field, field = binding)`: matches an object of the class and binds fields. */
+data class VeraPattern(val className: Identifier, val fields: List<VeraFieldPattern>, val span: SourceSpan)
+
+/** Binds [field] of the matched object to the local [binding] (the field name unless renamed). */
+data class VeraFieldPattern(val field: Identifier, val binding: Identifier, val span: SourceSpan)
 
 data class VeraParameter(val name: Identifier, val type: VeraType, val span: SourceSpan)
 

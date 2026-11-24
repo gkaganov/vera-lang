@@ -6,7 +6,8 @@ data class JvmProgram(val classes: List<JvmClass>)
 
 /**
  * A JVM class, or an interface when [isInterface]. Classes list the trait [interfaces] they
- * implement; interfaces declare their trait methods as [abstractMethods].
+ * implement; interfaces declare their trait methods as [abstractMethods]. A sealed interface lists
+ * its [permittedSubclasses].
  */
 data class JvmClass(
     val name: Identifier,
@@ -16,6 +17,7 @@ data class JvmClass(
     val interfaces: List<Identifier> = emptyList(),
     val isInterface: Boolean = false,
     val abstractMethods: List<JvmAbstractMethod> = emptyList(),
+    val permittedSubclasses: List<Identifier> = emptyList(),
 )
 
 /** A method without a body, declared by an interface. */
@@ -172,6 +174,19 @@ data class JvmInstanceCall(
     val ownerIsInterface: Boolean = false,
 ) : JvmExpression {
     override val type = signature.returnType
+}
+
+/** Tests whether [expression] holds an object of [className] (`instanceof`). */
+data class JvmInstanceOf(val expression: JvmExpression, val className: Identifier) : JvmExpression {
+    override val type = JvmType.BOOL
+}
+
+/** Treats a trait-typed value as the class a `match` arm selected (`checkcast`). */
+data class JvmCheckCast(val expression: JvmExpression, override val type: JvmType.ClassType) : JvmExpression
+
+/** Evaluates a block as an expression; its value is the block's value. */
+data class JvmBlockExpression(val block: JvmBlock) : JvmExpression {
+    override val type = block.type
 }
 
 /** Uses a class value as one of its trait types. No runtime work; it only changes the static type. */
