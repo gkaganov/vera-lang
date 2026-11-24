@@ -176,6 +176,9 @@ object JvmProgramLowering {
                         JvmTypeLowering.lowerReturn(method.returnType, typeNames),
                     ),
                 )
+            } + trait.fields.map { field ->
+                // A required field is read through an accessor named like the field, as Java records do.
+                JvmAbstractMethod(field.name, JvmMethodSignature(emptyList(), JvmTypeLowering.lower(field.type, typeNames)))
             } + objectMethods,
         )
     }
@@ -318,6 +321,16 @@ object JvmProgramLowering {
             }
             located(method.span) { JvmTypeLowering.lowerReturn(method.returnType, typeNames) }
         }
+        val seenFields = mutableSetOf<Identifier>()
+        trait.fields.forEach { field ->
+            if (!seenFields.add(field.name)) {
+                throw JvmLoweringException.DuplicateTraitField(trait.name, field.name).at(field.span)
+            }
+            if (field.name in seenMethods) {
+                throw JvmLoweringException.TraitFieldConflictsWithMethod(trait.name, field.name).at(field.span)
+            }
+            located(field.span) { JvmTypeLowering.lower(field.type, typeNames) }
+        }
     }
 
     /**
@@ -349,6 +362,22 @@ object JvmProgramLowering {
                     traitName,
                     JvmNameHints.closest(traitName, traitsByName.keys + JvmBuiltinTraits.names),
                 ).at(veraClass.span)
+            trait.fields.forEach { traitField ->
+                val classField = veraClass.fields.firstOrNull { field -> field.name == traitField.name }
+                    ?: throw JvmLoweringException.MissingTraitField(veraClass.name, traitName, traitField.name, traitField.type)
+                        .at(veraClass.span)
+                val expectedType = JvmTypeLowering.lower(traitField.type, typeNames)
+                val actualType = located(classField.span) { JvmTypeLowering.lower(classField.type, typeNames) }
+                if (expectedType != actualType) {
+                    throw JvmLoweringException.TraitFieldTypeMismatch(
+                        veraClass.name,
+                        traitName,
+                        traitField.name,
+                        expectedType,
+                        actualType,
+                    ).at(classField.span)
+                }
+            }
             trait.methods.forEach { traitMethod ->
                 val classMethod = veraClass.methods.firstOrNull { it.name == traitMethod.name }
                     ?: throw JvmLoweringException.MissingTraitMethod(
@@ -507,6 +536,13 @@ object JvmProgramLowering {
                 add(JvmObjectMethods.objectEqualsMethod(veraClass.name))
             }
             if (hasDisplay) add(JvmObjectMethods.toStringMethod(veraClass.name, jvmFields))
+            // Fields required by the class's traits get accessors that implement the interfaces.
+            val requiredFieldNames = veraClass.traits.flatMap { trait -> traitsByName[trait]?.fields.orEmpty() }
+                .map { field -> field.name }
+                .toSet()
+            jvmFields.filter { field -> field.name in requiredFieldNames }.forEach { field ->
+                add(JvmObjectMethods.fieldAccessorMethod(veraClass.name, field))
+            }
         }
         val interfaces = veraClass.traits.filter { trait -> trait !in JvmBuiltinTraits.names }
         if (jvmFields.isEmpty()) {

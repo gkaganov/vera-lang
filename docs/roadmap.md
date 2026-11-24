@@ -51,10 +51,11 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
      (`trait Option<T> { Some { val value: T } None }`).
   8. Trait requirements: `trait Shape requires Display, Eq` means every member of `Shape` has
      those traits, so a `Shape` value can be printed, compared, or used where a required trait is
-     expected. This is interface inheritance only: traits carry no fields or code. In the separate
+     expected. This is interface inheritance only: traits carry no storage or code. In the separate
      form, a joining class lists the required traits explicitly
      (`class Circle has Shape, Display, Eq`), and a missing one is an error naming it; block-form
-     cases get them automatically.
+     cases get them automatically. Requirements may not form a cycle: traits that require each
+     other would have the same members, so they should be one trait.
   9. `Bool` is a built-in closed trait in block form, `trait Bool { True, False }`, whose cases are
      imported by default so they stay written `True` and `False`; a `match` on a `Bool` covers
      `True` and `False`. It stays a JVM `boolean`. `Unit` is a built-in field-less class, so its
@@ -85,7 +86,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
      `Display`. Done.
   4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values. Done; a
      matching `hashCode` for Java collections is still missing.
-  5. Required fields in traits.
+  5. Required fields in traits. Done.
   6. Structural `interface`s with `implements`.
 - Acceptance: a non-exhaustive `match` is rejected and names the missing cases; interfaces cannot
   be matched; a block-form trait cannot be joined with `has`; field-less classes are singletons; a

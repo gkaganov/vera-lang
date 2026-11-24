@@ -2744,6 +2744,105 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `trait values read the fields their trait requires`(testInfo: TestInfo) {
+        val source = """
+                    trait Event {
+                        val timestamp: Int
+                        fn describe(): String
+                    }
+                    class Login has Event {
+                        val user: String
+                        val timestamp: Int
+                        fn describe(): String = "login \{user}"
+                    }
+                    class Logout has Event {
+                        val timestamp: Int
+                        fn describe(): String = "logout"
+                    }
+                    fn later(first: Event, second: Event): Event = if first.timestamp > second.timestamp {
+                        first
+                    } else {
+                        second
+                    }
+                    fn $TEST_MAIN() {
+                        val event = later(first = Login(user = "ada", timestamp = 3), second = Logout(5))
+                        print(event.timestamp)
+                        print(event.describe())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "5${EOL}logout$EOL", testInfo)
+    }
+
+    @Test
+    fun `trait cases declare the fields their trait requires`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape {
+                        val name: String
+                        Circle {
+                            val name: String
+                            val radius: Int
+                        }
+                        Square {
+                            val name: String
+                            val side: Int
+                        }
+                    }
+                    fn area(shape: Shape): Int = match shape {
+                        Circle(radius) -> 3 * radius * radius
+                        Square(name, side) -> side * side
+                    }
+                    fn $TEST_MAIN() {
+                        val shape: Shape = Shape.Square(name = "tile", side = 2)
+                        print("\{shape.name}: \{area(shape)}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "tile: 4$EOL", testInfo)
+    }
+
+    @Test
+    fun `trait values read the fields of the traits their trait requires`(testInfo: TestInfo) {
+        val source = """
+                    trait Named {
+                        val name: String
+                    }
+                    trait Pet requires Named {
+                        val age: Int
+                    }
+                    class Dog has Pet, Named {
+                        val name: String
+                        val age: Int
+                    }
+                    fn $TEST_MAIN() {
+                        val pet: Pet = Dog(name = "Rex", age = 3)
+                        print("\{pet.name} is \{pet.age}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Rex is 3$EOL", testInfo)
+    }
+
+    @Test
+    fun `required fields compile to accessor methods on the JVM`() {
+        val source = """
+                    trait Event {
+                        val timestamp: Int
+                    }
+                    class Login has Event {
+                        val timestamp: Int
+                    }
+                    fn $TEST_MAIN() {
+                    }
+                """.trimIndent()
+        val bytecode = VeraCompiler.compile(Identifier("FieldAccessorTest"), source)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+        val event = classLoader.loadClass("Event")
+        val login = classLoader.loadClass("Login")
+        Assertions.assertEquals(Int::class.javaPrimitiveType, event.getMethod("timestamp").returnType)
+        val constructor = login.declaredConstructors.single()
+        val loginObject = constructor.newInstance(7)
+        Assertions.assertEquals(7, login.getMethod("timestamp").invoke(loginObject))
+    }
+
+    @Test
     fun `trait methods with omitted return types match Unit methods`(testInfo: TestInfo) {
         val source = """
                     trait Greeter {

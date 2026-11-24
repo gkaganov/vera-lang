@@ -184,9 +184,9 @@ class Square has Shape {
 }
 ```
 
-- `trait` declarations are top-level and contain method signatures only: `fn name(params): Type`.
-  Signatures end at a newline or before the closing brace, so `trait Shape { fn area(): Int }` is
-  valid.
+- `trait` declarations are top-level and contain method signatures (`fn name(params): Type`) and
+  required fields (`val name: Type`). Each ends at a newline or before the closing brace, so
+  `trait Shape { fn area(): Int }` is valid.
 - A class opts into traits with `has` after its name: `class Square has Shape`.
 - An implementing class must define every trait method with the same parameter types and return
   type and the same parameter names. Parameter names are part of the trait, because callers name
@@ -194,24 +194,43 @@ class Square has Shape {
 - A trait is also a type. Parameters, returns, locals, and fields can have a trait type, and an
   object whose class has the trait can be used wherever that trait is expected:
   `fn describe(shape: Shape): Int = shape.area()` accepts `Square(3)`.
-- A trait-typed value exposes only the trait's methods. Calling one runs the method of the
-  object's actual class (dynamic dispatch).
+- A trait-typed value exposes only the trait's fields and methods. Calling a method runs the
+  method of the object's actual class (dynamic dispatch).
+- A required field is a requirement, not storage: every class with the trait declares the field
+  itself, with the same type, and nothing is inherited. Trait values can read it:
+
+  ```vera
+  trait Event {
+      val timestamp: Int
+  }
+
+  class Login has Event {
+      val user: String
+      val timestamp: Int
+  }
+
+  fn age(event: Event, now: Int): Int = now - event.timestamp
+  ```
+
+  Required fields are read-only, like every field, and a trait cannot have a field and a method of
+  the same name. On the JVM, the interface declares an accessor method `timestamp()` and each class
+  implements it.
 - Traits compile to JVM interfaces that their classes implement, so Java code sees ordinary
   interfaces.
 - A trait can require other traits: `trait Shape requires Display, Eq { ... }` means every member of
-  `Shape` has them. This is interface inheritance only; traits carry no fields or code.
+  `Shape` has them. This is interface inheritance only; traits carry no storage or code.
   - A class joining the trait lists the required traits itself (`class Square has Shape, Display, Eq`),
     so its declaration shows every trait it has; a missing one is an error naming it. Cases in a
     trait's block get the requirements automatically.
   - A `Shape` value can be printed and used in string templates when `Shape` requires `Display`, and
     compared with `==` when it requires `Eq`. Objects of different classes compare as the one trait
     they share: equal only if they have the same class and equal fields.
-  - A `Shape` value is also a value of every trait `Shape` requires, and their methods can be called
-    on it.
+  - A `Shape` value is also a value of every trait `Shape` requires, and their fields and methods
+    can be used on it.
   - A class with `Eq` or `Display` can have a trait-typed field when that trait requires the same
     built-in trait.
   - Requirements must not form a cycle. The built-in traits `Eq` and `Display` are not types.
-- Traits cannot declare fields, default method bodies, or overloads.
+- Traits cannot declare default method bodies or overloads.
 - Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
   follow the function rules, so a `Unit` method leaves its return type out.
 - Trait names share the top-level namespace with functions and classes.
@@ -258,7 +277,8 @@ fn name(color: Color): String = match color {
   pattern in a `match` on the owning trait, which can only name that trait's cases: `Red ->`.
 - A case can also join other traits (`Red has Printable { ... }`); in a `match` on such a trait it is
   written qualified (`Color.Red ->`).
-- A case without fields is a singleton (`Color.Red`). Every case must implement the trait's methods.
+- A case without fields is a singleton (`Color.Red`). Every case must implement the trait's methods
+  and declare its required fields in its body, so a trait with required fields has no body-less cases.
 - `Display` prints a case qualified: `Color.Red`, `Shape.Circle(radius: 2)`.
 - A case name may match a top-level class name: `Tree.Leaf` and `Leaf` never meet.
 - Cases compile to static nested JVM classes, which Java sees as `Shape.Circle`.
@@ -663,8 +683,9 @@ member         = "val" IDENT ":" type
                | function
 
 trait          = "trait" IDENT [ "requires" IDENT { "," IDENT } ] "{" { EOL } { traitItem } "}"
-traitItem      = traitMethod statementEnd | case ( "," | statementEnd )
+traitItem      = traitMethod statementEnd | traitField statementEnd | case ( "," | statementEnd )
 traitMethod    = "fn" IDENT signature
+traitField     = "val" IDENT ":" type
 case           = IDENT [ [ "has" IDENT { "," IDENT } ] classBody ]   (* `has` needs a body *)
 classBody      = "{" { EOL } { member statementEnd } "}"
 

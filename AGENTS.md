@@ -109,6 +109,12 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   also get `JvmObjectMethods.objectEqualsMethod`, an `equals(Object)` that is structural for the
   same class; trait values compare and print through the interface (`traitEqualsCall`,
   `traitToStringCall`). `coerce` upcasts a trait value to a trait it requires.
+- Required fields: `VeraTraitDeclaration.fields` are requirements, not storage. `validateClassTraits`
+  checks that each class with the trait declares the field with the same type (`MissingTraitField`,
+  `TraitFieldTypeMismatch`). The trait's interface declares an abstract accessor named after the
+  field, and each class gets `JvmObjectMethods.fieldAccessorMethod` for it. Reading a field on a
+  trait value lowers to a `JvmInstanceCall` of that accessor on the declaring trait (the trait or
+  one it requires); an unknown, uncalled member is `UnknownTraitField`.
 - Trait cases: `VeraParserState.parseTraitCase` turns each case in a trait block into a
   `VeraClassDeclaration` named `Owner$Case` (its JVM binary name; `Identifier.display` shows
   `Owner.Case`), with `owner` set and the owner first in `traits`; `VeraTraitDeclaration.cases`
@@ -357,7 +363,7 @@ uncommitted changes:
   (`JvmObjectMethods.concatenate`), rendering values as `print` does.
 - Class fields are `val name: Type` (`VeraParserState.parseField`); a bare `name: Type` is
   `VeraParseException.FieldWithoutVal`, and `mut val` fields are `MutableFieldNotSupported` until
-  `mut fn` exists.
+  `mut fn` exists. Required fields in a trait body follow the same rules.
 - Constructs: `fn`, `class`, `trait` (closed; `sealed trait` gets a hint), `has`, `val`, `mut val`, rebinding with `=`,
   `if` / `else if` / `else`, `match` with `Pattern -> body` arms, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary

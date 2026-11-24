@@ -947,29 +947,56 @@ private class JvmFunctionLoweringState(
                 is VeraMemberAccess -> {
                     val receiverType = jvmExpression.type
                     if (receiverType is JvmType.InterfaceType) {
-                        // A trait-typed value exposes only the trait's methods.
+                        // A trait-typed value exposes only the trait's fields and methods.
                         val veraTrait = visibleTraits[receiverType.name]
                             ?: throw JvmLoweringException.UnknownClassType(receiverType.name).at(chainedData.span)
                         val member = chainedData.member
-                        // Its own methods, and those of the traits it requires, declared by one of them.
+                        // Its own members, and those of the traits it requires, declared by one of them.
                         val declaringTraits = listOf(veraTrait) +
                             traitRequirements.userTraitsOf(veraTrait.name).mapNotNull { name -> visibleTraits[name] }
+                        val nextAccess = veraChainedExpression.data.getOrNull(dataIndex + 1)
+                        val fieldTrait = declaringTraits.firstOrNull { trait -> trait.fields.any { it.name == member } }
+                        if (fieldTrait != null) {
+                            // A required field is read through the accessor the interface declares.
+                            if (nextAccess is VeraArguments) {
+                                throw JvmLoweringException.ValueCallNotSupported().at(nextAccess.span)
+                            }
+                            val traitField = fieldTrait.fields.first { field -> field.name == member }
+                            jvmExpression = JvmInstanceCall(
+                                receiver = jvmExpression,
+                                ownerClass = fieldTrait.name,
+                                methodName = member,
+                                arguments = emptyList(),
+                                signature = JvmMethodSignature(emptyList(), lowerType(traitField.type)),
+                                ownerIsInterface = true,
+                            )
+                            dataIndex++
+                            continue
+                        }
                         val declaringTrait = declaringTraits.firstOrNull { trait -> trait.methods.any { it.name == member } }
-                            ?: throw JvmLoweringException.UnknownTraitMethod(
+                        if (nextAccess !is VeraArguments) {
+                            if (declaringTrait != null) {
+                                throw JvmLoweringException.ClassMethodUsedAsValue(receiverType.name, member)
+                                    .at(chainedData.span)
+                            }
+                            throw JvmLoweringException.UnknownTraitField(
+                                receiverType.name,
+                                member,
+                                JvmNameHints.closest(member, declaringTraits.flatMap { trait -> trait.fields.map { it.name } }),
+                            ).at(chainedData.span)
+                        }
+                        if (declaringTrait == null) {
+                            throw JvmLoweringException.UnknownTraitMethod(
                                 receiverType.name,
                                 member,
                                 JvmNameHints.closest(member, declaringTraits.flatMap { trait -> trait.methods.map { it.name } }),
                             ).at(chainedData.span)
-                        val traitMethod = declaringTrait.methods.first { method -> method.name == member }
-                        val nextData = veraChainedExpression.data.getOrNull(dataIndex + 1)
-                        if (nextData !is VeraArguments) {
-                            throw JvmLoweringException.ClassMethodUsedAsValue(receiverType.name, member)
-                                .at(chainedData.span)
                         }
+                        val traitMethod = declaringTrait.methods.first { method -> method.name == member }
                         val loweredArguments = lowerForwardedArguments(
                             forwardedArgument,
                             forwardedArgumentIndex == dataIndex + 1,
-                        ) { lowerArguments(nextData) }
+                        ) { lowerArguments(nextAccess) }
                         val jvmReceiver = jvmExpression
                         jvmExpression = located(chainedData.span) {
                             lowerTraitMethodCall(jvmReceiver, declaringTrait, traitMethod, loweredArguments)

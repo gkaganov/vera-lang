@@ -283,6 +283,18 @@ class CompilerErrorTests {
                 "mutable fields need `mut fn` methods, which are not implemented yet; use `val`",
             ),
             CompileErrorCase(
+                "trait fields without val",
+                "trait Event {\n    timestamp: Int\n}",
+                VeraParseException.FieldWithoutVal::class,
+                "declare fields with `val`: write `val timestamp: ...`",
+            ),
+            CompileErrorCase(
+                "mutable trait fields",
+                "trait Account {\n    mut val balance: Int\n}",
+                VeraParseException.MutableFieldNotSupported::class,
+                "mutable fields need `mut fn` methods, which are not implemented yet; use `val`",
+            ),
+            CompileErrorCase(
                 "statements in class bodies",
                 "class Point {\n    print(1)\n}",
                 VeraParseException.ExpectedToken::class,
@@ -709,6 +721,48 @@ class CompilerErrorTests {
                 "trait Shape requires Display {}\nclass Square has Shape {\n    val side: Int\n}",
                 JvmLoweringException.MissingRequiredTrait::class,
                 "Square has Shape, which requires Display; add `has Display`",
+            ),
+            CompileErrorCase(
+                "classes missing a field their trait requires",
+                "trait Event {\n    val timestamp: Int\n}\nclass Login has Event {\n    val user: String\n}",
+                JvmLoweringException.MissingTraitField::class,
+                "class Login has trait Event but no field timestamp; declare `val timestamp: Int`",
+            ),
+            CompileErrorCase(
+                "trait cases without a field their trait requires",
+                "trait Shape {\n    val name: String\n    Empty\n}",
+                JvmLoweringException.MissingTraitField::class,
+                "class Shape.Empty has trait Shape but no field name; declare `val name: String`",
+            ),
+            CompileErrorCase(
+                "required fields declared with another type",
+                "trait Event {\n    val timestamp: Int\n}\nclass Login has Event {\n    val timestamp: String\n}",
+                JvmLoweringException.TraitFieldTypeMismatch::class,
+                "class Login field timestamp has type String, but trait Event requires Int",
+            ),
+            CompileErrorCase(
+                "duplicate trait fields",
+                "trait Event {\n    val timestamp: Int\n    val timestamp: Int\n}",
+                JvmLoweringException.DuplicateTraitField::class,
+                "trait Event has duplicate field timestamp",
+            ),
+            CompileErrorCase(
+                "trait fields named like trait methods",
+                "trait Event {\n    val timestamp: Int\n    fn timestamp(): Int\n}",
+                JvmLoweringException.TraitFieldConflictsWithMethod::class,
+                "trait Event has both a field and a method named timestamp",
+            ),
+            CompileErrorCase(
+                "unknown fields on trait values",
+                "trait Event {\n    val timestamp: Int\n}\n" + "fn read(event: Event): Int = event.timestmap\n",
+                JvmLoweringException.UnknownTraitField::class,
+                "trait Event has no field timestmap; did you mean `timestamp`?",
+            ),
+            CompileErrorCase(
+                "required fields called like methods",
+                "trait Event {\n    val timestamp: Int\n}\n" + "fn read(event: Event): Int = event.timestamp()\n",
+                JvmLoweringException.ValueCallNotSupported::class,
+                "calling a value is not supported yet",
             ),
             CompileErrorCase(
                 "repeated requirements",

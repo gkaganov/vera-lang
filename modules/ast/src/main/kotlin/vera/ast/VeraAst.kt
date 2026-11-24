@@ -53,6 +53,8 @@ data class VeraTraitDeclaration(
     val cases: List<VeraClassDeclaration> = emptyList(),
     /** Traits every member must also have (`requires Display, Eq`); interface inheritance only. */
     val requirements: List<Identifier> = emptyList(),
+    /** Fields every member must declare itself (`val timestamp: Int`); a requirement, not storage. */
+    val fields: List<VeraField> = emptyList(),
 ) : VeraDeclaration
 
 data class VeraTraitMethod(

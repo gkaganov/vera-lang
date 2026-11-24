@@ -1,5 +1,7 @@
 package vera.jvm.lowering
 
+import vera.ast.VeraType
+import vera.ast.render
 import vera.jvm.ir.JvmBuiltin
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.render
@@ -228,13 +230,44 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "match arms must have the same type or share one trait, got ${types.joinToString(" and ") { it.render() }}",
     )
 
+    class DuplicateTraitField(val trait: Identifier, val field: Identifier) : JvmLoweringException(
+        "trait ${trait.display} has duplicate field ${field.display}",
+    )
+
+    class TraitFieldConflictsWithMethod(val trait: Identifier, val name: Identifier) : JvmLoweringException(
+        "trait ${trait.display} has both a field and a method named ${name.display}",
+    )
+
+    /** A member class that does not declare a field its trait requires. */
+    class MissingTraitField(
+        val className: Identifier,
+        val trait: Identifier,
+        val field: Identifier,
+        val fieldType: VeraType,
+    ) : JvmLoweringException(
+        "class ${className.display} has trait ${trait.display} but no field ${field.display}; " +
+            "declare `val ${field.display}: ${fieldType.render()}`",
+    )
+
+    class TraitFieldTypeMismatch(
+        val className: Identifier,
+        val trait: Identifier,
+        val field: Identifier,
+        val expected: JvmType,
+        val actual: JvmType,
+    ) : JvmLoweringException(
+        "class ${className.display} field ${field.display} has type ${actual.render()}, but trait ${trait.display} " +
+            "requires ${expected.render()}",
+    )
+
     class DuplicateRequirement(val trait: Identifier, val required: Identifier) : JvmLoweringException(
         "trait ${trait.display} requires ${required.display} more than once",
     )
 
     /** Requirements that lead back to their own trait, such as `A requires B` and `B requires A`. */
     class RequirementCycle(val traits: List<Identifier>) : JvmLoweringException(
-        "trait requirements form a cycle: ${traits.joinToString(" requires ") { it.display }}",
+        "trait requirements form a cycle: ${traits.joinToString(" requires ") { it.display }}; " +
+            "traits that require each other have the same members, so merge them or make only one require the other",
     )
 
     /** A class joining a trait without listing a trait it requires. */
@@ -286,7 +319,16 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
             "which does not require ${trait.display}",
     )
 
-    /** A trait-typed value has only the trait's methods. */
+    /** A trait-typed value has only the trait's fields and methods. */
+    class UnknownTraitField(
+        val trait: Identifier,
+        val field: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("trait ${trait.display} has no field ${field.display}", null, suggestion),
+    )
+
+    /** A trait-typed value has only the trait's fields and methods. */
     class UnknownTraitMethod(
         val trait: Identifier,
         val method: Identifier,

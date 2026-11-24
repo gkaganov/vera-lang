@@ -165,22 +165,30 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         skipEols()
         val methods = mutableListOf<VeraTraitMethod>()
         val cases = mutableListOf<VeraClassDeclaration>()
+        val fields = mutableListOf<VeraField>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
-            if (at(VeraTokenType.IDENTIFIER)) {
+            if (at(VeraTokenType.VAL)) {
+                fields += parseField()
+                parseStatementTerminator()
+            } else if (at(VeraTokenType.MUT)) {
+                throw VeraParseException.MutableFieldNotSupported(current())
+            } else if (at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.COLON) {
+                throw VeraParseException.FieldWithoutVal(current())
+            } else if (at(VeraTokenType.IDENTIFIER)) {
                 cases += parseTraitCase(owner)
                 // Cases are separated by commas or newlines: `trait Color { Red, Green, Blue }`.
                 if (!match(VeraTokenType.COMMA)) {
                     parseStatementTerminator()
                 }
             } else {
-                val fnToken = expect(VeraTokenType.FN, "a trait method (`fn`) or case")
+                val fnToken = expect(VeraTokenType.FN, "a trait method (`fn`), field (`val`), or case")
                 methods += parseTraitMethod(fnToken)
                 parseStatementTerminator()
             }
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases, requirements)
+        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases, requirements, fields)
     }
 
     /**

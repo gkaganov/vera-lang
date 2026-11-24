@@ -103,6 +103,21 @@ internal object JvmObjectMethods {
         )
     }
 
+    /**
+     * Builds `name(): Type` returning the field [field], which implements the accessor a trait declares
+     * for a required field. It is generated, so Vera name resolution never sees it.
+     */
+    fun fieldAccessorMethod(className: Identifier, field: JvmField): JvmMethod {
+        val receiver = JvmLocal(thisName, JvmType.ClassType(className))
+        return JvmMethod(
+            field.name,
+            emptyList(),
+            field.type,
+            JvmExplicitReturnBlock(listOf(JvmReturn(fieldRead(className, field, receiver)))),
+            receiver,
+        )
+    }
+
     /** Compares two values of trait [trait] through the interface's `equals(Object)`. */
     fun traitEqualsCall(receiver: JvmExpression, trait: Identifier, argument: JvmExpression): JvmExpression =
         JvmInstanceCall(
