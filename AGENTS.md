@@ -15,7 +15,7 @@ parser, a 2-phase IR lowering pipeline, and generates JVM bytecode via the Java 
 ```bash
 ./gradlew build                    # Compile, test, and assemble
 ./gradlew :compiler-tests:test     # Run integration tests
-./gradlew :compiler-tests:test --tests "vera.compiler.test.VeraCompilerTests.print function prints to system-out"
+./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests"
 ```
 
 Build output goes to `out/` (compiler) and `build/` (Gradle).
@@ -255,7 +255,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - JUnit 5 (JUnit 6 API) with JUnit Platform.
 - `compiler-tests` are integration tests: compile Vera code, load bytecode, execute, compare output.
 - Test names are descriptive backticked Kotlin names.
-- Error tests live in `CompilerErrorTests`; see [`docs/testing.md`](docs/testing.md).
+- Tests are organized by language feature (`language/*Tests.kt`, `@Nested` per sub-feature), with
+  error tests next to the successful ones; see [`docs/testing.md`](docs/testing.md).
 
 ### Workflow Keywords
 

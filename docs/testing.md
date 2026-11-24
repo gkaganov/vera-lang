@@ -1,10 +1,24 @@
 # Testing
 
-Compiler tests live in the `compiler-tests` module:
+Compiler tests live in the `compiler-tests` module, organized by language feature so that each
+feature's tests, successful and failing, are in one place.
 
-- `CompilerTests.kt` — successful compilation and execution tests
-- `CompilerErrorTests.kt` — compilation-failure tests grouped by compiler stage
-- `ByteArrayClassLoader.kt` — loads emitted bytecode in-memory
+- `language/` — one file per feature, mirroring the sections of [`language.md`](language.md):
+  `FunctionTests`, `BindingTests`, `ClassTests`, `TraitTests`, `InterfaceTests`, `MatchTests`, ...
+  Each file groups its tests in `@Nested` classes by sub-feature (`TraitTests.Requirements`,
+  `InterfaceTests.StructuralFit`), so the IDE outline and the test report read as a tree.
+- `DiagnosticsTests.kt` — the rendered form of compiler errors with their source location.
+- `InstructionLoweringTests.kt`, `BytecodeEmissionTests.kt` — invariants of the flat instruction
+  and emitter stages, checked with hand-built IR because valid Vera source cannot reach them.
+- `VeraTestSupport.kt` — shared helpers: compile, run, and compare output or errors.
+- `ByteArrayClassLoader.kt` — loads emitted bytecode in-memory.
+
+## Where a test goes
+
+- Put a test in the file of the feature it exercises, in the nested class of its sub-feature, next
+  to that feature's other tests. Error tests sit beside the successful ones.
+- Name tests as descriptive backticked sentences.
+- When a feature gets its own section in `language.md`, give it its own file or nested class.
 
 ## How tests work
 
@@ -12,16 +26,17 @@ Tests build Vera source inline, call `VeraCompiler.compile`, load the returned b
 `ByteArrayClassLoader`, and either invoke the compiled method or catch the rendered `VeraException`.
 Assertions compare printed stdout, returned values, or an error-message fragment.
 
-Error tests use parameterized cases per stage. Every source-level error case must carry a source
-span (`assertCompilationFails` checks it), and the diagnostics tests compare the full rendered
-output of `VeraDiagnostics.render`. Instruction-lowering and emitter diagnostics use hand-built IR
-because they cannot be reached through valid Vera source.
+Each error test is its own `@Test` calling `assertCompilationFails(source, ExpectedError::class,
+"message part")`. Every error reachable from source must carry a source span
+(`assertCompilationFails` checks it), and the diagnostics tests compare the full rendered output
+of `VeraDiagnostics.render`.
 
 Run the suite with:
 
 ```bash
 ./gradlew :compiler-tests:test
-./gradlew :compiler-tests:test --tests "vera.compiler.test.VeraCompilerTests.print function prints to system-out"
+./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests"
+./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests\$StructuralFit"
 ```
 
 Some tests set `compileToOut = true` to dump generated `.class` files under `out/` for debugging.
