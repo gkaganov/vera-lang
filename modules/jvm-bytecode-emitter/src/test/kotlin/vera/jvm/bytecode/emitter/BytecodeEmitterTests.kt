@@ -1,8 +1,7 @@
-package vera.compiler.test
+package vera.jvm.bytecode.emitter
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
-import vera.jvm.bytecode.emitter.BytecodeEmitException
-import vera.jvm.bytecode.emitter.BytecodeEmitter
 import vera.jvm.instruction.FlatClass
 import vera.jvm.instruction.FlatJump
 import vera.jvm.instruction.FlatLabel
@@ -12,9 +11,10 @@ import vera.jvm.instruction.FlatMethodBuilder
 import vera.jvm.instruction.FlatProgram
 import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
+import vera.shared.model.VeraException
 
 /** Bytecode emission invariants, checked with hand-built flat IR. */
-class BytecodeEmissionTests {
+class BytecodeEmitterTests {
     @Test
     fun `bytecode emission rejects unbound labels`() {
         val builder = methodBuilder()
@@ -54,4 +54,13 @@ class BytecodeEmissionTests {
                 listOf(FlatClass(Identifier("ErrorTest"), listOf(method))),
             ),
         )
+}
+
+/** Runs [block] and expects an error of type [T] whose message contains [messagePart]. */
+private inline fun <reified T : VeraException> assertCompilerError(messagePart: String, crossinline block: () -> Unit) {
+    val error = Assertions.assertThrows(T::class.java) { block() }
+    Assertions.assertTrue(
+        error.render().contains(messagePart),
+        "Expected error message to contain '$messagePart', but was '${error.render()}'",
+    )
 }

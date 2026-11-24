@@ -256,7 +256,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - `compiler-tests` are integration tests: compile Vera code, load bytecode, execute, compare output.
 - Test names are descriptive backticked Kotlin names.
 - Tests are organized by language feature (`language/*Tests.kt`, `@Nested` per sub-feature), with
-  error tests next to the successful ones; see [`docs/testing.md`](docs/testing.md).
+  error tests next to the successful ones; see [`docs/testing.md`](docs/testing.md). Every new compiler
+  error needs a test; `ErrorCoverageTests` fails otherwise.
 
 ### Workflow Keywords
 

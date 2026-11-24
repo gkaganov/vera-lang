@@ -1,10 +1,7 @@
-package vera.compiler.test
+package vera.jvm.instruction
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
-import vera.jvm.instruction.FlatInstructionException
-import vera.jvm.instruction.FlatLoadConstant
-import vera.jvm.instruction.FlatMethodBuilder
-import vera.jvm.instruction.FlatPop
 import vera.jvm.instruction.lowering.FlatInstructionLowering
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.ir.JvmBreak
@@ -28,9 +25,10 @@ import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmWhile
 import vera.shared.model.Identifier
+import vera.shared.model.VeraException
 
 /** Flat instruction lowering invariants, checked with hand-built IR. */
-class InstructionLoweringTests {
+class FlatInstructionLoweringTests {
     @Test
     fun `instruction builder rejects stack underflow`() {
         assertCompilerError<FlatInstructionException.StackUnderflow>("stack underflow") {
@@ -127,5 +125,14 @@ class InstructionLoweringTests {
 
     private fun jvmProgram(method: JvmMethod): JvmProgram = JvmProgram(
         listOf(JvmClass(Identifier("ErrorTest"), listOf(method))),
+    )
+}
+
+/** Runs [block] and expects an error of type [T] whose message contains [messagePart]. */
+private inline fun <reified T : VeraException> assertCompilerError(messagePart: String, crossinline block: () -> Unit) {
+    val error = Assertions.assertThrows(T::class.java) { block() }
+    Assertions.assertTrue(
+        error.render().contains(messagePart),
+        "Expected error message to contain '$messagePart', but was '${error.render()}'",
     )
 }

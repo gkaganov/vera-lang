@@ -8,10 +8,13 @@ feature's tests, successful and failing, are in one place.
   Each file groups its tests in `@Nested` classes by sub-feature (`TraitTests.Requirements`,
   `InterfaceTests.StructuralFit`), so the IDE outline and the test report read as a tree.
 - `DiagnosticsTests.kt` — the rendered form of compiler errors with their source location.
-- `InstructionLoweringTests.kt`, `BytecodeEmissionTests.kt` — invariants of the flat instruction
-  and emitter stages, checked with hand-built IR because valid Vera source cannot reach them.
+- `ErrorCoverageTests.kt` — fails when a compiler error has no test; see below.
 - `VeraTestSupport.kt` — shared helpers: compile, run, and compare output or errors.
 - `ByteArrayClassLoader.kt` — loads emitted bytecode in-memory.
+
+The flat instruction and emitter stages test their own invariants with hand-built IR, because valid
+Vera source cannot reach them: `FlatInstructionLoweringTests` in `jvm-instruction-lowering` and
+`BytecodeEmitterTests` in `jvm-bytecode-emitter`.
 
 ## Where a test goes
 
@@ -56,10 +59,18 @@ of `VeraDiagnostics.render`.
 Run the suite with:
 
 ```bash
+./gradlew test
 ./gradlew :compiler-tests:test
 ./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests"
 ./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests\$StructuralFit"
 ```
+
+## Error coverage
+
+`ErrorCoverageTests` lists every class of each stage's exception hierarchy (`VeraLexException`,
+`VeraParseException`, `JvmLoweringException`, `FlatInstructionException`, `BytecodeEmitException`)
+and fails unless each is named, as `Stage.Error`, in some test source. An error that no input can
+reach goes into its `untestable` map with the reason, so the list of known gaps stays visible.
 
 ## Why inline source
 

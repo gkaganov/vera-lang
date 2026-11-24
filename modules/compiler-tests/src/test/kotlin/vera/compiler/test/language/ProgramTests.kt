@@ -37,6 +37,13 @@ class ProgramTests {
             VeraParseException.ExpectedExpression::class,
             "expected an expression",
         )
+
+        @Test
+        fun `missing types`() = assertCompilationFails(
+            "fn scale(by: 2): Int = by",
+            VeraParseException.ExpectedType::class,
+            "expected a type, found '2'",
+        )
     }
 
     @Nested
