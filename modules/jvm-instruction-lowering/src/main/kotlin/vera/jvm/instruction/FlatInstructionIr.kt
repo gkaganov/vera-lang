@@ -9,11 +9,17 @@ import vera.shared.model.Identifier
 
 data class FlatProgram(val classes: List<FlatClass>)
 
+/** A class, or an interface when [isInterface]; see [vera.jvm.ir.JvmClass]. */
 data class FlatClass(
     val name: Identifier,
     val methods: List<FlatMethod>,
     val fields: List<FlatField> = emptyList(),
+    val interfaces: List<Identifier> = emptyList(),
+    val isInterface: Boolean = false,
+    val abstractMethods: List<FlatAbstractMethod> = emptyList(),
 )
+
+data class FlatAbstractMethod(val name: Identifier, val signature: JvmMethodSignature)
 
 data class FlatField(val name: Identifier, val type: JvmType, val isStatic: Boolean = false)
 
@@ -158,6 +164,27 @@ data class FlatInvokeVirtual(
         stackPops = listOf(receiverType) + methodSignature.parameters.map { it.type },
         stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
     )
+}
+
+/** Calls a trait method through its interface (`invokeinterface`). */
+data class FlatInvokeInterface(
+    val ownerClass: Identifier,
+    val methodName: Identifier,
+    val methodSignature: JvmMethodSignature,
+    val receiverType: JvmType,
+) : FlatInstruction {
+    override val effect = FlatInstructionEffect(
+        stackPops = listOf(receiverType) + methodSignature.parameters.map { it.type },
+        stackPushes = if (methodSignature.returnType == JvmType.VOID) emptyList() else listOf(methodSignature.returnType),
+    )
+}
+
+/**
+ * Retypes the value on top of the stack from a class to one of its interfaces. It emits no bytecode;
+ * the JVM accepts the class value wherever the interface is expected.
+ */
+data class FlatUpcast(val from: JvmType, val to: JvmType) : FlatInstruction {
+    override val effect = FlatInstructionEffect(stackPops = listOf(from), stackPushes = listOf(to))
 }
 
 data class FlatInvokeSpecial(

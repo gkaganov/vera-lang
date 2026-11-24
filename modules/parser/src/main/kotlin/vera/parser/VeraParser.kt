@@ -107,22 +107,31 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val fields = mutableListOf<VeraField>()
         val methods = mutableListOf<VeraFunctionDeclaration>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
-            if (at(VeraTokenType.FN)) {
-                methods += parseFunctionDeclaration()
-            } else {
-                if (peek().type != VeraTokenType.COLON) {
+            when {
+                at(VeraTokenType.FN) -> methods += parseFunctionDeclaration()
+                at(VeraTokenType.VAL) -> fields += parseField()
+                at(VeraTokenType.MUT) -> throw VeraParseException.MutableFieldNotSupported(current())
+                at(VeraTokenType.IDENTIFIER) && peek().type == VeraTokenType.COLON ->
+                    throw VeraParseException.FieldWithoutVal(current())
+                else -> {
                     rejectJavaModifier(current())
+                    throw VeraParseException.ExpectedToken("a field (`val`) or method (`fn`)", current())
                 }
-                val fieldName = expect(VeraTokenType.IDENTIFIER, "field name")
-                expect(VeraTokenType.COLON)
-                val fieldType = parseTypeRef()
-                fields += VeraField(Identifier(fieldName.text), fieldType, spanFrom(fieldName))
             }
             parseStatementTerminator()
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
         return VeraClassDeclaration(Identifier(name.text), fields, methods, traits, spanOf(classToken, name))
+    }
+
+    /** Parses `val name: Type` in a class body. */
+    private fun parseField(): VeraField {
+        val keyword = expect(VeraTokenType.VAL)
+        val name = expect(VeraTokenType.IDENTIFIER, "field name")
+        expect(VeraTokenType.COLON)
+        val type = parseTypeRef()
+        return VeraField(Identifier(name.text), type, spanFrom(keyword))
     }
 
     private fun parseTraitDeclaration(): VeraTraitDeclaration {

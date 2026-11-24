@@ -76,6 +76,16 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         val found: VeraToken,
     ) : VeraParseException("leave out the return type for a function that returns `Unit`; remove `: Unit`", found)
 
+    /** A class field written without `val`. */
+    class FieldWithoutVal(
+        val found: VeraToken,
+    ) : VeraParseException("declare fields with `val`: write `val ${found.text}: ...`", found)
+
+    /** `mut val` in a class body; mutable fields arrive together with `mut fn` methods. */
+    class MutableFieldNotSupported(
+        val found: VeraToken,
+    ) : VeraParseException("mutable fields need `mut fn` methods, which are not implemented yet; use `val`", found)
+
     /** Java syntax with a different spelling, or no counterpart, in Vera. [hint] says what to write. */
     class JavaSyntax(
         val found: VeraToken,

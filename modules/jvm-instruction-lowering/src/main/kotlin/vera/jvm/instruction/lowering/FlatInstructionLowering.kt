@@ -40,10 +40,14 @@ import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
+import vera.jvm.ir.JvmUpcast
 import vera.jvm.ir.JvmBoolLiteral
 import vera.jvm.ir.JvmBreak
 import vera.jvm.ir.JvmContinue
 import vera.jvm.instruction.FlatBindLabel
+import vera.jvm.instruction.FlatAbstractMethod
+import vera.jvm.instruction.FlatInvokeInterface
+import vera.jvm.instruction.FlatUpcast
 import vera.jvm.instruction.FlatBoolEqualityJump
 import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatCreateLabel
@@ -117,7 +121,16 @@ private class FlatInstructionLoweringState {
         jvmClass.methods.forEach { jvmMethod ->
             instructionMethods += lowerMethod(jvmMethod)
         }
-        return FlatClass(jvmClass.name, instructionMethods, flatFields)
+        return FlatClass(
+            name = jvmClass.name,
+            methods = instructionMethods,
+            fields = flatFields,
+            interfaces = jvmClass.interfaces,
+            isInterface = jvmClass.isInterface,
+            abstractMethods = jvmClass.abstractMethods.map { jvmAbstractMethod ->
+                FlatAbstractMethod(jvmAbstractMethod.name, jvmAbstractMethod.signature)
+            },
+        )
     }
 
     private fun lowerConstructor(jvmClass: JvmClass, jvmConstructor: JvmConstructor): FlatMethod {
@@ -391,15 +404,32 @@ private class FlatInstructionLoweringState {
                 jvmExpression.arguments.forEach { jvmArgument ->
                     lowerExpression(jvmArgument)
                 }
-                append(
-                    FlatInvokeVirtual(
-                        jvmExpression.ownerClass,
-                        jvmExpression.methodName,
-                        jvmExpression.signature,
-                        receiverType = jvmExpression.receiver.type,
-                    ),
-                )
+                if (jvmExpression.ownerIsInterface) {
+                    append(
+                        FlatInvokeInterface(
+                            jvmExpression.ownerClass,
+                            jvmExpression.methodName,
+                            jvmExpression.signature,
+                            receiverType = jvmExpression.receiver.type,
+                        ),
+                    )
+                } else {
+                    append(
+                        FlatInvokeVirtual(
+                            jvmExpression.ownerClass,
+                            jvmExpression.methodName,
+                            jvmExpression.signature,
+                            receiverType = jvmExpression.receiver.type,
+                        ),
+                    )
+                }
                 jvmExpression.signature.returnType
+            }
+
+            is JvmUpcast -> {
+                val fromType = lowerExpression(jvmExpression.expression)
+                append(FlatUpcast(fromType, jvmExpression.type))
+                jvmExpression.type
             }
 
             is JvmBuiltinCall -> lowerBuiltinCall(jvmExpression)

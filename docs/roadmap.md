@@ -10,6 +10,19 @@ it is implemented and covered by tests.
 
 Reasonable short- and mid-term goals that make ordinary programs correct and complete.
 
+### Sealed traits, `match`, and `enum`
+
+- Status: in progress; trait-typed values and dynamic dispatch (phase A) are implemented.
+- Area: parser, AST, lowering, structured IR, flat IR, emitter.
+- Phase B: `sealed trait` (implementing classes in the same file), `match` with `->` arms and
+  named-field patterns (`Rect(width, height)`, `Rect(width = w)`), exhaustiveness without `else`,
+  and `if`/`match` branches of different classes unifying to their sealed trait.
+- Phase C: `enum Shape has Display { Circle(radius: Int) Empty }` as shorthand for a sealed trait plus
+  classes, so a variant can later become a full class without changing callers; classes without
+  fields become singletons written by name (`Empty`), with `Unit` as one of them.
+- Acceptance: sealed traits compile to JVM sealed interfaces; a non-exhaustive `match` is rejected;
+  converting an enum variant to a hand-written class needs no changes at call sites or patterns.
+
 ### Object mutation
 
 - Status: not started.
@@ -35,16 +48,14 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   document them explicitly.
 - Default class field values: decide whether fields may omit constructor arguments by declaring a
   default, or keep every field required at construction.
-- Trait representation: keep traits as compile-time contracts or map them to JVM interfaces once
-  trait-typed values and dynamic dispatch exist.
 
 ## Long-term ideas and advanced features
 
 Larger design work and features that are not required for a usable basic language.
 
 - Persistent collections.
-- String concatenation and other string operations.
-- Trait default method bodies and trait-typed values with dynamic dispatch.
+- String operations such as length and substring; strings are built with templates, not `+`.
+- Trait default method bodies.
 - Doc comments: attach `///` comments to the following declaration and render them as documentation.
 - A universal `Any` top type with `java.lang.Object`-like behavior. Deferred: it requires boxing
   for primitives, `instanceof`/`checkcast`, `invokeinterface`, and a heterogeneous `equals`.

@@ -201,6 +201,36 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         JvmNameHints.withHelp("class type ${name.value} is not defined", hint, suggestion),
     )
 
+    /** A built-in trait such as `Eq` named as a type; only user traits are types. */
+    class BuiltinTraitUsedAsType(val name: Identifier) : JvmLoweringException(
+        "built-in trait ${name.value} cannot be used as a type",
+    )
+
+    /** A trait-typed field in a class with `Eq` or `Display`, which trait values do not support yet. */
+    class ClassFieldTraitTypeNotSupported(
+        val className: Identifier,
+        val field: Identifier,
+        val fieldType: Identifier,
+        val trait: Identifier,
+    ) : JvmLoweringException(
+        "class ${className.value} has ${trait.value}, but field ${field.value} has trait type ${fieldType.value}, " +
+            "which does not support ${trait.value} yet",
+    )
+
+    /** A trait-typed value has only the trait's methods. */
+    class UnknownTraitMethod(
+        val trait: Identifier,
+        val method: Identifier,
+        val suggestion: Identifier? = null,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("trait ${trait.value} has no method ${method.value}", null, suggestion),
+    )
+
+    /** A trait name that is also the name of the program class. */
+    class TraitNameConflictsWithProgramClass(val name: Identifier) : JvmLoweringException(
+        "trait ${name.value} conflicts with the program class ${name.value}",
+    )
+
     class UnknownClassField(
         val className: Identifier,
         val field: Identifier,

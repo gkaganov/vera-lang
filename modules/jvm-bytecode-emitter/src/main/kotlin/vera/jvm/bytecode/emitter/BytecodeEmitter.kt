@@ -16,6 +16,8 @@ import vera.jvm.instruction.FlatInstructionWithDebugInfo
 import vera.jvm.instruction.FlatIntBinaryOperation
 import vera.jvm.instruction.FlatIntComparisonJump
 import vera.jvm.instruction.FlatIntUnaryOperation
+import vera.jvm.instruction.FlatInvokeInterface
+import vera.jvm.instruction.FlatUpcast
 import vera.jvm.instruction.FlatBoolNot
 import vera.jvm.instruction.FlatInvokeSpecial
 import vera.jvm.instruction.FlatInvokeVirtual
@@ -34,7 +36,9 @@ import vera.jvm.instruction.FlatStoreLocal
 import vera.jvm.instruction.FlatStringEqualityJump
 import vera.shared.model.Identifier
 import java.lang.classfile.ClassFile
+import java.lang.classfile.ClassFile.ACC_ABSTRACT
 import java.lang.classfile.ClassFile.ACC_FINAL
+import java.lang.classfile.ClassFile.ACC_INTERFACE
 import java.lang.classfile.ClassFile.ACC_PUBLIC
 import java.lang.classfile.ClassFile.ACC_STATIC
 import java.lang.classfile.CodeBuilder
@@ -65,8 +69,22 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
 
         flatProgram.classes.forEach { clazz ->
             val bytes = classFile.build(ClassDesc.of(clazz.name.value)) { classBuilder ->
-                classBuilder.withFlags(ACC_PUBLIC or ACC_FINAL)
+                if (clazz.isInterface) {
+                    classBuilder.withFlags(ACC_PUBLIC or ACC_INTERFACE or ACC_ABSTRACT)
+                } else {
+                    classBuilder.withFlags(ACC_PUBLIC or ACC_FINAL)
+                }
                 classBuilder.withSuperclass(CD_Object)
+                if (clazz.interfaces.isNotEmpty()) {
+                    classBuilder.withInterfaceSymbols(clazz.interfaces.map { name -> ClassDesc.of(name.value) })
+                }
+                clazz.abstractMethods.forEach { abstractMethod ->
+                    classBuilder.withMethod(
+                        abstractMethod.name.value,
+                        abstractMethod.signature.toMethodTypeDesc(),
+                        ACC_PUBLIC or ACC_ABSTRACT,
+                    ) { _ -> }
+                }
                 clazz.fields.forEach { flatField ->
                     val fieldFlags = (ACC_PUBLIC or ACC_FINAL) or
                         (if (flatField.isStatic) ACC_STATIC else 0)
@@ -196,6 +214,16 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 )
             }
 
+            is FlatInvokeInterface -> {
+                codeBuilder.invokeinterface(
+                    ClassDesc.of(instruction.ownerClass.value),
+                    instruction.methodName.value,
+                    instruction.methodSignature.toMethodTypeDesc(),
+                )
+            }
+
+            is FlatUpcast -> {} // An interface accepts its implementing class; nothing to emit.
+
             is FlatInvokeSpecial -> {
                 codeBuilder.invokespecial(
                     ClassDesc.of(instruction.ownerClass.value),
@@ -295,6 +323,7 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
         JvmType.OBJECT -> CD_Object
         JvmType.VOID -> CD_void
         is JvmType.ClassType -> ClassDesc.of(name.value)
+        is JvmType.InterfaceType -> ClassDesc.of(name.value)
         is JvmType.Array -> elementType.toClassDesc().arrayType()
     }
 }

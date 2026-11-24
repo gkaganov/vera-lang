@@ -20,6 +20,7 @@ import vera.ast.VeraIntLiteral
 import vera.ast.VeraMemberAccess
 import vera.ast.VeraMutableParameter
 import vera.ast.VeraOperator
+import vera.ast.VeraParameter
 import vera.ast.VeraPrimaryExpression
 import vera.ast.VeraRebindStatement
 import vera.ast.VeraClassDeclaration
@@ -27,6 +28,8 @@ import vera.ast.VeraReturnStatement
 import vera.ast.VeraStatement
 import vera.ast.VeraStringLiteral
 import vera.ast.VeraStringTemplate
+import vera.ast.VeraTraitDeclaration
+import vera.ast.VeraTraitMethod
 import vera.ast.VeraTemplateText
 import vera.ast.VeraTemplateValue
 import vera.ast.VeraType
@@ -75,6 +78,7 @@ import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUnitLiteral
 import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmUpcast
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.shared.model.Identifier
@@ -106,9 +110,10 @@ internal object JvmFunctionLowering {
         className: Identifier,
         visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
         visibleClasses: Map<Identifier, VeraClassDeclaration>,
+        visibleTraits: Map<Identifier, VeraTraitDeclaration>,
         veraFunction: VeraFunctionDeclaration,
         receiverClass: VeraClassDeclaration? = null,
-    ): JvmMethod = JvmFunctionLoweringState(className, visibleFunctions, visibleClasses, receiverClass)
+    ): JvmMethod = JvmFunctionLoweringState(className, visibleFunctions, visibleClasses, visibleTraits, receiverClass)
         .lower(veraFunction)
 }
 
@@ -116,8 +121,11 @@ private class JvmFunctionLoweringState(
     private val className: Identifier,
     private val visibleFunctions: Map<Identifier, VeraFunctionDeclaration>,
     private val visibleClasses: Map<Identifier, VeraClassDeclaration>,
+    private val visibleTraits: Map<Identifier, VeraTraitDeclaration>,
     private val receiverClass: VeraClassDeclaration?,
 ) {
+
+    private val typeNames = JvmTypeNames(visibleClasses.keys, visibleTraits.keys)
 
     private val receiverLocal: JvmLocal? = receiverClass?.let { veraClass ->
         JvmLocal(Identifier("<this>"), JvmType.ClassType(veraClass.name))
@@ -126,6 +134,7 @@ private class JvmFunctionLoweringState(
     private val reservedNames: Set<Identifier> = buildSet {
         addAll(visibleFunctions.keys)
         addAll(visibleClasses.keys)
+        addAll(visibleTraits.keys)
         addAll(JvmFunctionLowering.builtinNames())
         receiverClass?.let { veraClass ->
             addAll(veraClass.fields.map { field -> field.name })
@@ -181,7 +190,7 @@ private class JvmFunctionLoweringState(
     private lateinit var currentReturnType: JvmType
 
     fun lower(veraFunction: VeraFunctionDeclaration): JvmMethod {
-        currentReturnType = JvmTypeLowering.lowerReturn(veraFunction.returnType, visibleClasses.keys)
+        currentReturnType = JvmTypeLowering.lowerReturn(veraFunction.returnType, typeNames)
 
         val jvmParameters = veraFunction.parameters
             .map { veraParameter ->
@@ -226,14 +235,15 @@ private class JvmFunctionLoweringState(
         veraBody: VeraExpressionBody,
     ): JvmExpression {
         val jvmValue = lowerStatementExpression(veraBody.expression).jvmExpression
-        if (jvmValue.type != currentReturnType) {
+        val jvmReturned = coerce(jvmValue, currentReturnType)
+        if (jvmReturned == null) {
             if (veraFunction.returnType == VeraType.UNKNOWN) {
                 throw JvmLoweringException.ExpressionBodyReturnTypeRequired(veraFunction.name, jvmValue.type)
                     .at(veraFunction.span)
             }
             throw JvmLoweringException.ReturnTypeMismatch(currentReturnType, jvmValue.type).at(veraBody.expression.span)
         }
-        return jvmValue
+        return jvmReturned
     }
 
     /** @return the lowered statement and whether it explicitly returns from the current function. */
@@ -254,17 +264,16 @@ private class JvmFunctionLoweringState(
             }
 
             is VeraReturnStatement -> {
-                val jvmReturnExpression = veraStatement.expression
+                val jvmValue = veraStatement.expression
                     ?.let { veraExpression -> lowerExpression(veraExpression) }
-                if (jvmReturnExpression == null) {
+                val jvmReturnExpression = if (jvmValue == null) {
                     if (currentReturnType != JvmUnitType) {
                         throw JvmLoweringException.MissingReturnValue(currentReturnType)
                     }
-                } else if (jvmReturnExpression.type != currentReturnType) {
-                    throw JvmLoweringException.ReturnTypeMismatch(
-                        currentReturnType,
-                        jvmReturnExpression.type,
-                    )
+                    null
+                } else {
+                    coerce(jvmValue, currentReturnType)
+                        ?: throw JvmLoweringException.ReturnTypeMismatch(currentReturnType, jvmValue.type)
                 }
                 LoweredStatement(JvmReturn(jvmReturnExpression), true, exit = "return")
             }
@@ -346,29 +355,27 @@ private class JvmFunctionLoweringState(
         }
         val jvmLocal = binding.jvmLocal
         val jvmExpression = lowerExpression(veraRebindStatement.expression)
-        if (jvmExpression.type != jvmLocal.type) {
-            throw JvmLoweringException.RebindTypeMismatch(
-                jvmLocal.name,
-                jvmLocal.type,
-                jvmExpression.type,
-            )
-        }
-        return JvmRebind(jvmLocal, jvmExpression)
+        val jvmValue = coerce(jvmExpression, jvmLocal.type)
+            ?: throw JvmLoweringException.RebindTypeMismatch(jvmLocal.name, jvmLocal.type, jvmExpression.type)
+        return JvmRebind(jvmLocal, jvmValue)
     }
 
     private fun lowerBindStatement(veraBindStatement: VeraBindStatement): JvmStatement {
         requireFreshName(veraBindStatement.name)
         val jvmExpression = lowerExpression(veraBindStatement.expression)
-        val jvmExpressionType = jvmExpression.type
-        if (veraBindStatement.type != VeraType.UNKNOWN && lowerType(veraBindStatement.type) != jvmExpressionType) {
-            throw JvmLoweringException.BindTypeMismatch(
-                veraBindStatement.name,
-                veraBindStatement.type.render(),
-                jvmExpressionType,
-            )
+        // A declared type wins over the value's type, so `val shape: Shape = Circle(...)` holds a Shape.
+        val jvmValue = if (veraBindStatement.type == VeraType.UNKNOWN) {
+            jvmExpression
+        } else {
+            coerce(jvmExpression, lowerType(veraBindStatement.type))
+                ?: throw JvmLoweringException.BindTypeMismatch(
+                    veraBindStatement.name,
+                    veraBindStatement.type.render(),
+                    jvmExpression.type,
+                )
         }
-        val jvmLocal = declareLocal(veraBindStatement.name, jvmExpressionType, mutable = veraBindStatement.mutable)
-        return JvmVarDeclaration(jvmLocal, jvmExpression)
+        val jvmLocal = declareLocal(veraBindStatement.name, jvmValue.type, mutable = veraBindStatement.mutable)
+        return JvmVarDeclaration(jvmLocal, jvmValue)
     }
 
     /** Lowers the expression of a bind, rebind, or return statement. */
@@ -436,6 +443,20 @@ private class JvmFunctionLoweringState(
         addAll(JvmFunctionLowering.builtinNames())
         addAll(visibleClasses.keys)
         receiverClass?.methods?.forEach { method -> add(method.name) }
+    }
+
+    /**
+     * Returns [jvmExpression] as a value of [expectedType], or `null` when it is not assignable. A class
+     * value is assignable to each user trait it has, through a [JvmUpcast].
+     */
+    private fun coerce(jvmExpression: JvmExpression, expectedType: JvmType): JvmExpression? {
+        val actualType = jvmExpression.type
+        if (actualType == expectedType) return jvmExpression
+        if (actualType is JvmType.ClassType && expectedType is JvmType.InterfaceType) {
+            val veraClass = visibleClasses[actualType.name] ?: return null
+            if (expectedType.name in veraClass.traits) return JvmUpcast(jvmExpression, expectedType)
+        }
+        return null
     }
 
     private fun lookupLocal(name: Identifier): JvmLocal? = lookupBinding(name)?.jvmLocal
@@ -695,7 +716,35 @@ private class JvmFunctionLoweringState(
         while (dataIndex < veraChainedExpression.data.size) {
             when (val chainedData = veraChainedExpression.data[dataIndex]) {
                 is VeraMemberAccess -> {
-                    val ownerType = jvmExpression.type as? JvmType.ClassType
+                    val receiverType = jvmExpression.type
+                    if (receiverType is JvmType.InterfaceType) {
+                        // A trait-typed value exposes only the trait's methods.
+                        val veraTrait = visibleTraits[receiverType.name]
+                            ?: throw JvmLoweringException.UnknownClassType(receiverType.name).at(chainedData.span)
+                        val member = chainedData.member
+                        val traitMethod = veraTrait.methods.firstOrNull { method -> method.name == member }
+                            ?: throw JvmLoweringException.UnknownTraitMethod(
+                                receiverType.name,
+                                member,
+                                JvmNameHints.closest(member, veraTrait.methods.map { method -> method.name }),
+                            ).at(chainedData.span)
+                        val nextData = veraChainedExpression.data.getOrNull(dataIndex + 1)
+                        if (nextData !is VeraArguments) {
+                            throw JvmLoweringException.ClassMethodUsedAsValue(receiverType.name, member)
+                                .at(chainedData.span)
+                        }
+                        val loweredArguments = lowerForwardedArguments(
+                            forwardedArgument,
+                            forwardedArgumentIndex == dataIndex + 1,
+                        ) { lowerArguments(nextData) }
+                        val jvmReceiver = jvmExpression
+                        jvmExpression = located(chainedData.span) {
+                            lowerTraitMethodCall(jvmReceiver, veraTrait, traitMethod, loweredArguments)
+                        }
+                        dataIndex += 2
+                        continue
+                    }
+                    val ownerType = receiverType as? JvmType.ClassType
                         ?: throw JvmLoweringException.MemberAccessRequiresObject(jvmExpression.type).at(chainedData.span)
                     val veraClass = visibleClasses[ownerType.name]
                         ?: throw JvmLoweringException.UnknownClassType(ownerType.name).at(chainedData.span)
@@ -797,45 +846,78 @@ private class JvmFunctionLoweringState(
         veraClass: VeraClassDeclaration,
         veraMethod: VeraFunctionDeclaration,
         loweredArguments: List<LoweredArgument>,
+    ): JvmExpression = lowerMethodCall(
+        jvmReceiver,
+        ownerName = veraClass.name,
+        methodName = veraMethod.name,
+        parameters = veraMethod.parameters,
+        returnType = veraMethod.returnType,
+        loweredArguments = loweredArguments,
+        ownerIsInterface = false,
+    )
+
+    /** Calls a method declared by a trait on a trait-typed value, through the trait's interface. */
+    private fun lowerTraitMethodCall(
+        jvmReceiver: JvmExpression,
+        veraTrait: VeraTraitDeclaration,
+        veraMethod: VeraTraitMethod,
+        loweredArguments: List<LoweredArgument>,
+    ): JvmExpression = lowerMethodCall(
+        jvmReceiver,
+        ownerName = veraTrait.name,
+        methodName = veraMethod.name,
+        parameters = veraMethod.parameters,
+        returnType = veraMethod.returnType,
+        loweredArguments = loweredArguments,
+        ownerIsInterface = true,
+    )
+
+    private fun lowerMethodCall(
+        jvmReceiver: JvmExpression,
+        ownerName: Identifier,
+        methodName: Identifier,
+        parameters: List<VeraParameter>,
+        returnType: VeraType,
+        loweredArguments: List<LoweredArgument>,
+        ownerIsInterface: Boolean,
     ): JvmExpression {
-        val jvmParameters = veraMethod.parameters.map { veraParameter ->
+        val jvmParameters = parameters.map { veraParameter ->
             JvmParameter(veraParameter.name, lowerType(veraParameter.type))
         }
         if (loweredArguments.size != jvmParameters.size) {
             throw JvmLoweringException.MethodArityMismatch(
-                veraClass.name,
-                veraMethod.name,
+                ownerName,
+                methodName,
                 jvmParameters.size,
                 loweredArguments.size,
             )
         }
         requireArgumentNames(
-            "method ${veraClass.name.value}.${veraMethod.name.value}",
-            veraMethod.parameters.map { veraParameter -> veraParameter.name },
+            "method ${ownerName.value}.${methodName.value}",
+            parameters.map { veraParameter -> veraParameter.name },
             loweredArguments,
         )
-        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
-        jvmArguments.forEachIndexed { index, jvmArgument ->
+        val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
+            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmParameters[index].type
-            if (jvmArgument.type != expectedType) {
-                throw JvmLoweringException.MethodArgumentTypeMismatch(
-                    veraClass.name,
-                    veraMethod.name,
-                    veraMethod.parameters[index].name,
-                    expectedType,
-                    jvmArgument.type,
-                ).at(loweredArguments[index].span)
-            }
+            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.MethodArgumentTypeMismatch(
+                ownerName,
+                methodName,
+                parameters[index].name,
+                expectedType,
+                jvmArgument.type,
+            ).at(loweredArgument.span)
         }
         return JvmInstanceCall(
             receiver = jvmReceiver,
-            ownerClass = veraClass.name,
-            methodName = veraMethod.name,
+            ownerClass = ownerName,
+            methodName = methodName,
             arguments = jvmArguments,
             signature = JvmMethodSignature(
                 jvmParameters,
-                JvmTypeLowering.lowerReturn(veraMethod.returnType, visibleClasses.keys),
+                JvmTypeLowering.lowerReturn(returnType, typeNames),
             ),
+            ownerIsInterface = ownerIsInterface,
         )
     }
 
@@ -855,19 +937,16 @@ private class JvmFunctionLoweringState(
             veraClass.fields.map { field -> field.name },
             loweredArguments,
         )
-        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
-
         val jvmFieldTypes = veraClass.fields.map { field -> lowerType(field.type) }
-        jvmArguments.forEachIndexed { index, jvmArgument ->
+        val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
+            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmFieldTypes[index]
-            if (jvmArgument.type != expectedType) {
-                throw JvmLoweringException.ClassConstructorArgumentTypeMismatch(
-                    veraClass.name,
-                    veraClass.fields[index].name,
-                    expectedType,
-                    jvmArgument.type,
-                ).at(loweredArguments[index].span)
-            }
+            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.ClassConstructorArgumentTypeMismatch(
+                veraClass.name,
+                veraClass.fields[index].name,
+                expectedType,
+                jvmArgument.type,
+            ).at(loweredArgument.span)
         }
 
         val jvmParameters = veraClass.fields.mapIndexed { index, field ->
@@ -909,21 +988,19 @@ private class JvmFunctionLoweringState(
             veraFunctionDeclaration.parameters.map { veraParameter -> veraParameter.name },
             loweredArguments,
         )
-        val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
-        jvmArguments.forEachIndexed { index, jvmArgument ->
+        val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
+            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmParameters[index].type
-            if (jvmArgument.type != expectedType) {
-                throw JvmLoweringException.FunctionArgumentTypeMismatch(
-                    veraFunctionName,
-                    veraFunctionDeclaration.parameters[index].name,
-                    expectedType,
-                    jvmArgument.type,
-                ).at(loweredArguments[index].span)
-            }
+            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.FunctionArgumentTypeMismatch(
+                veraFunctionName,
+                veraFunctionDeclaration.parameters[index].name,
+                expectedType,
+                jvmArgument.type,
+            ).at(loweredArgument.span)
         }
         val jvmSignature = JvmMethodSignature(
             jvmParameters,
-            JvmTypeLowering.lowerReturn(veraFunctionDeclaration.returnType, visibleClasses.keys),
+            JvmTypeLowering.lowerReturn(veraFunctionDeclaration.returnType, typeNames),
         )
         return JvmStaticCall(
             className,
@@ -1143,5 +1220,5 @@ private class JvmFunctionLoweringState(
     }
 
     private fun lowerType(veraType: VeraType): JvmType =
-        JvmTypeLowering.lower(veraType, visibleClasses.keys)
+        JvmTypeLowering.lower(veraType, typeNames)
 }

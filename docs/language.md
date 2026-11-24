@@ -32,7 +32,8 @@ Implemented:
 Not implemented:
 
 - Object mutation (including `mut fn` methods).
-- Trait default method bodies and trait-typed values.
+- Trait default method bodies.
+- Printing, comparing, or interpolating trait-typed values.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
@@ -122,8 +123,8 @@ fn log(text: String) = print(text)
 
 ```vera
 class Point {
-    x: Int
-    y: Int
+    val x: Int
+    val y: Int
 
     fn sum(): Int {
         return x + y
@@ -138,7 +139,9 @@ fn main() {
 ```
 
 - `class` declarations are top-level.
-- Fields are declared one per line as `name: Type`.
+- Fields are declared one per line as `val name: Type`, the same `val` as for immutable locals. A
+  field without `val` is an error with a hint. `mut val` fields are reserved for the planned
+  `mut fn` methods and are rejected until those exist.
 - Methods are declared with `fn` inside the class body, before or after fields.
 - Methods are instance methods. They can read the class's fields and call sibling methods by
   name, without an explicit `this`/`self` expression.
@@ -152,7 +155,7 @@ fn main() {
 - Methods are called after `.` and must include an argument list: `point.sum()`.
 - Method overloading is not supported.
 - A class cannot have both a field and a method with the same name.
-- Field types may be `Int`, `String`, `Bool`, `Unit`, or another class type.
+- Field types may be `Int`, `String`, `Bool`, `Unit`, a class type, or a trait type.
 - Objects are immutable; fields are read-only from Vera source.
 - The compiler generates a constructor with one parameter per field, in field declaration order.
   Construction follows the named-argument rules: `Point(x = 1, y = 2)`.
@@ -171,7 +174,7 @@ trait Shape {
 }
 
 class Square has Shape {
-    side: Int
+    val side: Int
 
     fn area(): Int {
         return side * side
@@ -186,10 +189,18 @@ class Square has Shape {
 - An implementing class must define every trait method with the same parameter types and return
   type and the same parameter names. Parameter names are part of the trait, because callers name
   their arguments.
-- Traits are compile-time contracts: they produce no bytecode, are not types, and cannot be used
-  in annotations. Trait methods are called on the class, with static dispatch.
+- A trait is also a type. Parameters, returns, locals, and fields can have a trait type, and an
+  object whose class has the trait can be used wherever that trait is expected:
+  `fn describe(shape: Shape): Int = shape.area()` accepts `Square(3)`.
+- A trait-typed value exposes only the trait's methods. Calling one runs the method of the
+  object's actual class (dynamic dispatch).
+- Traits compile to JVM interfaces that their classes implement, so Java code sees ordinary
+  interfaces.
+- Trait-typed values cannot yet be printed, compared with `==`, or used in string templates, and a
+  class with `Eq` or `Display` cannot have a trait-typed field yet. The built-in traits `Eq` and
+  `Display` are not types.
 - Traits cannot declare fields, default method bodies, or overloads.
-- Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, or class types; return types
+- Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
   follow the function rules, so a `Unit` method leaves its return type out.
 - Trait names share the top-level namespace with functions and classes.
 - Two built-in traits are always available and are implemented by the compiler:
@@ -551,7 +562,7 @@ signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]   (* type 
 parameter      = IDENT ":" type
 
 class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { member statementEnd } "}"
-member         = IDENT ":" type
+member         = "val" IDENT ":" type
                | function
 
 trait          = "trait" IDENT "{" { EOL } { traitMethod statementEnd } "}"

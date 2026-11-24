@@ -42,7 +42,7 @@
 | Variables | `val` immutable, `mut val` mutable; rebind with `=`                                 | Implemented; parameters are immutable        |
 | Types     | Keep JVM primitives distinct; no generic numeric abstraction                        | Primitives and class types                   |
 | Classes   | Data-oriented structured objects                                                    | Fields, access, methods, and `Eq`/`Display` traits work; updates do not |
-| Traits    | Shared behavior and composition without inheritance                                 | Required methods and `Eq`/`Display` markers work; default methods and trait values do not |
+| Traits    | Shared behavior and composition without inheritance                                 | Required methods, trait-typed values, dynamic dispatch, and `Eq`/`Display` work; default methods do not |
 | Functions | Pure by default; side effects declared as capabilities                              | `fn` exists; effects do not                  |
 | Effects   | Explicit capabilities such as `Print`                                               | Not implemented                              |
 | Services  | Separate abstraction for external interaction                                       | Not implemented                              |

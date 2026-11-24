@@ -4,12 +4,22 @@ import vera.shared.model.Identifier
 
 data class JvmProgram(val classes: List<JvmClass>)
 
+/**
+ * A JVM class, or an interface when [isInterface]. Classes list the trait [interfaces] they
+ * implement; interfaces declare their trait methods as [abstractMethods].
+ */
 data class JvmClass(
     val name: Identifier,
     val methods: List<JvmMethod>,
     val fields: List<JvmField> = emptyList(),
     val constructors: List<JvmConstructor> = emptyList(),
+    val interfaces: List<Identifier> = emptyList(),
+    val isInterface: Boolean = false,
+    val abstractMethods: List<JvmAbstractMethod> = emptyList(),
 )
+
+/** A method without a body, declared by an interface. */
+data class JvmAbstractMethod(val name: Identifier, val signature: JvmMethodSignature)
 
 data class JvmField(val name: Identifier, val type: JvmType, val isStatic: Boolean = false)
 
@@ -37,6 +47,8 @@ sealed interface JvmType {
     data object OBJECT : JvmType
     data object VOID : JvmType
     data class ClassType(val name: Identifier) : JvmType
+    /** A Vera trait used as a type; compiled to a JVM interface. */
+    data class InterfaceType(val name: Identifier) : JvmType
     data class Array(val elementType: JvmType) : JvmType
 }
 
@@ -51,6 +63,7 @@ fun JvmType.render(): String = when (this) {
     JvmType.OBJECT -> "Object"
     JvmType.VOID -> "void"
     is JvmType.ClassType -> name.value
+    is JvmType.InterfaceType -> name.value
     is JvmType.Array -> "${elementType.render()}[]"
 }
 
@@ -149,15 +162,20 @@ data class JvmStaticCall(
     override val type = signature.returnType
 }
 
+/** A method call on [receiver]; [ownerIsInterface] marks a trait method called through its interface. */
 data class JvmInstanceCall(
     val receiver: JvmExpression,
     val ownerClass: Identifier,
     val methodName: Identifier,
     val arguments: List<JvmExpression>,
     val signature: JvmMethodSignature,
+    val ownerIsInterface: Boolean = false,
 ) : JvmExpression {
     override val type = signature.returnType
 }
+
+/** Uses a class value as one of its trait types. No runtime work; it only changes the static type. */
+data class JvmUpcast(val expression: JvmExpression, override val type: JvmType.InterfaceType) : JvmExpression
 
 enum class JvmBuiltin { PRINT }
 

@@ -271,6 +271,24 @@ class CompilerErrorTests {
                 "expected `val` after `mut`, found 'count'",
             ),
             CompileErrorCase(
+                "fields without val",
+                "class Point {\n    x: Int\n}",
+                VeraParseException.FieldWithoutVal::class,
+                "declare fields with `val`: write `val x: ...`",
+            ),
+            CompileErrorCase(
+                "mutable fields",
+                "class Account {\n    mut val balance: Int\n}",
+                VeraParseException.MutableFieldNotSupported::class,
+                "mutable fields need `mut fn` methods, which are not implemented yet; use `val`",
+            ),
+            CompileErrorCase(
+                "statements in class bodies",
+                "class Point {\n    print(1)\n}",
+                VeraParseException.ExpectedToken::class,
+                "expected a field (`val`) or method (`fn`), found 'print'",
+            ),
+            CompileErrorCase(
                 "missing statement terminators",
                 function("print(1) print(2)"),
                 VeraParseException.ExpectedEndOfLine::class,
@@ -397,14 +415,14 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "misspelled fields",
-                classDeclaration("Size", "width: Int", "height: Int") +
+                classDeclaration("Size", "val width: Int", "val height: Int") +
                     function("print(Size(width = 1, height = 2).widht)"),
                 JvmLoweringException.UnknownClassField::class,
                 "class Size has no field widht; did you mean `width`?",
             ),
             CompileErrorCase(
                 "misspelled methods",
-                classDeclaration("Size", "width: Int", "fn area(): Int {", "    return width", "}") +
+                classDeclaration("Size", "val width: Int", "fn area(): Int {", "    return width", "}") +
                     function("print(Size(2).aera())"),
                 JvmLoweringException.UnknownClassMethod::class,
                 "class Size has no method aera; did you mean `area`?",
@@ -417,7 +435,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "misspelled traits",
-                "class Point has Eqq {\n    x: Int\n}",
+                "class Point has Eqq {\n    val x: Int\n}",
                 JvmLoweringException.UnknownTrait::class,
                 "trait Eqq is not defined; did you mean `Eq`?",
             ),
@@ -441,7 +459,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "Java this",
-                classDeclaration("Point", "x: Int", "fn getX(): Int {", "    return this.x", "}"),
+                classDeclaration("Point", "val x: Int", "fn getX(): Int {", "    return this.x", "}"),
                 JvmLoweringException.UnknownVariable::class,
                 "variable this is not defined; Vera has no `this`; refer to fields and methods by their names",
             ),
@@ -498,6 +516,44 @@ class CompilerErrorTests {
                 "fn next(value: Int) {\n    if True {\n        mut val value\n    }\n}",
                 JvmLoweringException.MutableParameterOutsideFunctionBody::class,
                 "`mut val value` must be written directly in the function body, not inside a block",
+            ),
+            CompileErrorCase(
+                "classes without the trait passed as a trait type",
+                traitDeclaration("Shape", "fn area(): Int") + classDeclaration("Point", "val x: Int") +
+                    "fn describe(shape: Shape): Int = shape.area()\n" + function("print(describe(Point(1)))"),
+                JvmLoweringException.FunctionArgumentTypeMismatch::class,
+                "function describe parameter shape requires Shape, got Point",
+            ),
+            CompileErrorCase(
+                "members that the trait does not declare",
+                traitDeclaration("Shape", "fn area(): Int") +
+                    "fn describe(shape: Shape): Int = shape.aera()\n",
+                JvmLoweringException.UnknownTraitMethod::class,
+                "trait Shape has no method aera; did you mean `area`?",
+            ),
+            CompileErrorCase(
+                "built-in traits used as types",
+                "fn show(value: Display) {\n}",
+                JvmLoweringException.BuiltinTraitUsedAsType::class,
+                "built-in trait Display cannot be used as a type",
+            ),
+            CompileErrorCase(
+                "trait-typed fields in Eq classes",
+                traitDeclaration("Shape", "fn area(): Int") + "class Holder has Eq {\n    val shape: Shape\n}",
+                JvmLoweringException.ClassFieldTraitTypeNotSupported::class,
+                "class Holder has Eq, but field shape has trait type Shape, which does not support Eq yet",
+            ),
+            CompileErrorCase(
+                "printing trait-typed values",
+                traitDeclaration("Shape", "fn area(): Int") + "fn show(shape: Shape) = print(shape)\n",
+                JvmLoweringException.PrintArgumentTypeNotSupported::class,
+                "print does not support values of type Shape",
+            ),
+            CompileErrorCase(
+                "traits named like the program class",
+                traitDeclaration("ErrorTest"),
+                JvmLoweringException.TraitNameConflictsWithProgramClass::class,
+                "trait ErrorTest conflicts with the program class ErrorTest",
             ),
             CompileErrorCase(
                 "undefined names",
@@ -597,7 +653,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "object equality without the Eq trait",
-                classDeclaration("Point", "x: Int") + function("print(Point(1) == Point(1))"),
+                classDeclaration("Point", "val x: Int") + function("print(Point(1) == Point(1))"),
                 JvmLoweringException.ObjectEqualityRequiresTrait::class,
                 "class Point does not have the Eq trait",
             ),
@@ -681,13 +737,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "unnamed constructor arguments",
-                classDeclaration("Point", "x: Int", "y: Int") + function("print(Point(1, 2).x)"),
+                classDeclaration("Point", "val x: Int", "val y: Int") + function("print(Point(1, 2).x)"),
                 JvmLoweringException.ArgumentNameRequired::class,
                 "argument 1 of class Point must be named: write `x = ...`",
             ),
             CompileErrorCase(
                 "unnamed method arguments",
-                classDeclaration("Box", "base: Int", "fn plus(a: Int, b: Int): Int {", "    return a + b", "}") +
+                classDeclaration("Box", "val base: Int", "fn plus(a: Int, b: Int): Int {", "    return a + b", "}") +
                     function("print(Box(1).plus(a = 1, 2))"),
                 JvmLoweringException.ArgumentNameRequired::class,
                 "argument 2 of method Box.plus must be named: write `b = ...`",
@@ -721,7 +777,7 @@ class CompilerErrorTests {
             CompileErrorCase(
                 "trait methods with renamed parameters",
                 traitDeclaration("Scaled", "fn scale(by: Int): Int") +
-                    "\nclass Counter has Scaled {\n    value: Int\n" +
+                    "\nclass Counter has Scaled {\n    val value: Int\n" +
                     "    fn scale(amount: Int): Int {\n        return value * amount\n    }\n}",
                 JvmLoweringException.TraitMethodParameterNameMismatch::class,
                 "class Counter method scale names a parameter amount, but trait Scaled names it by",
@@ -777,40 +833,40 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "objects without the Display trait in string templates",
-                classDeclaration("Point", "x: Int") + function("print(\"at \\{Point(1)}\")"),
+                classDeclaration("Point", "val x: Int") + function("print(\"at \\{Point(1)}\")"),
                 JvmLoweringException.TemplateValueRequiresDisplayTrait::class,
                 "class Point does not have the Display trait, so its objects cannot be used in a string template",
             ),
             CompileErrorCase(
                 "printing objects without the Display trait",
-                classDeclaration("Point", "x: Int") + function("print(Point(1))"),
+                classDeclaration("Point", "val x: Int") + function("print(Point(1))"),
                 JvmLoweringException.PrintRequiresDisplayTrait::class,
                 "class Point does not have the Display trait",
             ),
             CompileErrorCase(
                 "unknown traits",
-                "class Point has Missing {\n    x: Int\n}",
+                "class Point has Missing {\n    val x: Int\n}",
                 JvmLoweringException.UnknownTrait::class,
                 "trait Missing is not defined",
             ),
             CompileErrorCase(
                 "trait methods that are not implemented",
                 traitDeclaration("Shape", "fn area(): Int") +
-                    "\nclass Square has Shape {\n    side: Int\n}",
+                    "\nclass Square has Shape {\n    val side: Int\n}",
                 JvmLoweringException.MissingTraitMethod::class,
                 "class Square has trait Shape but no method area",
             ),
             CompileErrorCase(
                 "trait methods with the wrong signature",
                 traitDeclaration("Shape", "fn area(): Int") +
-                    "\nclass Square has Shape {\n    side: Int\n" +
+                    "\nclass Square has Shape {\n    val side: Int\n" +
                     "    fn area(): String {\n        return \"x\"\n    }\n}",
                 JvmLoweringException.TraitMethodSignatureMismatch::class,
                 "class Square method area does not match trait Shape: expected () -> Int, got () -> String",
             ),
             CompileErrorCase(
                 "traits listed more than once",
-                "class Point has Eq, Eq {\n    x: Int\n}",
+                "class Point has Eq, Eq {\n    val x: Int\n}",
                 JvmLoweringException.DuplicateTraitImplementation::class,
                 "class Point has trait Eq more than once",
             ),
@@ -828,39 +884,39 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "declarations conflicting with builtin traits",
-                classDeclaration("Display", "x: Int"),
+                classDeclaration("Display", "val x: Int"),
                 JvmLoweringException.NameConflictsWithBuiltinTrait::class,
                 "name Display is reserved for a built-in trait",
             ),
             CompileErrorCase(
                 "Eq fields whose types lack Eq",
-                "class Point {\n    x: Int\n}\nclass Line has Eq {\n    start: Point\n}",
+                "class Point {\n    val x: Int\n}\nclass Line has Eq {\n    val start: Point\n}",
                 JvmLoweringException.ClassFieldRequiresTrait::class,
                 "class Line field start has type Point, which does not have the Eq trait",
             ),
             CompileErrorCase(
                 "Display fields whose types lack Display",
-                "class Point {\n    x: Int\n}\nclass Line has Display {\n    start: Point\n}",
+                "class Point {\n    val x: Int\n}\nclass Line has Display {\n    val start: Point\n}",
                 JvmLoweringException.ClassFieldRequiresTrait::class,
                 "class Line field start has type Point, which does not have the Display trait",
             ),
             CompileErrorCase(
                 "class methods conflicting with generated trait methods",
-                "class Point has Eq {\n    x: Int\n" +
+                "class Point has Eq {\n    val x: Int\n" +
                     "    fn equals(other: Point): Bool {\n        return True\n    }\n}",
                 JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
                 "class Point method equals conflicts with the generated method for trait Eq",
             ),
             CompileErrorCase(
                 "class methods conflicting with generated Display methods",
-                "class Point has Display {\n    x: Int\n" +
+                "class Point has Display {\n    val x: Int\n" +
                     "    fn toString(): String {\n        return \"point\"\n    }\n}",
                 JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
                 "class Point method toString conflicts with the generated method for trait Display",
             ),
             CompileErrorCase(
                 "forwarding objects without the Display trait to print",
-                classDeclaration("Point", "x: Int") + function("Point(1) |> print"),
+                classDeclaration("Point", "val x: Int") + function("Point(1) |> print"),
                 JvmLoweringException.PrintRequiresDisplayTrait::class,
                 "class Point does not have the Display trait",
             ),
@@ -872,13 +928,13 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "trailing commas in has clauses",
-                "class Point has Eq, {\n    x: Int\n}",
+                "class Point has Eq, {\n    val x: Int\n}",
                 VeraParseException.ExpectedToken::class,
                 "expected trait name",
             ),
             CompileErrorCase(
                 "empty has clauses",
-                "class Point has {\n    x: Int\n}",
+                "class Point has {\n    val x: Int\n}",
                 VeraParseException.ExpectedToken::class,
                 "expected trait name",
             ),
@@ -896,67 +952,67 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "traits conflicting with class names",
-                traitDeclaration("Point") + "class Point {\n    x: Int\n}",
+                traitDeclaration("Point") + "class Point {\n    val x: Int\n}",
                 JvmLoweringException.TopLevelNameConflict::class,
                 "top-level name Point is declared more than once",
             ),
             CompileErrorCase(
                 "duplicate class fields",
-                classDeclaration("Point", "x: Int", "x: String"),
+                classDeclaration("Point", "val x: Int", "val x: String"),
                 JvmLoweringException.DuplicateClassField::class,
                 "class Point has duplicate field x",
             ),
             CompileErrorCase(
                 "unknown class field types",
-                classDeclaration("Point", "x: Missing"),
+                classDeclaration("Point", "val x: Missing"),
                 JvmLoweringException.UnknownClassType::class,
                 "class type Missing is not defined",
             ),
             CompileErrorCase(
                 "duplicate class types",
-                classDeclaration("Point", "x: Int") + classDeclaration("Point", "y: Int"),
+                classDeclaration("Point", "val x: Int") + classDeclaration("Point", "val y: Int"),
                 JvmLoweringException.DuplicateClassType::class,
                 "class Point is declared more than once",
             ),
             CompileErrorCase(
                 "class names conflicting with the program class",
-                classDeclaration("ErrorTest", "x: Int"),
+                classDeclaration("ErrorTest", "val x: Int"),
                 JvmLoweringException.ClassNameConflictsWithProgramClass::class,
                 "class ErrorTest conflicts with the generated program class",
             ),
             CompileErrorCase(
                 "class constructors with the wrong arity",
-                classDeclaration("Point", "x: Int") + function("val point = Point()"),
+                classDeclaration("Point", "val x: Int") + function("val point = Point()"),
                 JvmLoweringException.ClassConstructorArityMismatch::class,
                 "class Point constructor requires 1 argument, got 0",
             ),
             CompileErrorCase(
                 "class constructor arguments with the wrong type",
-                classDeclaration("Point", "x: Int") + function("val point = Point(\"wrong\")"),
+                classDeclaration("Point", "val x: Int") + function("val point = Point(\"wrong\")"),
                 JvmLoweringException.ClassConstructorArgumentTypeMismatch::class,
                 "class Point field x requires Int, got String",
             ),
             CompileErrorCase(
                 "unknown class fields",
-                classDeclaration("Point", "x: Int") + function("print(Point(1).y)"),
+                classDeclaration("Point", "val x: Int") + function("print(Point(1).y)"),
                 JvmLoweringException.UnknownClassField::class,
                 "class Point has no field y",
             ),
             CompileErrorCase(
                 "class types used as values",
-                classDeclaration("Point", "x: Int") + function("val point = Point"),
+                classDeclaration("Point", "val x: Int") + function("val point = Point"),
                 JvmLoweringException.ClassTypeUsedAsValue::class,
                 "class type Point cannot be used as a value",
             ),
             CompileErrorCase(
                 "calling class fields",
-                classDeclaration("Point", "x: Int") + function("print(Point(1).x())"),
+                classDeclaration("Point", "val x: Int") + function("print(Point(1).x())"),
                 JvmLoweringException.ValueCallNotSupported::class,
                 "calling a value is not supported yet",
             ),
             CompileErrorCase(
                 "unknown class methods",
-                classDeclaration("Point", "x: Int") + function("print(Point(1).missing())"),
+                classDeclaration("Point", "val x: Int") + function("print(Point(1).missing())"),
                 JvmLoweringException.UnknownClassMethod::class,
                 "class Point has no method missing",
             ),
@@ -964,7 +1020,7 @@ class CompilerErrorTests {
                 "class methods called with the wrong arity",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn add(other: Int): Int {",
                     "    return x + other",
                     "}",
@@ -976,7 +1032,7 @@ class CompilerErrorTests {
                 "class method arguments with the wrong type",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn add(other: Int): Int {",
                     "    return x + other",
                     "}",
@@ -988,7 +1044,7 @@ class CompilerErrorTests {
                 "class method return values with the wrong type",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn value(): Int {",
                     "    return \"wrong\"",
                     "}",
@@ -1014,7 +1070,7 @@ class CompilerErrorTests {
                 "class methods conflicting with fields",
                 classDeclaration(
                     "Point",
-                    "value: Int",
+                    "val value: Int",
                     "fn value(): Int {",
                     "    return value",
                     "}",
@@ -1026,7 +1082,7 @@ class CompilerErrorTests {
                 "class methods used as values through member access",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn value(): Int {",
                     "    return x",
                     "}",
@@ -1038,7 +1094,7 @@ class CompilerErrorTests {
                 "class methods used as bare values",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn value(): Int {",
                     "    return x",
                     "}",
@@ -1059,7 +1115,7 @@ class CompilerErrorTests {
                 "parameters shadowing fields",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn compute(x: Int): Int {",
                     "    return x",
                     "}",
@@ -1071,7 +1127,7 @@ class CompilerErrorTests {
                 "locals shadowing fields",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn compute(): Int {",
                     "    val x = 1",
                     "    return x",
@@ -1084,7 +1140,7 @@ class CompilerErrorTests {
                 "locals in nested blocks shadowing fields",
                 classDeclaration(
                     "Point",
-                    "x: Int",
+                    "val x: Int",
                     "fn compute(): Int {",
                     "    if True {",
                     "        val x = 1",
@@ -1115,7 +1171,7 @@ class CompilerErrorTests {
             ),
             CompileErrorCase(
                 "class fields shadowing builtins",
-                classDeclaration("Point", "print: Int"),
+                classDeclaration("Point", "val print: Int"),
                 JvmLoweringException.ShadowingNotAllowed::class,
                 "name print is already in scope; shadowing is not allowed",
             ),

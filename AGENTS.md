@@ -82,10 +82,17 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - First pass collects class, trait, and function declarations by name; classes lower to their own
   JVM classes (including instance methods), then functions lower to static methods on the program
   class.
-- Traits are compile-time contracts. `JvmProgramLowering` validates `VeraTraitDeclaration`
-  signatures and each class's `VeraClassDeclaration.traits` (every trait method must be
-  implemented with matching parameter names, parameter types, and return type, and class-typed fields of `Eq`/`Display`
-  classes must carry the same trait). Traits produce no IR or bytecode.
+- Traits: `JvmProgramLowering` validates `VeraTraitDeclaration` signatures and each class's
+  `VeraClassDeclaration.traits` (every trait method must be implemented with matching parameter
+  names, parameter types, and return type, and class-typed fields of `Eq`/`Display` classes must
+  carry the same trait). Each user trait lowers to an interface `JvmClass` (`isInterface`, with
+  `abstractMethods`), and classes list their user traits in `JvmClass.interfaces`.
+- Trait types: `JvmTypeLowering` resolves type names through `JvmTypeNames` (classes and user
+  traits); a trait name becomes `JvmType.InterfaceType`, and built-in traits are not types.
+  `JvmFunctionLoweringState.coerce` accepts a class value where one of its traits is expected,
+  wrapping it in `JvmUpcast`; arguments, returns, annotated `val`s, and rebinding all use it. An
+  annotated `val` takes its declared type. Calls on trait-typed values lower to `JvmInstanceCall`
+  with `ownerIsInterface`.
 - `JvmFunctionLowering` is stateless; per-call mutable state lives in a private `*State` helper.
 - Locals are block-scoped: `JvmFunctionLoweringState` keeps a scope stack, and `if` branches and
   `while` bodies open a new scope.
@@ -146,6 +153,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   initialize fields with `FlatPutField`.
 - Object method calls use `FlatInvokeVirtual`; its `receiverType` participates in stack
   verification.
+- Trait method calls use `FlatInvokeInterface` (`invokeinterface`). `FlatUpcast` retypes a class
+  value to an interface on the simulated stack and emits no bytecode.
 - `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
   statements.
 - `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
@@ -317,6 +326,9 @@ uncommitted changes:
   inside a placeholder work; a line break inside a placeholder is an unterminated string. The
   parser builds `VeraStringTemplate`, and lowering joins the parts with a `StringBuilder`
   (`JvmObjectMethods.concatenate`), rendering values as `print` does.
+- Class fields are `val name: Type` (`VeraParserState.parseField`); a bare `name: Type` is
+  `VeraParseException.FieldWithoutVal`, and `mut val` fields are `MutableFieldNotSupported` until
+  `mut fn` exists.
 - Constructs: `fn`, `class`, `trait`, `has`, `val`, `mut val`, rebinding with `=`, `if` / `else if` /
   `else`, `while`, `break`, `continue`, `print`.
 - `if` and `while` conditions do not require parentheses; `( ... )` remains available as ordinary

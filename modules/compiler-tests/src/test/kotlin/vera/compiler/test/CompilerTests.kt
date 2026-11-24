@@ -125,8 +125,8 @@ class VeraCompilerTests {
     fun `string templates insert values`(testInfo: TestInfo) {
         val source = """
                     class Point has Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                         fn sum(): Int {
                             return x + y
                         }
@@ -717,10 +717,10 @@ class VeraCompilerTests {
     fun `a leading forward application or member access continues the statement`(testInfo: TestInfo) {
         val source = """
                     class Box {
-                        inner: Inner
+                        val inner: Inner
                     }
                     class Inner {
-                        value: Int
+                        val value: Int
                         fn doubled(): Int {
                             return value * 2
                         }
@@ -755,7 +755,7 @@ class VeraCompilerTests {
     @Test
     fun `blocks can be written on one line`(testInfo: TestInfo) {
         val source = """
-                    class Point { x: Int }
+                    class Point { val x: Int }
                     fn one(): Int { return 1 }
                     fn $TEST_MAIN() {
                         mut val counter = 0
@@ -778,7 +778,7 @@ class VeraCompilerTests {
                     }
                     /// Documents the class.
                     class Square has Shape {
-                        side: Int // trailing comment on a field
+                        val side: Int // trailing comment on a field
 
                         /// Documents a method.
                         fn area(): Int {
@@ -1035,7 +1035,7 @@ class VeraCompilerTests {
                         fn area(): Int
                     }
                     class Square has Shape {
-                        side: Int
+                        val side: Int
                         fn area(): Int = side * side
                     }
                     fn double(value: Int): Int = value * 2
@@ -1060,8 +1060,8 @@ class VeraCompilerTests {
     fun `mut val bindings can be rebound`(testInfo: TestInfo) {
         val source = """
                     class Point has Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN() {
                         val limit = 3
@@ -1082,7 +1082,7 @@ class VeraCompilerTests {
     fun `mut val without a value makes a parameter rebindable`(testInfo: TestInfo) {
         val source = """
                     class Counter {
-                        start: Int
+                        val start: Int
                         fn countUp(steps: Int): Int {
                             mut val steps
                             mut val total = start
@@ -1382,7 +1382,7 @@ class VeraCompilerTests {
     fun `not applies to whole member call chains`(testInfo: TestInfo) {
         val source = """
                     class Task {
-                        finished: Bool
+                        val finished: Bool
                         fn isFinished(): Bool {
                             return finished
                         }
@@ -1522,8 +1522,8 @@ class VeraCompilerTests {
     fun `forward application accepts object values`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn sum(point: Point): Int {
                         return point.x + point.y
@@ -1565,8 +1565,8 @@ class VeraCompilerTests {
     fun `forward application accepts field access on the left`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn double(value: Int): Int {
                         return value * 2
@@ -1582,14 +1582,14 @@ class VeraCompilerTests {
     fun `forward application calls methods on member chains`(testInfo: TestInfo) {
         val source = """
                     class Runtime {
-                        base: Int
+                        val base: Int
 
                         fn process(input: Int): Int {
                             return input + base
                         }
                     }
                     class Processor {
-                        runtime: Runtime
+                        val runtime: Runtime
                     }
                     fn $TEST_MAIN(): Int {
                         val processor = Processor(Runtime(10))
@@ -1603,7 +1603,7 @@ class VeraCompilerTests {
     fun `forward application passes the left value before explicit method arguments`(testInfo: TestInfo) {
         val source = """
                     class Calculator {
-                        offset: Int
+                        val offset: Int
 
                         fn add(value: Int, extra: Int): Int {
                             return value + extra + offset
@@ -1621,14 +1621,14 @@ class VeraCompilerTests {
     fun `forward application chains member calls`(testInfo: TestInfo) {
         val source = """
                     class Runtime {
-                        base: Int
+                        val base: Int
 
                         fn process(input: Int): Int {
                             return input + base
                         }
                     }
                     class Processor {
-                        runtime: Runtime
+                        val runtime: Runtime
                     }
                     fn $TEST_MAIN() {
                         val processor = Processor(Runtime(10))
@@ -1642,7 +1642,7 @@ class VeraCompilerTests {
     fun `forward application evaluates the left value before a member chain`(testInfo: TestInfo) {
         val source = """
                     class Box {
-                        base: Int
+                        val base: Int
                         fn plus(a: Int, b: Int): Int {
                             return a + b + base
                         }
@@ -1670,8 +1670,8 @@ class VeraCompilerTests {
     fun `named arguments work for functions, constructors, and methods`(testInfo: TestInfo) {
         val source = """
                     class Rect {
-                        width: Int
-                        height: Int
+                        val width: Int
+                        val height: Int
                         fn scaled(factor: Int, extra: Int): Int {
                             return width * height * factor + extra
                         }
@@ -1696,8 +1696,8 @@ class VeraCompilerTests {
     fun `bare locals with matching names count as named arguments`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN(): Int {
                         val x = 3
@@ -1731,7 +1731,7 @@ class VeraCompilerTests {
     fun `forward application calls sibling class methods`(testInfo: TestInfo) {
         val source = """
                     class Counter {
-                        value: Int
+                        val value: Int
 
                         fn add(amount: Int): Int {
                             return value + amount
@@ -1752,8 +1752,8 @@ class VeraCompilerTests {
     fun `forward application accepts class constructors on the right`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN(): Int {
                         val point = 2 |> Point(1)
@@ -1767,8 +1767,8 @@ class VeraCompilerTests {
     fun `objects can be constructed and fields read`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN(): Int {
                         val point = Point(x = 1, y = 2)
@@ -1782,12 +1782,12 @@ class VeraCompilerTests {
     fun `class fields can hold objects and chained field access works`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     class Line {
-                        start: Point
-                        end: Point
+                        val start: Point
+                        val end: Point
                     }
                     fn $TEST_MAIN(): Int {
                         val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
@@ -1801,8 +1801,8 @@ class VeraCompilerTests {
     fun `objects can be passed to and returned from functions`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn add(left: Point, right: Point): Point {
                         return Point(x = left.x + right.x, y = left.y + right.y)
@@ -1819,8 +1819,8 @@ class VeraCompilerTests {
     fun `class fields can hold String and Bool values`(testInfo: TestInfo) {
         val source = """
                     class Message {
-                        text: String
-                        active: Bool
+                        val text: String
+                        val active: Bool
                     }
                     fn $TEST_MAIN() {
                         val message = Message(text = "Hello", active = False)
@@ -1835,8 +1835,8 @@ class VeraCompilerTests {
     fun `field access can follow a constructor call`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN(): Int {
                         return Point(x = 4, y = 5).y
@@ -1849,8 +1849,8 @@ class VeraCompilerTests {
     fun `class types work in local annotations and field access follows function calls`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn makePoint(): Point {
                         return Point(x = 7, y = 8)
@@ -1867,8 +1867,8 @@ class VeraCompilerTests {
     fun `class methods can read fields implicitly`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn sum(): Int {
                             return x + y
@@ -1885,8 +1885,8 @@ class VeraCompilerTests {
     fun `class methods accept parameters and return objects`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn offset(dx: Int, dy: Int): Point {
                             return Point(x = x + dx, y = y + dy)
@@ -1904,7 +1904,7 @@ class VeraCompilerTests {
     fun `class methods can call sibling methods`(testInfo: TestInfo) {
         val source = """
                     class Counter {
-                        value: Int
+                        val value: Int
 
                         fn doubled(): Int {
                             return value * 2
@@ -1928,7 +1928,7 @@ class VeraCompilerTests {
                         return value + 1
                     }
                     class Counter {
-                        value: Int
+                        val value: Int
 
                         fn printNext() {
                             print(increment(value))
@@ -1945,16 +1945,16 @@ class VeraCompilerTests {
     fun `class methods can be called on nested object values`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn sum(): Int {
                             return x + y
                         }
                     }
                     class Line {
-                        start: Point
-                        end: Point
+                        val start: Point
+                        val end: Point
                     }
                     fn $TEST_MAIN(): Int {
                         val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
@@ -1968,14 +1968,14 @@ class VeraCompilerTests {
     fun `class methods can call methods on field values`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
+                        val x: Int
 
                         fn value(): Int {
                             return x
                         }
                     }
                     class Box {
-                        point: Point
+                        val point: Point
 
                         fn value(): Int {
                             return point.value()
@@ -1992,8 +1992,8 @@ class VeraCompilerTests {
     fun `class methods can be called on constructor results`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn withX(newX: Int): Point {
                             return Point(x = newX, y = y)
@@ -2010,7 +2010,7 @@ class VeraCompilerTests {
     fun `class methods can use if expressions`(testInfo: TestInfo) {
         val source = """
                     class Number {
-                        value: Int
+                        val value: Int
 
                         fn sign(): Int {
                             return if value < 0 {
@@ -2031,7 +2031,7 @@ class VeraCompilerTests {
     fun `class methods support string parameters and returns`(testInfo: TestInfo) {
         val source = """
                     class Label {
-                        text: String
+                        val text: String
 
                         fn value(): String {
                             return text
@@ -2053,7 +2053,7 @@ class VeraCompilerTests {
     fun `class methods support bool parameters and returns`(testInfo: TestInfo) {
         val source = """
                     class Flag {
-                        value: Bool
+                        val value: Bool
 
                         fn select(useValue: Bool): Bool {
                             return if useValue {
@@ -2078,15 +2078,15 @@ class VeraCompilerTests {
     fun `class methods on field values accept arguments`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn offset(dx: Int, dy: Int): Point {
                             return Point(x = x + dx, y = y + dy)
                         }
                     }
                     class Box {
-                        point: Point
+                        val point: Point
 
                         fn shifted(dx: Int, dy: Int): Int {
                             val moved = point.offset(dx, dy)
@@ -2104,8 +2104,8 @@ class VeraCompilerTests {
     fun `class methods accept object parameters`(testInfo: TestInfo) {
         val source = """
                     class Point {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
 
                         fn total(other: Point): Int {
                             return x + y + other.x + other.y
@@ -2122,7 +2122,7 @@ class VeraCompilerTests {
     fun `Unit values can be stored in objects and read back`(testInfo: TestInfo) {
         val source = """
                     class Signal {
-                        flag: Unit
+                        val flag: Unit
                     }
                     fn $TEST_MAIN(): Int {
                         val signal = Signal(Unit)
@@ -2194,7 +2194,7 @@ class VeraCompilerTests {
                         fn area(): Int
                     }
                     class Square has Shape {
-                        side: Int
+                        val side: Int
                         fn area(): Int {
                             return side * side
                         }
@@ -2213,7 +2213,7 @@ class VeraCompilerTests {
                     trait Shape { fn area(): Int }
                     trait Marker {}
                     class Square has Shape, Marker {
-                        side: Int
+                        val side: Int
                         fn area(): Int {
                             return side * side
                         }
@@ -2227,13 +2227,115 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `trait-typed parameters call the implementing class's method`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Square has Shape {
+                        val side: Int
+                        fn area(): Int = side * side
+                    }
+                    class Rect has Shape {
+                        val width: Int
+                        val height: Int
+                        fn area(): Int = width * height
+                    }
+                    fn describe(shape: Shape): Int = shape.area()
+                    fn $TEST_MAIN() {
+                        print(describe(Square(3)))
+                        print(describe(Rect(width = 2, height = 5)))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "9${EOL}10$EOL", testInfo)
+    }
+
+    @Test
+    fun `trait types work for locals, rebinding, returns, and fields`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Square has Shape {
+                        val side: Int
+                        fn area(): Int = side * side
+                    }
+                    class Rect has Shape {
+                        val width: Int
+                        val height: Int
+                        fn area(): Int = width * height
+                    }
+                    class Holder {
+                        val shape: Shape
+                    }
+                    fn pick(big: Bool): Shape {
+                        if big {
+                            return Square(10)
+                        }
+                        return Rect(width = 1, height = 2)
+                    }
+                    fn $TEST_MAIN() {
+                        mut val current: Shape = Square(2)
+                        print(current.area())
+                        current = Rect(width = 1, height = 3)
+                        print(current.area())
+                        print(pick(True).area())
+                        print(pick(False).area())
+                        print(Holder(Square(4)).shape.area())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "4${EOL}3${EOL}100${EOL}2${EOL}16$EOL", testInfo)
+    }
+
+    @Test
+    fun `trait method calls use named arguments and forward application`(testInfo: TestInfo) {
+        val source = """
+                    trait Scaler {
+                        fn scale(value: Int, offset: Int): Int
+                    }
+                    class Doubler has Scaler {
+                        fn scale(value: Int, offset: Int): Int = value * 2 + offset
+                    }
+                    fn apply(scaler: Scaler): Int = scaler.scale(value = 5, offset = 1)
+                    fn $TEST_MAIN() {
+                        print(apply(Doubler()))
+                        val scaler: Scaler = Doubler()
+                        3 |> scaler.scale(10) |> print
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "11${EOL}16$EOL", testInfo)
+    }
+
+    @Test
+    fun `traits compile to JVM interfaces implemented by their classes`() {
+        val source = """
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Square has Shape, Eq {
+                        val side: Int
+                        fn area(): Int = side * side
+                    }
+                    fn $TEST_MAIN() {
+                    }
+                """.trimIndent()
+        val bytecode = VeraCompiler.compile(Identifier("TraitInterfaceTest"), source)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+        val shape = classLoader.loadClass("Shape")
+        val square = classLoader.loadClass("Square")
+        Assertions.assertTrue(shape.isInterface)
+        Assertions.assertEquals(listOf(shape), square.interfaces.toList())
+        Assertions.assertEquals(listOf("area"), shape.declaredMethods.map { it.name })
+    }
+
+    @Test
     fun `trait methods with omitted return types match Unit methods`(testInfo: TestInfo) {
         val source = """
                     trait Greeter {
                         fn greet()
                     }
                     class Host has Greeter {
-                        name: String
+                        val name: String
                         fn greet() {
                             print(name)
                         }
@@ -2253,7 +2355,7 @@ class VeraCompilerTests {
                         fn scale(by: Int): Int
                     }
                     class Counter has Scaled {
-                        value: Int
+                        val value: Int
                         fn scale(by: Int): Int {
                             return value * by
                         }
@@ -2276,8 +2378,8 @@ class VeraCompilerTests {
                         fn value(): Int
                     }
                     class Entry has Named, Valued {
-                        label: String
-                        amount: Int
+                        val label: String
+                        val amount: Int
                         fn name(): String {
                             return label
                         }
@@ -2298,8 +2400,8 @@ class VeraCompilerTests {
     fun `objects with Eq compare structurally`(testInfo: TestInfo) {
         val source = """
                     class Point has Eq {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN() {
                         print(Point(x = 1, y = 2) == Point(x = 1, y = 2))
@@ -2315,12 +2417,12 @@ class VeraCompilerTests {
     fun `nested objects with Eq compare structurally`(testInfo: TestInfo) {
         val source = """
                     class Point has Eq {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     class Line has Eq {
-                        start: Point
-                        end: Point
+                        val start: Point
+                        val end: Point
                     }
                     fn $TEST_MAIN() {
                         print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) == Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)))
@@ -2335,8 +2437,8 @@ class VeraCompilerTests {
     fun `Eq compares String and Bool fields by value`(testInfo: TestInfo) {
         val source = """
                     class Label has Eq {
-                        text: String
-                        active: Bool
+                        val text: String
+                        val active: Bool
                     }
                     fn $TEST_MAIN() {
                         print(Label(text = "same", active = True) == Label(text = "same", active = True))
@@ -2396,8 +2498,8 @@ class VeraCompilerTests {
     fun `Display prints objects with their fields`(testInfo: TestInfo) {
         val source = """
                     class Point has Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN() {
                         print(Point(x = 1, y = 2))
@@ -2410,8 +2512,8 @@ class VeraCompilerTests {
     fun `Display objects can be forwarded to print`(testInfo: TestInfo) {
         val source = """
                     class Point has Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN() {
                         Point(x = 1, y = 2) |> print
@@ -2425,12 +2527,12 @@ class VeraCompilerTests {
     fun `Display prints nested objects recursively`(testInfo: TestInfo) {
         val source = """
                     class Point has Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     class Line has Display {
-                        start: Point
-                        end: Point
+                        val start: Point
+                        val end: Point
                     }
                     fn $TEST_MAIN() {
                         print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)))
@@ -2447,11 +2549,11 @@ class VeraCompilerTests {
     fun `Display prints String Bool and Unit fields`(testInfo: TestInfo) {
         val source = """
                     class Message has Display {
-                        text: String
-                        active: Bool
+                        val text: String
+                        val active: Bool
                     }
                     class Signal has Display {
-                        flag: Unit
+                        val flag: Unit
                     }
                     fn $TEST_MAIN() {
                         print(Message(text = "hello", active = True))
@@ -2487,8 +2589,8 @@ class VeraCompilerTests {
     fun `object equality works on variables`(testInfo: TestInfo) {
         val source = """
                     class Point has Eq {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN(): Int {
                         val first = Point(x = 1, y = 2)
@@ -2506,8 +2608,8 @@ class VeraCompilerTests {
     fun `Eq and Display can be combined`(testInfo: TestInfo) {
         val source = """
                     class Point has Eq, Display {
-                        x: Int
-                        y: Int
+                        val x: Int
+                        val y: Int
                     }
                     fn $TEST_MAIN() {
                         print(Point(x = 1, y = 2))
