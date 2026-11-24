@@ -210,6 +210,50 @@ class Square has Shape {
   for now. A trait's cases are therefore always known, so a `match` on a `Shape` can check that it
   covers every one. Each trait compiles to a JVM sealed interface that permits exactly its classes.
   Writing `sealed trait` is an error with a hint, since every trait is already closed.
+### Trait cases
+
+A trait can list its own cases in a block instead of letting classes join it:
+
+```vera
+trait Color { Red, Green, Blue }
+
+trait Shape {
+    fn area(): Int
+    Circle has Display {
+        val radius: Int
+        fn area(): Int = 3 * radius * radius
+    }
+    Empty has Display {
+        fn area(): Int = 0
+    }
+}
+
+val color = Color.Red
+val shape: Shape = Shape.Circle(2)
+print(shape)                              // Shape.Circle(radius: 2)
+
+fn name(color: Color): String = match color {
+    Red -> "red"
+    Green -> "green"
+    Blue -> "blue"
+}
+```
+
+- A case is `Name`, optionally followed by `has Traits` and a body with `val` fields and `fn` methods,
+  without the `class` keyword. Cases are separated by commas or newlines. A case with `has` needs a
+  body, which ends its trait list.
+- A trait takes one form: either it lists its cases, or classes join it with `has`. A class cannot
+  join a trait that lists its cases.
+- Cases are classes owned by their trait and always written qualified: `Color.Red`,
+  `Shape.Circle(2)`, `val circle: Shape.Circle`, even inside the trait. The only exception is a
+  pattern in a `match` on the owning trait, which can only name that trait's cases: `Red ->`.
+- A case can also join other traits (`Red has Printable { ... }`); in a `match` on such a trait it is
+  written qualified (`Color.Red ->`).
+- A case without fields is a singleton (`Color.Red`). Every case must implement the trait's methods.
+- `Display` prints a case qualified: `Color.Red`, `Shape.Circle(radius: 2)`.
+- A case name may match a top-level class name: `Tree.Leaf` and `Leaf` never meet.
+- Cases compile to static nested JVM classes, which Java sees as `Shape.Circle`.
+
 - When `if` or `match` branches produce objects of different classes, the result has the one user
   trait they all share: `if big { Circle(5) } else { Empty() }` is a `Shape`.
 - Two built-in traits are always available and are implemented by the compiler:
@@ -609,10 +653,13 @@ class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { membe
 member         = "val" IDENT ":" type
                | function
 
-trait          = "trait" IDENT "{" { EOL } { traitMethod statementEnd } "}"
+trait          = "trait" IDENT "{" { EOL } { traitItem } "}"
+traitItem      = traitMethod statementEnd | case ( "," | statementEnd )
 traitMethod    = "fn" IDENT signature
+case           = IDENT [ [ "has" IDENT { "," IDENT } ] classBody ]   (* `has` needs a body *)
+classBody      = "{" { EOL } { member statementEnd } "}"
 
-type           = "Int" | "String" | "Bool" | "Unit" | IDENT
+type           = "Int" | "String" | "Bool" | "Unit" | typeName
 ```
 
 ### Statements
@@ -658,7 +705,8 @@ template       = TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLA
 if             = "if" expression block [ { EOL } "else" ( if | block ) ]
 match          = "match" expression "{" { EOL } arm statementEnd { arm statementEnd } "}"
 arm            = pattern "->" ( block | expression | "return" [ expression ] | "break" | "continue" )
-pattern        = IDENT [ "(" fieldPattern { "," fieldPattern } ")" ]
+pattern        = typeName [ "(" fieldPattern { "," fieldPattern } ")" ]
+typeName       = IDENT [ "." IDENT ]                (* Owner.Case names a trait case *)
 fieldPattern   = IDENT [ "=" IDENT ]
 ```
 

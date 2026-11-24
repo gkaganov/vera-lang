@@ -76,10 +76,10 @@ internal object JvmObjectMethods {
     /** Builds `toString(): String`, rendering `ClassName(field: value, ...)`, or `ClassName` without fields. */
     fun toStringMethod(className: Identifier, fields: List<JvmField>): JvmMethod {
         // A field-less class is a singleton written by its name, so it prints as just the name.
-        if (fields.isEmpty()) return constantToStringMethod(className, className.value)
+        if (fields.isEmpty()) return constantToStringMethod(className, className.display)
         val receiver = JvmLocal(thisName, JvmType.ClassType(className))
         var builder = stringBuilder()
-        builder = append(builder, JvmStringLiteral("${className.value}("))
+        builder = append(builder, JvmStringLiteral("${className.display}("))
         fields.forEachIndexed { index, field ->
             if (index > 0) builder = append(builder, JvmStringLiteral(", "))
             builder = append(builder, JvmStringLiteral("${field.name.value}: "))

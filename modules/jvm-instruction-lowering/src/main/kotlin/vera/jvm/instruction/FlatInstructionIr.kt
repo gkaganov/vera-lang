@@ -18,6 +18,7 @@ data class FlatClass(
     val isInterface: Boolean = false,
     val abstractMethods: List<FlatAbstractMethod> = emptyList(),
     val permittedSubclasses: List<Identifier> = emptyList(),
+    val owner: Identifier? = null,
 )
 
 data class FlatAbstractMethod(val name: Identifier, val signature: JvmMethodSignature)

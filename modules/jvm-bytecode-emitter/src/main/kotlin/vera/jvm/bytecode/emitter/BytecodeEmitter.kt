@@ -18,6 +18,7 @@ import vera.jvm.instruction.FlatIntComparisonJump
 import vera.jvm.instruction.FlatIntUnaryOperation
 import vera.jvm.instruction.FlatInvokeInterface
 import vera.jvm.instruction.FlatUpcast
+import vera.jvm.instruction.FlatClass
 import vera.jvm.instruction.FlatCheckCast
 import vera.jvm.instruction.FlatInstanceOf
 import vera.jvm.instruction.FlatBoolNot
@@ -48,6 +49,8 @@ import java.lang.classfile.ClassHierarchyResolver
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.Label
 import java.lang.classfile.TypeKind
+import java.lang.classfile.attribute.InnerClassInfo
+import java.lang.classfile.attribute.InnerClassesAttribute
 import java.lang.classfile.attribute.PermittedSubclassesAttribute
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs.CD_Object
@@ -56,6 +59,7 @@ import java.lang.constant.ConstantDescs.CD_String
 import java.lang.constant.ConstantDescs.CD_int
 import java.lang.constant.ConstantDescs.CD_void
 import java.lang.constant.MethodTypeDesc
+import java.util.Optional
 
 object BytecodeEmitter {
     fun emit(flatProgram: FlatProgram): Map<Identifier, ByteArray> =
@@ -82,6 +86,10 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 classBuilder.withSuperclass(CD_Object)
                 if (clazz.interfaces.isNotEmpty()) {
                     classBuilder.withInterfaceSymbols(clazz.interfaces.map { name -> ClassDesc.of(name.value) })
+                }
+                val innerClasses = innerClassesOf(clazz)
+                if (innerClasses.isNotEmpty()) {
+                    classBuilder.with(InnerClassesAttribute.of(innerClasses))
                 }
                 if (clazz.permittedSubclasses.isNotEmpty()) {
                     classBuilder.with(
@@ -125,6 +133,24 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
         }
 
         return bytecode
+    }
+
+    /**
+     * `InnerClasses` entries for a trait's nested cases (on the trait) and for a nested case itself, so
+     * Java and reflection see `Shape.Circle` as a static nested class of `Shape`.
+     */
+    private fun innerClassesOf(clazz: FlatClass): List<InnerClassInfo> {
+        val nestedClasses = flatProgram.classes.filter { other -> other.owner == clazz.name } +
+            listOfNotNull(clazz.takeIf { it.owner != null })
+        return nestedClasses.mapNotNull { nested ->
+            val owner = nested.owner ?: return@mapNotNull null
+            InnerClassInfo.of(
+                ClassDesc.of(nested.name.value),
+                Optional.of(ClassDesc.of(owner.value)),
+                Optional.of(nested.name.value.substringAfter('$')),
+                ACC_PUBLIC or ACC_STATIC or ACC_FINAL,
+            )
+        }
     }
 
     /**

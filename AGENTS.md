@@ -101,6 +101,13 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- Trait cases: `VeraParserState.parseTraitCase` turns each case in a trait block into a
+  `VeraClassDeclaration` named `Owner$Case` (its JVM binary name; `Identifier.display` shows
+  `Owner.Case`), with `owner` set and the owner first in `traits`; `VeraTraitDeclaration.cases`
+  holds them. `JvmProgramLowering` lowers them with the top-level classes, rejects other classes
+  joining a trait with cases (`BlockTraitJoined`), and marks them with `JvmClass.owner`, which the
+  emitter turns into `InnerClasses` attributes. `Owner.Case` in expressions resolves through
+  `requireTraitCase`; an unqualified pattern resolves to the scrutinee trait's own case first.
 - `match` (`JvmFunctionLoweringState.lowerMatchExpression`) evaluates the scrutinee once into a
   `JvmLet` temporary and lowers to a chain of `JvmIfExpression`s testing `JvmInstanceOf`; the last arm
   is untested (`JvmBlockExpression`) because exhaustiveness rules out every other case. The scrutinee

@@ -27,21 +27,30 @@ sealed interface VeraFunctionBody
 data class VeraBlockBody(val block: VeraExplicitReturnBlock) : VeraFunctionBody
 data class VeraExpressionBody(val expression: VeraPrimaryExpression) : VeraFunctionBody
 
+/**
+ * A class. A case declared inside a trait's block has that trait as its [owner], is named
+ * `Owner$Case`, and lists the owner first in [traits].
+ */
 data class VeraClassDeclaration(
     override val name: Identifier,
     val fields: List<VeraField>,
     val methods: List<VeraFunctionDeclaration>,
     val traits: List<Identifier>,
     override val span: SourceSpan,
+    val owner: Identifier? = null,
 ) : VeraDeclaration
 
 data class VeraField(val name: Identifier, val type: VeraType, val span: SourceSpan)
 
-/** A trait. Traits are closed: their classes are all known, so `match` can be exhaustive. */
+/**
+ * A trait. Traits are closed: their classes are all known, so `match` can be exhaustive. A trait in
+ * block form owns its [cases]; otherwise classes join it with `has`.
+ */
 data class VeraTraitDeclaration(
     override val name: Identifier,
     val methods: List<VeraTraitMethod>,
     override val span: SourceSpan,
+    val cases: List<VeraClassDeclaration> = emptyList(),
 ) : VeraDeclaration
 
 data class VeraTraitMethod(
@@ -215,5 +224,5 @@ fun VeraType.render(): String = when (this) {
     VeraType.BOOL -> "Bool"
     VeraType.UNIT -> "Unit"
     VeraType.UNKNOWN -> "an inferred type"
-    is VeraType.ClassType -> name.value
+    is VeraType.ClassType -> name.display
 }

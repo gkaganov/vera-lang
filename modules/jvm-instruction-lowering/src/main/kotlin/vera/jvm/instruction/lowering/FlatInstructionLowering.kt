@@ -137,6 +137,7 @@ private class FlatInstructionLoweringState {
                 FlatAbstractMethod(jvmAbstractMethod.name, jvmAbstractMethod.signature)
             },
             permittedSubclasses = jvmClass.permittedSubclasses,
+            owner = jvmClass.owner,
         )
     }
 

@@ -98,6 +98,14 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseClassDeclaration(): VeraClassDeclaration {
         val classToken = expect(VeraTokenType.CLASS)
         val name = expect(VeraTokenType.IDENTIFIER, "class name")
+        val traits = parseHasClause()
+        rejectJavaInheritance(name)
+        val (fields, methods) = parseClassBody()
+        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits, spanOf(classToken, name))
+    }
+
+    /** Parses an optional `has Trait, Trait` clause. */
+    private fun parseHasClause(): List<Identifier> {
         val traits = mutableListOf<Identifier>()
         if (match(VeraTokenType.HAS)) {
             traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
@@ -105,7 +113,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 traits += Identifier(expect(VeraTokenType.IDENTIFIER, "trait name").text)
             }
         }
-        rejectJavaInheritance(name)
+        return traits
+    }
+
+    /** Parses `{ ... }` with `val` fields and `fn` methods, one per line. */
+    private fun parseClassBody(): Pair<List<VeraField>, List<VeraFunctionDeclaration>> {
         expect(VeraTokenType.LBRACE)
         skipEols()
         val fields = mutableListOf<VeraField>()
@@ -126,7 +138,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraClassDeclaration(Identifier(name.text), fields, methods, traits, spanOf(classToken, name))
+        return fields to methods
     }
 
     /** Parses `val name: Type` in a class body. */
@@ -141,17 +153,49 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     /** Parses a trait after its `trait` keyword, [startToken]. */
     private fun parseTraitDeclaration(startToken: VeraToken): VeraTraitDeclaration {
         val name = expect(VeraTokenType.IDENTIFIER, "trait name")
+        val owner = Identifier(name.text)
         expect(VeraTokenType.LBRACE)
         skipEols()
         val methods = mutableListOf<VeraTraitMethod>()
+        val cases = mutableListOf<VeraClassDeclaration>()
         while (!at(VeraTokenType.RBRACE) && !at(VeraTokenType.EOF)) {
-            val fnToken = expect(VeraTokenType.FN, "trait method")
-            methods += parseTraitMethod(fnToken)
-            parseStatementTerminator()
+            if (at(VeraTokenType.IDENTIFIER)) {
+                cases += parseTraitCase(owner)
+                // Cases are separated by commas or newlines: `trait Color { Red, Green, Blue }`.
+                if (!match(VeraTokenType.COMMA)) {
+                    parseStatementTerminator()
+                }
+            } else {
+                val fnToken = expect(VeraTokenType.FN, "a trait method (`fn`) or case")
+                methods += parseTraitMethod(fnToken)
+                parseStatementTerminator()
+            }
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(Identifier(name.text), methods, spanOf(startToken, name))
+        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases)
+    }
+
+    /**
+     * Parses a case in a trait's block: `Name [has Traits] [{ fields and methods }]`. The case is a class
+     * owned by the trait, named `Owner$Case` and displayed as `Owner.Case`.
+     */
+    private fun parseTraitCase(owner: Identifier): VeraClassDeclaration {
+        val name = expect(VeraTokenType.IDENTIFIER, "case name")
+        val traits = parseHasClause()
+        // Commas also separate cases, so a `has` list must end at a body to stay unambiguous.
+        if (traits.isNotEmpty() && !at(VeraTokenType.LBRACE)) {
+            throw VeraParseException.CaseTraitsWithoutBody(current(), name.text)
+        }
+        val (fields, methods) = if (at(VeraTokenType.LBRACE)) parseClassBody() else emptyList<VeraField>() to emptyList()
+        return VeraClassDeclaration(
+            name = Identifier("${owner.value}$${name.text}"),
+            fields = fields,
+            methods = methods,
+            traits = listOf(owner) + traits,
+            span = name.span(),
+            owner = owner,
+        )
     }
 
     private fun parseTraitMethod(fnToken: VeraToken): VeraTraitMethod {
@@ -211,10 +255,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 VeraType.UNIT
             }
 
-            VeraTokenType.IDENTIFIER -> {
-                val token = advance()
-                VeraType.ClassType(Identifier(token.text))
-            }
+            VeraTokenType.IDENTIFIER -> VeraType.ClassType(parseQualifiedName(advance()))
 
             else -> {
                 val token = current()
@@ -659,10 +700,11 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     /** Parses `ClassName` or `ClassName(field, field = binding)`. */
     private fun parsePattern(): VeraPattern {
         val className = expect(VeraTokenType.IDENTIFIER, "a class name in the pattern")
+        val patternName = parseQualifiedName(className)
         val fields = mutableListOf<VeraFieldPattern>()
         if (match(VeraTokenType.LPAREN)) {
             if (at(VeraTokenType.RPAREN)) {
-                throw VeraParseException.EmptyPatternParentheses(current(), className.text)
+                throw VeraParseException.EmptyPatternParentheses(current(), patternName.display)
             }
             fields += parseFieldPattern()
             while (match(VeraTokenType.COMMA)) {
@@ -670,7 +712,20 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             }
             expect(VeraTokenType.RPAREN)
         }
-        return VeraPattern(Identifier(className.text), fields, spanFrom(className))
+        return VeraPattern(patternName, fields, spanFrom(className))
+    }
+
+    /**
+     * Completes a name started by [first]: `Name`, or `Owner.Case` for a case nested in a trait, which
+     * is named `Owner$Case`. Used where a type or pattern names a class.
+     */
+    private fun parseQualifiedName(first: VeraToken): Identifier {
+        if (at(VeraTokenType.DOT) && peek().type == VeraTokenType.IDENTIFIER) {
+            advance()
+            val case = advance()
+            return Identifier("${first.text}\$${case.text}")
+        }
+        return Identifier(first.text)
     }
 
     /** Parses `field` (binds the field to a local of the same name) or `field = binding`. */

@@ -439,15 +439,22 @@ private class JvmFunctionLoweringState(
         val scrutineeName = Identifier(jvmScrutinee.type.render())
         val jvmTemporary = JvmLocal(Identifier("<match${temporaryCount++}>"), jvmScrutinee.type)
 
+        val ownerTrait = (jvmScrutinee.type as? JvmType.InterfaceType)?.name
         val coveredClasses = mutableSetOf<Identifier>()
         val loweredArms = veraMatch.arms.map { veraArm ->
             val pattern = veraArm.pattern
-            val veraClass = visibleClasses[pattern.className]
+            // In a match on the trait that owns a case, the case is written unqualified (`Red`).
+            val ownedName = ownerTrait?.let { owner -> Identifier("${owner.value}\$${pattern.className.value}") }
+            val veraClass = ownedName?.let { name -> visibleClasses[name] }?.takeIf { it in cases }
+                ?: visibleClasses[pattern.className]
             if (veraClass == null || veraClass !in cases) {
+                val candidates = cases.map { case ->
+                    if (case.owner != null && case.owner == ownerTrait) Identifier(case.name.value.substringAfter('$')) else case.name
+                }
                 throw JvmLoweringException.MatchPatternNotACase(
                     pattern.className,
                     scrutineeName,
-                    JvmNameHints.closest(pattern.className, cases.map { case -> case.name }),
+                    JvmNameHints.closest(pattern.className, candidates),
                 ).at(pattern.span)
             }
             if (!coveredClasses.add(veraClass.name)) {
@@ -645,6 +652,32 @@ private class JvmFunctionLoweringState(
      * A bare name used as a value that is not a local or field: the single value of a field-less
      * class (`Empty`), or an error explaining why the name is not a value.
      */
+    /** The case `Owner.Case` named by [access], which must be owned by the trait [traitName]. */
+    private fun requireTraitCase(traitName: Identifier, access: VeraMemberAccess): VeraClassDeclaration {
+        val caseName = Identifier("${traitName.value}\$${access.member.value}")
+        return visibleClasses[caseName]?.takeIf { veraCase -> veraCase.owner == traitName }
+            ?: throw JvmLoweringException.UnknownTraitCase(
+                traitName,
+                access.member,
+                JvmNameHints.closest(access.member, caseNamesOf(traitName)),
+            ).at(access.span)
+    }
+
+    /** The unqualified names of the cases [traitName] owns. */
+    private fun caseNamesOf(traitName: Identifier): List<Identifier> =
+        visibleClasses.values
+            .filter { veraClass -> veraClass.owner == traitName }
+            .map { veraCase -> Identifier(veraCase.name.value.substringAfter('$')) }
+
+    /** A hint for an unqualified case name such as `Red`: write it qualified, as `Color.Red`. */
+    private fun qualifiedCaseHint(name: Identifier): String? {
+        val veraCase = visibleClasses.values.firstOrNull { veraClass ->
+            val owner = veraClass.owner
+            owner != null && veraClass.name.value == "${owner.value}\$${name.value}"
+        } ?: return null
+        return "a case is written with its trait: `${veraCase.name.display}`"
+    }
+
     private fun lowerNamedValue(name: Identifier): JvmExpression {
         val veraClass = visibleClasses[name]
         if (veraClass != null) {
@@ -655,6 +688,7 @@ private class JvmFunctionLoweringState(
         if (receiver != null && receiver.methods.any { method -> method.name == name }) {
             throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, name)
         }
+        qualifiedCaseHint(name)?.let { hint -> throw JvmLoweringException.UnknownVariable(name, hint = hint) }
         throw unknownVariable(name)
     }
 
@@ -859,6 +893,21 @@ private class JvmFunctionLoweringState(
                     ) { lowerArguments(firstData) }
                     jvmExpression = located(nameSpan) { lowerNamedCall(veraName, loweredArguments) }
                     dataIndex = 1
+                } else if (firstData is VeraMemberAccess && veraName in visibleTraits) {
+                    // `Shape.Circle(...)` or `Color.Red`: a case owned by the trait.
+                    val veraCase = requireTraitCase(veraName, firstData)
+                    val callData = veraChainedExpression.data.getOrNull(1)
+                    if (callData is VeraArguments) {
+                        val loweredArguments = lowerForwardedArguments(
+                            forwardedArgument,
+                            forwardedArgumentIndex == 1,
+                        ) { lowerArguments(callData) }
+                        jvmExpression = located(firstData.span) { lowerObjectConstruction(veraCase, loweredArguments) }
+                        dataIndex = 2
+                    } else {
+                        jvmExpression = located(firstData.span) { lowerNamedValue(veraCase.name) }
+                        dataIndex = 1
+                    }
                 } else {
                     // `Empty.describe()`: a field-less class's name is its single value.
                     jvmExpression = located(nameSpan) { lowerNamedValue(veraName) }
@@ -1047,7 +1096,7 @@ private class JvmFunctionLoweringState(
             )
         }
         requireArgumentNames(
-            "method ${ownerName.value}.${methodName.value}",
+            "method ${ownerName.display}.${methodName.display}",
             parameters.map { veraParameter -> veraParameter.name },
             loweredArguments,
         )
@@ -1090,7 +1139,7 @@ private class JvmFunctionLoweringState(
             )
         }
         requireArgumentNames(
-            "class ${veraClass.name.value}",
+            "class ${veraClass.name.display}",
             veraClass.fields.map { field -> field.name },
             loweredArguments,
         )
@@ -1129,6 +1178,7 @@ private class JvmFunctionLoweringState(
             ?: throw JvmLoweringException.UnknownFunction(
                 veraFunctionName,
                 JvmNameHints.closest(veraFunctionName, callableNames()),
+                qualifiedCaseHint(veraFunctionName),
             )
         val jvmParameters = veraFunctionDeclaration.parameters.map { veraParameter ->
             JvmParameter(veraParameter.name, lowerType(veraParameter.type))
@@ -1141,7 +1191,7 @@ private class JvmFunctionLoweringState(
             )
         }
         requireArgumentNames(
-            "function ${veraFunctionName.value}",
+            "function ${veraFunctionName.display}",
             veraFunctionDeclaration.parameters.map { veraParameter -> veraParameter.name },
             loweredArguments,
         )

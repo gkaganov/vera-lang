@@ -82,6 +82,15 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         val className: String,
     ) : VeraParseException("a pattern that binds no fields has no parentheses: write `$className`", found)
 
+    /** A trait case with `has` but no body; the body ends the `has` list, since commas also separate cases. */
+    class CaseTraitsWithoutBody(
+        val found: VeraToken,
+        val caseName: String,
+    ) : VeraParseException(
+        "a case with `has` needs a body to end its trait list: write `$caseName has ... { }`, found ${found.describe()}",
+        found,
+    )
+
     /** A class field written without `val`. */
     class FieldWithoutVal(
         val found: VeraToken,

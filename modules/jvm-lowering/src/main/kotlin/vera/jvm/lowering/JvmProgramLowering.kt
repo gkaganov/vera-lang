@@ -66,7 +66,10 @@ object JvmProgramLowering {
             }
         }
 
-        val duplicateClass = classDeclarations
+        // Cases nested in trait blocks are classes too, named `Owner$Case`; only top-level classes
+        // take part in the top-level namespace below.
+        val allClassDeclarations = classDeclarations + traitDeclarations.flatMap { trait -> trait.cases }
+        val duplicateClass = allClassDeclarations
             .groupBy { it.name }
             .values
             .firstOrNull { it.size > 1 }
@@ -92,8 +95,9 @@ object JvmProgramLowering {
             throw JvmLoweringException.ProgramClassConflictsWithUnit(mainClassName)
         }
 
-        val classesByName = classDeclarations.associateBy { it.name }
+        val classesByName = allClassDeclarations.associateBy { it.name }
         val traitsByName = traitDeclarations.associateBy { it.name }
+        allClassDeclarations.forEach { veraClass -> requireTraitForms(veraClass, traitsByName) }
         val typeNames = JvmTypeNames(classesByName.keys, traitsByName.keys)
         traitDeclarations.firstOrNull { it.name == mainClassName }?.let { conflicting ->
             throw JvmLoweringException.TraitNameConflictsWithProgramClass(mainClassName).at(conflicting.span)
@@ -102,7 +106,7 @@ object JvmProgramLowering {
             located(trait.span) { validateTrait(trait, typeNames) }
         }
 
-        val jvmDeclaredClasses = classDeclarations.map { declaration ->
+        val jvmDeclaredClasses = allClassDeclarations.map { declaration ->
             located(declaration.span) {
                 lowerClass(declaration, mainClassName, functionDeclarations, classesByName, traitsByName)
             }
@@ -118,7 +122,7 @@ object JvmProgramLowering {
             jvmMethods += adapter
         }
 
-        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames, classDeclarations) }
+        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames, allClassDeclarations) }
         val jvmClasses = listOf(lowerUnitClass()) + jvmInterfaces + jvmDeclaredClasses +
             JvmClass(mainClassName, jvmMethods)
         return JvmProgram(jvmClasses)
@@ -245,6 +249,19 @@ object JvmProgramLowering {
                 located(parameter.span) { JvmTypeLowering.lower(parameter.type, typeNames) }
             }
             located(method.span) { JvmTypeLowering.lowerReturn(method.returnType, typeNames) }
+        }
+    }
+
+    /**
+     * A trait in block form owns its cases, so only those cases have it; any other class joining it
+     * with `has` is rejected.
+     */
+    private fun requireTraitForms(veraClass: VeraClassDeclaration, traitsByName: Map<Identifier, VeraTraitDeclaration>) {
+        veraClass.traits.forEach { traitName ->
+            val veraTrait = traitsByName[traitName] ?: return@forEach
+            if (veraTrait.cases.isNotEmpty() && veraClass.owner != traitName) {
+                throw JvmLoweringException.BlockTraitJoined(veraClass.name, traitName).at(veraClass.span)
+            }
         }
     }
 
@@ -427,6 +444,7 @@ object JvmProgramLowering {
                 fields = listOf(instanceField),
                 constructors = listOf(JvmConstructor(emptyList(), isPrivate = true)),
                 interfaces = interfaces,
+                owner = veraClass.owner,
             )
         }
         val constructorParameters = jvmFields.map { field ->
@@ -438,6 +456,7 @@ object JvmProgramLowering {
             fields = jvmFields,
             constructors = listOf(JvmConstructor(constructorParameters)),
             interfaces = interfaces,
+            owner = veraClass.owner,
         )
     }
 }

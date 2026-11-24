@@ -307,6 +307,12 @@ class CompilerErrorTests {
                 "traits are closed by default; remove `sealed`",
             ),
             CompileErrorCase(
+                "trait cases with traits but no body",
+                "trait Printable {\n    fn label(): String\n}\ntrait Color { Red has Printable, Green }",
+                VeraParseException.CaseTraitsWithoutBody::class,
+                "a case with `has` needs a body to end its trait list: write `Red has ... { }`, found '}'",
+            ),
+            CompileErrorCase(
                 "missing statement terminators",
                 function("print(1) print(2)"),
                 VeraParseException.ExpectedEndOfLine::class,
@@ -649,6 +655,54 @@ class CompilerErrorTests {
                 classDeclaration("Empty") + function("val empty = 1 |> Empty"),
                 JvmLoweringException.SingletonConstructed::class,
                 "Empty has no fields, so it has a single value",
+            ),
+            CompileErrorCase(
+                "classes joining a trait that lists its cases",
+                "trait Color { Red }\nclass Teal has Color {}",
+                JvmLoweringException.BlockTraitJoined::class,
+                "Color lists its cases inside it; add Teal there instead of joining with `has`",
+            ),
+            CompileErrorCase(
+                "unknown trait cases",
+                "trait Color { Red, Green }\n" + function("val color = Color.Rde"),
+                JvmLoweringException.UnknownTraitCase::class,
+                "trait Color has no case Rde; did you mean `Red`?",
+            ),
+            CompileErrorCase(
+                "unqualified trait cases",
+                "trait Color { Red, Green }\n" + function("val color = Red"),
+                JvmLoweringException.UnknownVariable::class,
+                "variable Red is not defined; a case is written with its trait: `Color.Red`",
+            ),
+            CompileErrorCase(
+                "unqualified trait case construction",
+                "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" + function("val shape = Circle(1)"),
+                JvmLoweringException.UnknownFunction::class,
+                "function Circle is not defined; a case is written with its trait: `Shape.Circle`",
+            ),
+            CompileErrorCase(
+                "trait cases missing a trait method",
+                "trait Shape {\n    fn area(): Int\n    Empty\n}",
+                JvmLoweringException.MissingTraitMethod::class,
+                "class Shape.Empty has trait Shape but no method area",
+            ),
+            CompileErrorCase(
+                "duplicate trait cases",
+                "trait Color { Red, Red }",
+                JvmLoweringException.DuplicateClassType::class,
+                "Color.Red is declared more than once",
+            ),
+            CompileErrorCase(
+                "match on a trait's cases that misses one",
+                "trait Color { Red, Blue }\n" + "fn name(color: Color): Int = match color {\n    Red -> 1\n}",
+                JvmLoweringException.MatchNotExhaustive::class,
+                "match on Color does not cover Color.Blue",
+            ),
+            CompileErrorCase(
+                "trait cases with fields used as values",
+                "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" + function("val shape = Shape.Circle"),
+                JvmLoweringException.ClassTypeUsedAsValue::class,
+                "class type Shape.Circle cannot be used as a value",
             ),
             CompileErrorCase(
                 "undefined names",

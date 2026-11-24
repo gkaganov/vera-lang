@@ -13,7 +13,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 ### Closed traits, trait cases, and structural interfaces (design in progress)
 
 - Status: design settled; implementing in steps. Done: trait-typed values with dynamic dispatch,
-  steps 1 (every trait closed and matchable) and 2 (field-less singletons).
+  steps 1 (every trait closed and matchable), 2 (field-less singletons), and 3
+  (block-form cases).
 - Area: parser, AST, lowering, emitter.
 - Model:
   - `trait` is closed: only classes in its module can join it. Traits compile to sealed interfaces
@@ -30,7 +31,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
     nested or not, is a singleton written by name.
   - Nested cases compile to nested JVM classes (`Color$Red`), seen from Java as `Color.Red`.
 - Decisions:
-  1. Constructing a case is always qualified: `Color.Red`, `Shape.Circle(radius = 2)`. An
+  1. Constructing a case is always qualified: `Color.Red`, `Shape.Circle(2)`. An
      explicit import shorthand (`import Color.{Red, Green}`) may come with modules.
   2. Cases use the body-optional form above; no `class` keyword inside a block.
   3. Sibling cases are qualified even inside their own block (`Tree.Leaf`). The only unqualified
@@ -81,7 +82,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   1. Every trait closed (drop `sealed`), and `match` on any trait. Done.
   2. Field-less classes as singletons, with `Unit` as one of them. Done.
   3. Block-form cases: qualified names, nested JVM classes, unqualified patterns, qualified
-     `Display`.
+     `Display`. Done.
   4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values.
   5. Required fields in traits.
   6. Structural `interface`s with `implements`.

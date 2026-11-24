@@ -7,7 +7,7 @@ data class JvmProgram(val classes: List<JvmClass>)
 /**
  * A JVM class, or an interface when [isInterface]. Classes list the trait [interfaces] they
  * implement; interfaces declare their trait methods as [abstractMethods]. A sealed interface lists
- * its [permittedSubclasses].
+ * its [permittedSubclasses]. A case nested in a trait's block names that trait as its [owner].
  */
 data class JvmClass(
     val name: Identifier,
@@ -18,6 +18,7 @@ data class JvmClass(
     val isInterface: Boolean = false,
     val abstractMethods: List<JvmAbstractMethod> = emptyList(),
     val permittedSubclasses: List<Identifier> = emptyList(),
+    val owner: Identifier? = null,
 )
 
 /** A method without a body, declared by an interface. */
@@ -65,8 +66,8 @@ fun JvmType.render(): String = when (this) {
     JvmType.BOOL -> "Bool"
     JvmType.OBJECT -> "Object"
     JvmType.VOID -> "void"
-    is JvmType.ClassType -> name.value
-    is JvmType.InterfaceType -> name.value
+    is JvmType.ClassType -> name.display
+    is JvmType.InterfaceType -> name.display
     is JvmType.Array -> "${elementType.render()}[]"
 }
 

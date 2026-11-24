@@ -35,7 +35,7 @@ internal object JvmNameHints {
 
     /** Joins a message with a hint, or with a "did you mean" suggestion when there is no hint. */
     fun withHelp(message: String, hint: String?, suggestion: Identifier?): String {
-        val help = hint ?: suggestion?.let { "did you mean `${it.value}`?" } ?: return message
+        val help = hint ?: suggestion?.let { "did you mean `${it.display}`?" } ?: return message
         return "$message; $help"
     }
 
