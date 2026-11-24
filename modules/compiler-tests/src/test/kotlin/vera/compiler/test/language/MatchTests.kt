@@ -1,58 +1,48 @@
 package vera.compiler.test.language
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
+import vera.compiler.test.assertPrints
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
-import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
 import vera.parser.VeraParseException
-import vera.shared.model.Identifier
 
 /** `match`: scrutinees, patterns, arms, exhaustiveness, and branch types. */
 class MatchTests {
     @Nested
     inner class Scrutinee {
         @Test
-        fun `match destructures a single class and evaluates its scrutinee once`(testInfo: TestInfo) {
-            val source = """
-                        class Point {
-                            val x: Int
-                            val y: Int
-                        }
-                        fn origin(): Point {
-                            print("origin")
-                            return Point(x = 3, y = 4)
-                        }
-                        fn $TEST_MAIN() {
-                            val sum = match origin() {
-                                Point(x, y) -> x + y
-                            }
-                            print(sum)
-                            mut val count = 0
-                            while count < 3 {
-                                count = count + 1
-                                match Point(x = count, y = 0) {
-                                    Point(x) -> if x == 2 { break }
-                                }
-                            }
-                            print(count)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "origin${EOL}7${EOL}2$EOL", testInfo)
-        }
+        fun `match destructures a single class and evaluates its scrutinee once`() = assertPrints(
+            """
+            class Point {
+                val x: Int
+                val y: Int
+            }
+            fn origin(): Point {
+                print("origin")
+                return Point(x = 3, y = 4)
+            }
+            fn main() {
+                val sum = match origin() {
+                    Point(x, y) -> x + y
+                }
+                print(sum)
+                mut val count = 0
+                while count < 3 {
+                    count = count + 1
+                    match Point(x = count, y = 0) {
+                        Point(x) -> if x == 2 { break }
+                    }
+                }
+                print(count)
+            }
+            """,
+            "origin",
+            "7",
+            "2",
+        )
 
         @Test
         fun `match on values that are not objects`() = assertCompilationFails(
@@ -65,30 +55,32 @@ class MatchTests {
     @Nested
     inner class Patterns {
         @Test
-        fun `match selects the arm for the object's class and binds its fields`(testInfo: TestInfo) {
-            val source = """
-                        trait Shape {}
-                        class Circle has Shape {
-                            val radius: Int
-                        }
-                        class Rect has Shape {
-                            val width: Int
-                            val height: Int
-                        }
-                        class Empty has Shape {}
-                        fn area(shape: Shape): Int = match shape {
-                            Circle(radius) -> 3 * radius * radius
-                            Rect(width = w, height) -> w * height
-                            Empty -> 0
-                        }
-                        fn $TEST_MAIN() {
-                            print(area(Circle(2)))
-                            print(area(Rect(width = 2, height = 3)))
-                            print(area(Empty))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "12${EOL}6${EOL}0$EOL", testInfo)
-        }
+        fun `match selects the arm for the object's class and binds its fields`() = assertPrints(
+            """
+            trait Shape {}
+            class Circle has Shape {
+                val radius: Int
+            }
+            class Rect has Shape {
+                val width: Int
+                val height: Int
+            }
+            class Empty has Shape {}
+            fn area(shape: Shape): Int = match shape {
+                Circle(radius) -> 3 * radius * radius
+                Rect(width = w, height) -> w * height
+                Empty -> 0
+            }
+            fn main() {
+                print(area(Circle(2)))
+                print(area(Rect(width = 2, height = 3)))
+                print(area(Empty))
+            }
+            """,
+            "12",
+            "6",
+            "0",
+        )
 
         @Test
         fun `empty parentheses in match patterns`() = assertCompilationFails(
@@ -134,29 +126,30 @@ class MatchTests {
     @Nested
     inner class Arms {
         @Test
-        fun `match arms can be blocks, statements, and return from the function`(testInfo: TestInfo) {
-            val source = """
-                        trait Event {}
-                        class Click has Event {
-                            val x: Int
-                        }
-                        class Quit has Event {}
-                        fn describe(event: Event): String {
-                            match event {
-                                Click(x) -> {
-                                    val doubled = x * 2
-                                    return "click \{doubled}"
-                                }
-                                Quit -> return "quit"
-                            }
-                        }
-                        fn $TEST_MAIN() {
-                            print(describe(Click(4)))
-                            print(describe(Quit))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "click 8${EOL}quit$EOL", testInfo)
-        }
+        fun `match arms can be blocks, statements, and return from the function`() = assertPrints(
+            """
+            trait Event {}
+            class Click has Event {
+                val x: Int
+            }
+            class Quit has Event {}
+            fn describe(event: Event): String {
+                match event {
+                    Click(x) -> {
+                        val doubled = x * 2
+                        return "click \{doubled}"
+                    }
+                    Quit -> return "quit"
+                }
+            }
+            fn main() {
+                print(describe(Click(4)))
+                print(describe(Quit))
+            }
+            """,
+            "click 8",
+            "quit",
+        )
 
         @Test
         fun `match arms without an arrow`() = assertCompilationFails(
@@ -189,32 +182,35 @@ class MatchTests {
     @Nested
     inner class BranchTypes {
         @Test
-        fun `branches of different classes unify to their shared trait`(testInfo: TestInfo) {
-            val source = """
-                        trait Shape {
-                            fn size(): Int
-                        }
-                        class Circle has Shape {
-                            val radius: Int
-                            fn size(): Int = radius
-                        }
-                        class Empty has Shape {
-                            fn size(): Int = 0
-                        }
-                        fn make(big: Bool): Shape = if big { Circle(5) } else { Empty }
-                        fn grow(shape: Shape): Shape = match shape {
-                            Circle(radius) -> Circle(radius + 1)
-                            Empty -> Circle(1)
-                        }
-                        fn $TEST_MAIN() {
-                            print(make(True).size())
-                            print(make(False).size())
-                            print(grow(make(True)).size())
-                            print(grow(make(False)).size())
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "5${EOL}0${EOL}6${EOL}1$EOL", testInfo)
-        }
+        fun `branches of different classes unify to their shared trait`() = assertPrints(
+            """
+            trait Shape {
+                fn size(): Int
+            }
+            class Circle has Shape {
+                val radius: Int
+                fn size(): Int = radius
+            }
+            class Empty has Shape {
+                fn size(): Int = 0
+            }
+            fn make(big: Bool): Shape = if big { Circle(5) } else { Empty }
+            fn grow(shape: Shape): Shape = match shape {
+                Circle(radius) -> Circle(radius + 1)
+                Empty -> Circle(1)
+            }
+            fn main() {
+                print(make(True).size())
+                print(make(False).size())
+                print(grow(make(True)).size())
+                print(grow(make(False)).size())
+            }
+            """,
+            "5",
+            "0",
+            "6",
+            "1",
+        )
 
         @Test
         fun `match arms of unrelated types`() = assertCompilationFails(

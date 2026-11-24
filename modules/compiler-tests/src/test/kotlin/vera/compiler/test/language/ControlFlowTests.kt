@@ -1,155 +1,143 @@
 package vera.compiler.test.language
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
+import vera.compiler.test.assertPrints
+import vera.compiler.test.assertReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
-import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
-import vera.parser.VeraParseException
-import vera.shared.model.Identifier
 
 /** Control flow: `if`, `while`, `break`/`continue`, and unreachable statements. */
 class ControlFlowTests {
     @Nested
     inner class If {
         @Test
-        fun `if statements execute only then-block if True`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if 1 + 1 < 3 {
-                                print("So true")
-                            } else {
-                                print("Never gonna happen")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "So true$EOL", testInfo)
-        }
+        fun `if statements execute only then-block if True`() = assertPrints(
+            """
+            fn main() {
+                if 1 + 1 < 3 {
+                    print("So true")
+                } else {
+                    print("Never gonna happen")
+                }
+            }
+            """,
+            "So true",
+        )
 
         @Test
-        fun `if statements execute only else-block if False`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("So true")
-                            } else {
-                                print("Absolutely false!")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "Absolutely false!$EOL", testInfo)
-        }
+        fun `if statements execute only else-block if False`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("So true")
+                } else {
+                    print("Absolutely false!")
+                }
+            }
+            """,
+            "Absolutely false!",
+        )
 
         @Test
-        fun `else if executes the matching branch`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("if")
-                            } else if True {
-                                print("else if")
-                            } else {
-                                print("else")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "else if$EOL", testInfo)
-        }
+        fun `else if executes the matching branch`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("if")
+                } else if True {
+                    print("else if")
+                } else {
+                    print("else")
+                }
+            }
+            """,
+            "else if",
+        )
 
         @Test
-        fun `else if falls through to else when no branch matches`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("if")
-                            } else if False {
-                                print("else if")
-                            } else {
-                                print("else")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "else$EOL", testInfo)
-        }
+        fun `else if falls through to else when no branch matches`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("if")
+                } else if False {
+                    print("else if")
+                } else {
+                    print("else")
+                }
+            }
+            """,
+            "else",
+        )
 
         @Test
-        fun `else if chains select the first matching branch`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("if")
-                            } else if False {
-                                print("second")
-                            } else if True {
-                                print("third")
-                            } else {
-                                print("else")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "third$EOL", testInfo)
-        }
+        fun `else if chains select the first matching branch`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("if")
+                } else if False {
+                    print("second")
+                } else if True {
+                    print("third")
+                } else {
+                    print("else")
+                }
+            }
+            """,
+            "third",
+        )
 
         @Test
-        fun `else if without a final else terminates before following statement`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("if")
-                            } else if False {
-                                print("else if")
-                            }
+        fun `else if without a final else terminates before following statement`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("if")
+                } else if False {
+                    print("else if")
+                }
 
-                            print("after")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "after$EOL", testInfo)
-        }
-
-        @Test
-        fun `if without else still terminates before following statement`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if False {
-                                print("then")
-                            }
-
-                            print("after")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "after$EOL", testInfo)
-        }
+                print("after")
+            }
+            """,
+            "after",
+        )
 
         @Test
-        fun `if and while conditions may use grouping parentheses`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            mut val count = 0
-                            mut val total = 0
-                            while (count < 3) {
-                                if (count == 1) or (count == 2) {
-                                    total = total + count
-                                }
-                                count = count + 1
-                            }
-                            return total
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 3, testInfo)
-        }
+        fun `if without else still terminates before following statement`() = assertPrints(
+            """
+            fn main() {
+                if False {
+                    print("then")
+                }
+
+                print("after")
+            }
+            """,
+            "after",
+        )
+
+        @Test
+        fun `if and while conditions may use grouping parentheses`() = assertReturns(
+            """
+            fn main(): Int {
+                mut val count = 0
+                mut val total = 0
+                while (count < 3) {
+                    if (count == 1) or (count == 2) {
+                        total = total + count
+                    }
+                    count = count + 1
+                }
+                return total
+            }
+            """,
+            3,
+        )
 
         @Test
         fun `non-Bool conditions`() = assertCompilationFails(
@@ -162,158 +150,159 @@ class ControlFlowTests {
     @Nested
     inner class IfExpressions {
         @Test
-        fun `if expressions evaluate to Unit when returned`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            return if False {
-                                print("if")
-                            } else {
-                                print("else")
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "else$EOL", testInfo)
-        }
+        fun `if expressions evaluate to Unit when returned`() = assertPrints(
+            """
+            fn main() {
+                return if False {
+                    print("if")
+                } else {
+                    print("else")
+                }
+            }
+            """,
+            "else",
+        )
 
         @Test
-        fun `if expressions return the matching branch value`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            print(if True {
-                                1
-                            } else {
-                                2
-                            })
-                            print(if False {
-                                3
-                            } else {
-                                4
-                            })
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "1${EOL}4${EOL}", testInfo)
-        }
+        fun `if expressions return the matching branch value`() = assertPrints(
+            """
+            fn main() {
+                print(if True {
+                    1
+                } else {
+                    2
+                })
+                print(if False {
+                    3
+                } else {
+                    4
+                })
+            }
+            """,
+            "1",
+            "4",
+        )
 
         @Test
-        fun `if expressions return the last expression in a branch`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            print(if True {
-                                val value = 40
-                                value + 2
-                            } else {
-                                0
-                            })
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "42$EOL", testInfo)
-        }
+        fun `if expressions return the last expression in a branch`() = assertPrints(
+            """
+            fn main() {
+                print(if True {
+                    val value = 40
+                    value + 2
+                } else {
+                    0
+                })
+            }
+            """,
+            "42",
+        )
 
         @Test
-        fun `if branch expression statements are discarded`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            print(if True {
-                                1 + 1
-                                3
-                            } else {
-                                4
-                            })
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "3$EOL", testInfo)
-        }
+        fun `if branch expression statements are discarded`() = assertPrints(
+            """
+            fn main() {
+                print(if True {
+                    1 + 1
+                    3
+                } else {
+                    4
+                })
+            }
+            """,
+            "3",
+        )
 
         @Test
-        fun `else if expressions return the matching branch value`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            print(if False {
-                                1
-                            } else if True {
-                                2
-                            } else {
-                                3
-                            })
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "2$EOL", testInfo)
-        }
+        fun `else if expressions return the matching branch value`() = assertPrints(
+            """
+            fn main() {
+                print(if False {
+                    1
+                } else if True {
+                    2
+                } else {
+                    3
+                })
+            }
+            """,
+            "2",
+        )
 
         @Test
-        fun `if expressions can be bound to a variable`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            val value = if False {
-                                1
-                            } else {
-                                2
-                            }
-                            print(value)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "2$EOL", testInfo)
-        }
+        fun `if expressions can be bound to a variable`() = assertPrints(
+            """
+            fn main() {
+                val value = if False {
+                    1
+                } else {
+                    2
+                }
+                print(value)
+            }
+            """,
+            "2",
+        )
 
         @Test
-        fun `if expressions can be returned`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            return if False {
-                                1
-                            } else {
-                                2
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 2, testInfo)
-        }
+        fun `if expressions can be returned`() = assertReturns(
+            """
+            fn main(): Int {
+                return if False {
+                    1
+                } else {
+                    2
+                }
+            }
+            """,
+            2,
+        )
 
         @Test
-        fun `if expressions used as statements discard their value`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            if True {
-                                1
-                            } else {
-                                2
-                            }
+        fun `if expressions used as statements discard their value`() = assertPrints(
+            """
+            fn main() {
+                if True {
+                    1
+                } else {
+                    2
+                }
 
-                            if True {
-                                3
-                            }
+                if True {
+                    3
+                }
 
-                            print("after")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "after$EOL", testInfo)
-        }
-
-        @Test
-        fun `if without else produces Unit`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            val result: Unit = if False {
-                                print("no")
-                            }
-                            return 1
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 1, testInfo)
-        }
+                print("after")
+            }
+            """,
+            "after",
+        )
 
         @Test
-        fun `if without else discards a non-Unit branch value`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            val result: Unit = if False {
-                                1
-                            }
-                            return 1
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 1, testInfo)
-        }
+        fun `if without else produces Unit`() = assertReturns(
+            """
+            fn main(): Int {
+                val result: Unit = if False {
+                    print("no")
+                }
+                return 1
+            }
+            """,
+            1,
+        )
+
+        @Test
+        fun `if without else discards a non-Unit branch value`() = assertReturns(
+            """
+            fn main(): Int {
+                val result: Unit = if False {
+                    1
+                }
+                return 1
+            }
+            """,
+            1,
+        )
 
         @Test
         fun `if branches with different types`() = assertCompilationFails(
@@ -326,155 +315,157 @@ class ControlFlowTests {
     @Nested
     inner class While {
         @Test
-        fun `while with a false condition skips its body`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            while False {
-                                print("body")
-                            }
-                            print("after")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "after$EOL", testInfo)
-        }
+        fun `while with a false condition skips its body`() = assertPrints(
+            """
+            fn main() {
+                while False {
+                    print("body")
+                }
+                print("after")
+            }
+            """,
+            "after",
+        )
 
         @Test
-        fun `while executes its body when the condition is true`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            while 1 + 1 < 3 {
-                                print("once")
-                                return
-                            }
-                            print("after")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "once$EOL", testInfo)
-        }
+        fun `while executes its body when the condition is true`() = assertPrints(
+            """
+            fn main() {
+                while 1 + 1 < 3 {
+                    print("once")
+                    return
+                }
+                print("after")
+            }
+            """,
+            "once",
+        )
 
         @Test
-        fun `while loops can terminate through rebinding`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            mut val counter = 0
-                            while counter <= 2 {
-                                print(counter)
-                                counter = counter + 1
-                            }
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "0${EOL}1${EOL}2${EOL}", testInfo)
-        }
+        fun `while loops can terminate through rebinding`() = assertPrints(
+            """
+            fn main() {
+                mut val counter = 0
+                while counter <= 2 {
+                    print(counter)
+                    counter = counter + 1
+                }
+            }
+            """,
+            "0",
+            "1",
+            "2",
+        )
     }
 
     @Nested
     inner class BreakAndContinue {
         @Test
-        fun `break exits the innermost while loop`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            mut val count = 0
-                            while True {
-                                count = count + 1
-                                if count == 3 {
-                                    break
-                                }
-                            }
-                            return count
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 3, testInfo)
-        }
+        fun `break exits the innermost while loop`() = assertReturns(
+            """
+            fn main(): Int {
+                mut val count = 0
+                while True {
+                    count = count + 1
+                    if count == 3 {
+                        break
+                    }
+                }
+                return count
+            }
+            """,
+            3,
+        )
 
         @Test
-        fun `continue skips the rest of the loop body`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            mut val count = 0
-                            mut val total = 0
-                            while count < 5 {
-                                count = count + 1
-                                if count == 3 {
-                                    continue
-                                }
-                                total = total + count
-                            }
-                            return total
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 12, testInfo)
-        }
+        fun `continue skips the rest of the loop body`() = assertReturns(
+            """
+            fn main(): Int {
+                mut val count = 0
+                mut val total = 0
+                while count < 5 {
+                    count = count + 1
+                    if count == 3 {
+                        continue
+                    }
+                    total = total + count
+                }
+                return total
+            }
+            """,
+            12,
+        )
 
         @Test
-        fun `break only exits the innermost loop`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            mut val outer = 0
-                            mut val total = 0
-                            while outer < 3 {
-                                outer = outer + 1
-                                mut val inner = 0
-                                while True {
-                                    inner = inner + 1
-                                    if inner == 2 {
-                                        break
-                                    }
-                                }
-                                total = total + inner
-                            }
-                            return total
+        fun `break only exits the innermost loop`() = assertReturns(
+            """
+            fn main(): Int {
+                mut val outer = 0
+                mut val total = 0
+                while outer < 3 {
+                    outer = outer + 1
+                    mut val inner = 0
+                    while True {
+                        inner = inner + 1
+                        if inner == 2 {
+                            break
                         }
-                    """.trimIndent()
-            assertProgramReturns(source, 6, testInfo)
-        }
+                    }
+                    total = total + inner
+                }
+                return total
+            }
+            """,
+            6,
+        )
 
         @Test
-        fun `break works inside an if that forms a whole statement`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            mut val counter = 0
-                            mut val last = 0
-                            while True {
-                                counter = counter + 1
-                                val value = if counter < 10 {
-                                    if counter == 3 {
-                                        break
-                                    }
-                                    counter * 10
-                                } else {
-                                    0
-                                }
-                                last = value
-                            }
-                            return last
+        fun `break works inside an if that forms a whole statement`() = assertReturns(
+            """
+            fn main(): Int {
+                mut val counter = 0
+                mut val last = 0
+                while True {
+                    counter = counter + 1
+                    val value = if counter < 10 {
+                        if counter == 3 {
+                            break
                         }
-                    """.trimIndent()
-            assertProgramReturns(source, 20, testInfo)
-        }
+                        counter * 10
+                    } else {
+                        0
+                    }
+                    last = value
+                }
+                return last
+            }
+            """,
+            20,
+        )
 
         @Test
-        fun `break works in a loop nested inside an expression`(testInfo: TestInfo) {
-            val source = """
-                        fn add(a: Int, b: Int): Int {
-                            return a + b
+        fun `break works in a loop nested inside an expression`() = assertReturns(
+            """
+            fn add(a: Int, b: Int): Int {
+                return a + b
+            }
+            fn main(): Int {
+                return add(a = 1, b = if True {
+                    mut val count = 0
+                    while True {
+                        count = count + 1
+                        if count == 4 {
+                            break
                         }
-                        fn $TEST_MAIN(): Int {
-                            return add(a = 1, b = if True {
-                                mut val count = 0
-                                while True {
-                                    count = count + 1
-                                    if count == 4 {
-                                        break
-                                    }
-                                }
-                                count
-                            } else {
-                                0
-                            })
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 5, testInfo)
-        }
+                    }
+                    count
+                } else {
+                    0
+                })
+            }
+            """,
+            5,
+        )
 
         @Test
         fun `break outside loops`() = assertCompilationFails(

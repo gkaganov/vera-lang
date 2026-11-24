@@ -3,22 +3,12 @@ package vera.compiler.test.language
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
 import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
 import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
-import vera.parser.VeraParseException
 import vera.shared.model.Identifier
 
 /** Name resolution: unknown names with suggestions, no shadowing, and top-level names. */
@@ -92,7 +82,7 @@ class NameResolutionTests {
 
         @Test
         fun `invalid type names`() = assertCompilationFails(
-            "fn $TEST_MAIN(): Nope { }",
+            "fn main(): Nope { }",
             JvmLoweringException.UnknownClassType::class,
             "class type Nope is not defined",
         )
@@ -117,7 +107,7 @@ class NameResolutionTests {
 
         @Test
         fun `duplicate parameters`() = assertCompilationFails(
-            "fn testMain(value: Int, value: Int) { }",
+            "fn main(value: Int, value: Int) { }",
             JvmLoweringException.ShadowingNotAllowed::class,
             "name value is already in scope; shadowing is not allowed",
         )
@@ -167,7 +157,7 @@ class NameResolutionTests {
 
         @Test
         fun `locals shadowing parameters`() = assertCompilationFails(
-            "fn testMain(value: Int) {\n    val value = 1\n}",
+            "fn main(value: Int) {\n    val value = 1\n}",
             JvmLoweringException.ShadowingNotAllowed::class,
             "name value is already in scope; shadowing is not allowed",
         )
@@ -181,7 +171,7 @@ class NameResolutionTests {
 
         @Test
         fun `parameters shadowing top-level functions`() = assertCompilationFails(
-            "fn helper() { }\nfn testMain(helper: Int) { }",
+            "fn helper() { }\nfn main(helper: Int) { }",
             JvmLoweringException.ShadowingNotAllowed::class,
             "name helper is already in scope; shadowing is not allowed",
         )

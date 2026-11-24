@@ -1,23 +1,15 @@
 package vera.compiler.test.language
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
 import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertCompilerError
 import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
 import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
 import vera.parser.VeraParseException
 import vera.shared.model.Identifier
 
@@ -34,7 +26,7 @@ class ProgramTests {
 
         @Test
         fun `missing tokens`() = assertCompilationFails(
-            "fn $TEST_MAIN( { }",
+            "fn main( { }",
             VeraParseException.ExpectedToken::class,
             "expected parameter name",
         )
@@ -56,7 +48,7 @@ class ProgramTests {
                             print("entry")
                         }
                     """.trimIndent()
-            assertJvmMainPrints(source, "entry$EOL")
+            assertJvmMainPrints(source, "entry")
         }
 
         @Test
@@ -67,7 +59,7 @@ class ProgramTests {
                             return 1
                         }
                     """.trimIndent()
-            assertJvmMainPrints(source, "entry$EOL")
+            assertJvmMainPrints(source, "entry")
         }
     }
 
@@ -92,7 +84,7 @@ class ProgramTests {
             assertCompilerError<JvmLoweringException.ProgramClassConflictsWithUnit>(
                 "program class Unit conflicts with the built-in Unit class",
             ) {
-                VeraCompiler.compile(Identifier("Unit"), "fn testMain() { }")
+                VeraCompiler.compile(Identifier("Unit"), "fn main() { }")
             }
         }
     }

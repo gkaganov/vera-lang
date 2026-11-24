@@ -22,9 +22,31 @@ feature's tests, successful and failing, are in one place.
 
 ## How tests work
 
-Tests build Vera source inline, call `VeraCompiler.compile`, load the returned bytecode with
-`ByteArrayClassLoader`, and either invoke the compiled method or catch the rendered `VeraException`.
-Assertions compare printed stdout, returned values, or an error-message fragment.
+Tests write a Vera program with a `fn main()` as an indented raw string. The helpers in
+`VeraTestSupport.kt` compile it, load the bytecode with `ByteArrayClassLoader`, and check the result:
+
+```kotlin
+@Test
+fun `classes fit interfaces by their members`() = assertPrints(
+    """
+    interface Named {
+        fn name(): String
+    }
+    class Dog {
+        fn name(): String = "Rex"
+    }
+    fn main() = print(Dog.name())
+    """,
+    "Rex",
+)
+```
+
+- `assertPrints(source, lines...)` calls `main` and compares the printed lines.
+- `assertReturns(source, value)` calls `main` and compares its return value.
+- `assertJvmMainPrints(source, lines...)` runs the JVM entry point `main(String[])`.
+- `compileProgram(source)` returns the compiled classes for tests that inspect them by reflection.
+- A source that starts with a line break is trimmed with `trimIndent`; any other source is used as
+  is, so a test can build exact input such as CRLF line endings.
 
 Each error test is its own `@Test` calling `assertCompilationFails(source, ExpectedError::class,
 "message part")`. Every error reachable from source must carry a source span
@@ -38,9 +60,6 @@ Run the suite with:
 ./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests"
 ./gradlew :compiler-tests:test --tests "vera.compiler.test.language.InterfaceTests\$StructuralFit"
 ```
-
-Some tests set `compileToOut = true` to dump generated `.class` files under `out/` for debugging.
-`out/` is git-ignored.
 
 ## Why inline source
 

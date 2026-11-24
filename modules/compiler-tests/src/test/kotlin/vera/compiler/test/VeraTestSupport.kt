@@ -1,27 +1,35 @@
 package vera.compiler.test
 
 import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.TestInfo
 import vera.compiler.VeraCompiler
 import vera.shared.model.Identifier
 import vera.shared.model.VeraException
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
-import java.util.concurrent.atomic.AtomicLong
-import kotlin.io.path.Path
-import kotlin.io.path.createParentDirectories
-import kotlin.io.path.writeBytes
 import kotlin.reflect.KClass
 
 // Shared helpers for compiler tests: compile Vera source, run it, and check its output or its error.
+//
+// Sources are usually indented raw strings:
+//
+//     assertPrints(
+//         """
+//         fn main() = print("hi")
+//         """,
+//         "hi",
+//     )
+//
+// A source that starts with a line break is trimmed with `trimIndent`; any other source is used as is,
+// so a test can build exact input such as CRLF line endings.
 
 internal val EOL: String = System.lineSeparator()
-internal const val TEST_MAIN = "testMain"
-private val CLASS_ID = AtomicLong()
 
-/** A `testMain` function with [lines] as its body. */
+/** The program class every test program compiles into; each program gets its own class loader. */
+internal const val PROGRAM_CLASS = "VeraTestProgram"
+
+/** A `main` function with [lines] as its body. */
 internal fun function(vararg lines: String): String = buildString {
-    appendLine("fn $TEST_MAIN() {")
+    appendLine("fn main() {")
     lines.forEach { appendLine("    $it") }
     appendLine("}")
 }
@@ -38,74 +46,51 @@ internal fun traitDeclaration(name: String, vararg lines: String): String = buil
     appendLine("}")
 }
 
-/** Compiles [source], runs its JVM entry point `main(String[])`, and compares what it printed. */
-internal fun assertJvmMainPrints(source: String, expected: String) {
-    val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-    val bytecode = compileOrFail(className, source)
-    val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
-    val entryPoint = classLoader.loadClass(className.value)
-        .getMethod("main", Array<String>::class.java)
+/** Compiles [source], calls its Vera `main`, and expects it to print [lines], each ending with a line break. */
+internal fun assertPrints(source: String, vararg lines: String) {
+    val (_, output) = runMain(source)
+    Assertions.assertEquals(expectedOutput(lines), output)
+}
 
-    val oldOut = System.out
-    val baos = ByteArrayOutputStream()
-    try {
-        System.setOut(PrintStream(baos))
+/** Compiles [source], calls its Vera `main`, and expects it to return [expected]. */
+internal fun assertReturns(source: String, expected: Any) {
+    val (result, _) = runMain(source)
+    Assertions.assertEquals(expected, result)
+}
+
+/** Compiles [source], runs its JVM entry point `main(String[])`, and expects it to print [lines]. */
+internal fun assertJvmMainPrints(source: String, vararg lines: String) {
+    val entryPoint = compileProgram(source).loadProgramClass().getMethod("main", Array<String>::class.java)
+    val (_, output) = capturingOutput {
         val arguments: Any = emptyArray<String>()
         entryPoint.invoke(null, arguments)
-    } finally {
-        System.setOut(oldOut)
     }
-
-    Assertions.assertEquals(expected, baos.toString())
+    Assertions.assertEquals(expectedOutput(lines), output)
 }
 
-/** Compiles [source], calls `testMain`, and compares its return value. */
-internal fun assertProgramReturns(
-    source: String,
-    expected: Any,
-    testInfo: TestInfo,
-    compileToOut: Boolean = false,
-) {
-    val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-    val bytecode = compileOrFail(className, source)
-    val mainBytecode = bytecode[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
-    if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(mainBytecode)
-    val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
-    val testMethod = classLoader.loadClass(className.value).getMethod(TEST_MAIN)
-    val actual = testMethod.invoke(null)
-    Assertions.assertEquals(expected, actual)
+/** Compiles [source] and calls its zero-parameter Vera `main`, returning its result and what it printed. */
+internal fun runMain(source: String): Pair<Any?, String> {
+    val mainMethod = compileProgram(source).loadProgramClass().getMethod("main")
+    return capturingOutput { mainMethod.invoke(null) }
 }
 
-/** Compiles [source], calls `testMain`, and compares what it printed. */
-internal fun assertProgramPrints(
-    source: String,
-    expected: String,
-    testInfo: TestInfo,
-    compileToOut: Boolean = false,
-) {
-    val className = Identifier("CompiledTestClass" + CLASS_ID.getAndIncrement())
-    val bytecode = compileOrFail(className, source)
-    val mainBytecode = bytecode[className] ?: throw AssertionError("no bytecode emitted for ${className.value}")
-    if (compileToOut) Path("out", testInfo.testMethod.get().name, "${className.value}.class").createParentDirectories().writeBytes(mainBytecode)
-    val oldOut = System.out
-    val baos = ByteArrayOutputStream()
-    val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
-    val testMethod = classLoader.loadClass(className.value).getMethod(TEST_MAIN)
-    try {
-        System.setOut(PrintStream(baos))
-        testMethod.invoke(null)
-    } finally {
-        System.setOut(oldOut)
-    }
-    Assertions.assertEquals(expected, baos.toString())
+/** The classes compiled from one program. */
+internal class CompiledProgram(val bytecode: Map<Identifier, ByteArray>) {
+    private val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+
+    fun loadClass(name: String): Class<*> = classLoader.loadClass(name)
+
+    fun loadProgramClass(): Class<*> = loadClass(PROGRAM_CLASS)
 }
 
-internal fun compileOrFail(className: Identifier, source: String): Map<Identifier, ByteArray> {
-    return try {
-        VeraCompiler.compile(className, source)
+/** Compiles [source] into [PROGRAM_CLASS], failing the test with the rendered error if it does not compile. */
+internal fun compileProgram(source: String): CompiledProgram {
+    val bytecode = try {
+        VeraCompiler.compile(Identifier(PROGRAM_CLASS), prepared(source))
     } catch (exception: VeraException) {
         throw AssertionError("compilation failed: ${exception.render()}")
     }
+    return CompiledProgram(bytecode)
 }
 
 /**
@@ -118,7 +103,7 @@ internal fun assertCompilationFails(
     messagePart: String,
 ) {
     val error = try {
-        VeraCompiler.compile(Identifier("ErrorTest"), source)
+        VeraCompiler.compile(Identifier("ErrorTest"), prepared(source))
         throw AssertionError("Expected compilation to fail, but it succeeded")
     } catch (exception: VeraException) {
         exception
@@ -149,4 +134,19 @@ internal fun assertMatches(
         error.render().contains(messagePart),
         "Expected error message to contain '$messagePart', but was '${error.render()}'",
     )
+}
+
+private fun prepared(source: String): String = if (source.startsWith("\n")) source.trimIndent() else source
+
+private fun expectedOutput(lines: Array<out String>): String = lines.joinToString("") { line -> line + EOL }
+
+private fun <T> capturingOutput(block: () -> T): Pair<T, String> {
+    val oldOut = System.out
+    val output = ByteArrayOutputStream()
+    try {
+        System.setOut(PrintStream(output))
+        return block() to output.toString()
+    } finally {
+        System.setOut(oldOut)
+    }
 }

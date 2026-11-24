@@ -3,23 +3,12 @@ package vera.compiler.test.language
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
-import vera.compiler.test.classDeclaration
+import vera.compiler.test.assertPrints
+import vera.compiler.test.compileProgram
 import vera.compiler.test.function
-import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
 import vera.parser.VeraParseException
-import vera.shared.model.Identifier
 
 /** Structural interfaces and `implements`. */
 class InterfaceTests {
@@ -50,99 +39,101 @@ class InterfaceTests {
     @Nested
     inner class StructuralFit {
         @Test
-        fun `classes fit interfaces by their members without stating them`(testInfo: TestInfo) {
-            val source = """
-                        interface Named {
-                            fn name(): String
-                        }
-                        class Dog {
-                            fn name(): String = "Rex"
-                        }
-                        class User {
-                            val login: String
-                            fn name(): String = login
-                        }
-                        fn greet(named: Named) = print("hello \{named.name()}")
-                        fn $TEST_MAIN() {
-                            greet(Dog)
-                            greet(User("ada"))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "hello Rex${EOL}hello ada$EOL", testInfo)
-        }
+        fun `classes fit interfaces by their members without stating them`() = assertPrints(
+            """
+            interface Named {
+                fn name(): String
+            }
+            class Dog {
+                fn name(): String = "Rex"
+            }
+            class User {
+                val login: String
+                fn name(): String = login
+            }
+            fn greet(named: Named) = print("hello \{named.name()}")
+            fn main() {
+                greet(Dog)
+                greet(User("ada"))
+            }
+            """,
+            "hello Rex",
+            "hello ada",
+        )
 
         @Test
-        fun `interfaces read the fields they require`(testInfo: TestInfo) {
-            val source = """
-                        interface Timed {
-                            val timestamp: Int
-                        }
-                        class Login {
-                            val user: String
-                            val timestamp: Int
-                        }
-                        class Tick {
-                            val timestamp: Int
-                        }
-                        fn age(timed: Timed, now: Int): Int = now - timed.timestamp
-                        fn $TEST_MAIN() {
-                            print(age(timed = Login(user = "ada", timestamp = 3), now = 10))
-                            print(age(timed = Tick(8), now = 10))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "7${EOL}2$EOL", testInfo)
-        }
+        fun `interfaces read the fields they require`() = assertPrints(
+            """
+            interface Timed {
+                val timestamp: Int
+            }
+            class Login {
+                val user: String
+                val timestamp: Int
+            }
+            class Tick {
+                val timestamp: Int
+            }
+            fn age(timed: Timed, now: Int): Int = now - timed.timestamp
+            fn main() {
+                print(age(timed = Login(user = "ada", timestamp = 3), now = 10))
+                print(age(timed = Tick(8), now = 10))
+            }
+            """,
+            "7",
+            "2",
+        )
 
         @Test
-        fun `trait values fit interfaces whose members their trait has`(testInfo: TestInfo) {
-            val source = """
-                        interface Named {
-                            fn name(): String
-                        }
-                        trait Labeled {
-                            fn name(): String
-                        }
-                        trait Pet requires Labeled {
-                            fn sound(): String
-                        }
-                        class Dog has Pet, Labeled {
-                            fn name(): String = "Rex"
-                            fn sound(): String = "woof"
-                        }
-                        fn greet(named: Named) = print("hello \{named.name()}")
-                        fn $TEST_MAIN() {
-                            val pet: Pet = Dog
-                            greet(pet)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "hello Rex$EOL", testInfo)
-        }
+        fun `trait values fit interfaces whose members their trait has`() = assertPrints(
+            """
+            interface Named {
+                fn name(): String
+            }
+            trait Labeled {
+                fn name(): String
+            }
+            trait Pet requires Labeled {
+                fn sound(): String
+            }
+            class Dog has Pet, Labeled {
+                fn name(): String = "Rex"
+                fn sound(): String = "woof"
+            }
+            fn greet(named: Named) = print("hello \{named.name()}")
+            fn main() {
+                val pet: Pet = Dog
+                greet(pet)
+            }
+            """,
+            "hello Rex",
+        )
 
         @Test
-        fun `branches still share their trait when an interface fits them too`(testInfo: TestInfo) {
-            val source = """
-                        interface Anything {}
-                        trait Shape {
-                            fn area(): Int
-                        }
-                        class Square has Shape {
-                            val side: Int
-                            fn area(): Int = side * side
-                        }
-                        class Empty has Shape {
-                            fn area(): Int = 0
-                        }
-                        fn pick(big: Bool): Shape = if big { Square(3) } else { Empty }
-                        fn $TEST_MAIN() {
-                            print(pick(True).area())
-                            val anything: Anything = pick(False)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "9$EOL", testInfo)
-        }
+        fun `branches still share their trait when an interface fits them too`() = assertPrints(
+            """
+            interface Anything {}
+            trait Shape {
+                fn area(): Int
+            }
+            class Square has Shape {
+                val side: Int
+                fn area(): Int = side * side
+            }
+            class Empty has Shape {
+                fn area(): Int = 0
+            }
+            fn pick(big: Bool): Shape = if big { Square(3) } else { Empty }
+            fn main() {
+                print(pick(True).area())
+                val anything: Anything = pick(False)
+            }
+            """,
+            "9",
+        )
 
         @Test
-        fun `parameter names are part of an interface's methods`(testInfo: TestInfo) {
+        fun `parameter names are part of an interface's methods`() {
             val source = """
                         interface Scaled {
                             fn scale(by: Int): Int
@@ -153,17 +144,16 @@ class InterfaceTests {
                         class Counter {
                             fn scale(factor: Int): Int = factor
                         }
-                        fn $TEST_MAIN() {
+                        fn main() {
                             val scaled: Scaled = Doubler
                             print(scaled.scale(4))
                         }
                     """.trimIndent()
-            assertProgramPrints(source, "8$EOL", testInfo)
-            val bytecode = VeraCompiler.compile(Identifier("ParameterNameTest"), source)
-            val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
-            val scaled = classLoader.loadClass("Scaled")
-            Assertions.assertEquals(listOf(scaled), classLoader.loadClass("Doubler").interfaces.toList())
-            Assertions.assertEquals(emptyList<Class<*>>(), classLoader.loadClass("Counter").interfaces.toList())
+            assertPrints(source, "8")
+            val program = compileProgram(source)
+            val scaled = program.loadClass("Scaled")
+            Assertions.assertEquals(listOf(scaled), program.loadClass("Doubler").interfaces.toList())
+            Assertions.assertEquals(emptyList<Class<*>>(), program.loadClass("Counter").interfaces.toList())
         }
 
         @Test
@@ -178,32 +168,33 @@ class InterfaceTests {
     @Nested
     inner class Implements {
         @Test
-        fun `classes and trait cases can state the interfaces they implement`(testInfo: TestInfo) {
-            val source = """
-                        interface Named {
-                            fn name(): String
-                        }
-                        trait Shape {
-                            fn area(): Int
-                            Square implements Named {
-                                val side: Int
-                                fn area(): Int = side * side
-                                fn name(): String = "square"
-                            }
-                        }
-                        trait Round {}
-                        class Circle has Round implements Named {
-                            val radius: Int
-                            fn name(): String = "circle"
-                        }
-                        fn describe(named: Named) = print(named.name())
-                        fn $TEST_MAIN() {
-                            describe(Shape.Square(2))
-                            describe(Circle(1))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "square${EOL}circle$EOL", testInfo)
-        }
+        fun `classes and trait cases can state the interfaces they implement`() = assertPrints(
+            """
+            interface Named {
+                fn name(): String
+            }
+            trait Shape {
+                fn area(): Int
+                Square implements Named {
+                    val side: Int
+                    fn area(): Int = side * side
+                    fn name(): String = "square"
+                }
+            }
+            trait Round {}
+            class Circle has Round implements Named {
+                val radius: Int
+                fn name(): String = "circle"
+            }
+            fn describe(named: Named) = print(named.name())
+            fn main() {
+                describe(Shape.Square(2))
+                describe(Circle(1))
+            }
+            """,
+            "square",
+            "circle",
+        )
 
         @Test
         fun `has written after implements`() = assertCompilationFails(
@@ -288,29 +279,31 @@ class InterfaceTests {
     @Nested
     inner class Requirements {
         @Test
-        fun `interfaces can require interfaces and built-in traits`(testInfo: TestInfo) {
-            val source = """
-                        interface Named requires Display {
-                            fn name(): String
-                        }
-                        interface Pet requires Named, Eq {
-                            fn sound(): String
-                        }
-                        class Dog has Display, Eq {
-                            val age: Int
-                            fn name(): String = "Rex"
-                            fn sound(): String = "woof"
-                        }
-                        fn introduce(named: Named) = print("\{named.name()} is \{named}")
-                        fn $TEST_MAIN() {
-                            val pet: Pet = Dog(3)
-                            introduce(pet)
-                            print(pet.sound())
-                            print(pet == Dog(3))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "Rex is Dog(age: 3)${EOL}woof${EOL}True$EOL", testInfo)
-        }
+        fun `interfaces can require interfaces and built-in traits`() = assertPrints(
+            """
+            interface Named requires Display {
+                fn name(): String
+            }
+            interface Pet requires Named, Eq {
+                fn sound(): String
+            }
+            class Dog has Display, Eq {
+                val age: Int
+                fn name(): String = "Rex"
+                fn sound(): String = "woof"
+            }
+            fn introduce(named: Named) = print("\{named.name()} is \{named}")
+            fn main() {
+                val pet: Pet = Dog(3)
+                introduce(pet)
+                print(pet.sound())
+                print(pet == Dog(3))
+            }
+            """,
+            "Rex is Dog(age: 3)",
+            "woof",
+            "True",
+        )
 
         @Test
         fun `interfaces requiring traits`() = assertCompilationFails(
@@ -380,14 +373,13 @@ class InterfaceTests {
                         class Dog has Pet {
                             fn name(): String = "Rex"
                         }
-                        fn $TEST_MAIN() {
+                        fn main() {
                         }
                     """.trimIndent()
-            val bytecode = VeraCompiler.compile(Identifier("InterfaceTest"), source)
-            val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
-            val named = classLoader.loadClass("Named")
-            val pet = classLoader.loadClass("Pet")
-            val dog = classLoader.loadClass("Dog")
+            val program = compileProgram(source)
+            val named = program.loadClass("Named")
+            val pet = program.loadClass("Pet")
+            val dog = program.loadClass("Dog")
             Assertions.assertTrue(named.isInterface)
             Assertions.assertFalse(named.isSealed)
             Assertions.assertEquals(listOf(named), pet.interfaces.toList())

@@ -43,7 +43,7 @@ class BytecodeEmissionTests {
     }
 
     private fun methodBuilder(): FlatMethodBuilder = FlatMethodBuilder(
-        Identifier(TEST_MAIN),
+        Identifier("main"),
         emptyList(),
         JvmType.VOID,
     )

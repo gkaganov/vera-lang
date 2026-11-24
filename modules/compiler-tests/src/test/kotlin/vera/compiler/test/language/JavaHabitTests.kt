@@ -1,25 +1,13 @@
 package vera.compiler.test.language
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
-import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
 import vera.parser.VeraLexException
 import vera.parser.VeraParseException
-import vera.shared.model.Identifier
 
 /** Hints for Java syntax and names that Vera spells differently. */
 class JavaHabitTests {

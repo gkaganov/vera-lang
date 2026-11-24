@@ -113,13 +113,13 @@ class InstructionLoweringTests {
     }
 
     private fun methodBuilder(): FlatMethodBuilder = FlatMethodBuilder(
-        Identifier(TEST_MAIN),
+        Identifier("main"),
         emptyList(),
         JvmType.VOID,
     )
 
     private fun jvmMethod(statements: List<JvmStatement>): JvmMethod = JvmMethod(
-        Identifier(TEST_MAIN),
+        Identifier("main"),
         emptyList(),
         JvmType.VOID,
         JvmExplicitReturnBlock(statements),

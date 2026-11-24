@@ -1,73 +1,63 @@
 package vera.compiler.test.language
 
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import vera.compiler.VeraCompiler
-import vera.compiler.test.ByteArrayClassLoader
-import vera.compiler.test.EOL
-import vera.compiler.test.TEST_MAIN
 import vera.compiler.test.assertCompilationFails
-import vera.compiler.test.assertCompilerError
-import vera.compiler.test.assertJvmMainPrints
-import vera.compiler.test.assertProgramPrints
-import vera.compiler.test.assertProgramReturns
+import vera.compiler.test.assertPrints
+import vera.compiler.test.assertReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
-import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
-import vera.parser.VeraLexException
 import vera.parser.VeraParseException
-import vera.shared.model.Identifier
 
 /** Functions: calls, named arguments, returns, and expression bodies. */
 class FunctionTests {
     @Nested
     inner class Calls {
         @Test
-        fun `functions can be called`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN() {
-                            print1()
-                            print2()
-                        }
-                        fn print1() {
-                            print(1)
-                        }
-                        fn print2() {
-                            print(2)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "1${EOL}2${EOL}", testInfo)
-        }
+        fun `functions can be called`() = assertPrints(
+            """
+            fn main() {
+                print1()
+                print2()
+            }
+            fn print1() {
+                print(1)
+            }
+            fn print2() {
+                print(2)
+            }
+            """,
+            "1",
+            "2",
+        )
 
         @Test
-        fun `one Int parameter can be passed`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            val numberResult: Int = receiveAndReturn(369)
-                            return numberResult
-                        }
-                        fn receiveAndReturn(int: Int): Int {
-                            return int
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 369, testInfo)
-        }
+        fun `one Int parameter can be passed`() = assertReturns(
+            """
+            fn main(): Int {
+                val numberResult: Int = receiveAndReturn(369)
+                return numberResult
+            }
+            fn receiveAndReturn(int: Int): Int {
+                return int
+            }
+            """,
+            369,
+        )
 
         @Test
-        fun `multiple Int parameters can be passed`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            return add3Ints(int1 = 99, int2 = 98, int3 = 2 * 48 + 1)
-                        }
-                        fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
-                            return int1 + int2 + int3
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 294, testInfo)
-        }
+        fun `multiple Int parameters can be passed`() = assertReturns(
+            """
+            fn main(): Int {
+                return add3Ints(int1 = 99, int2 = 98, int3 = 2 * 48 + 1)
+            }
+            fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
+                return int1 + int2 + int3
+            }
+            """,
+            294,
+        )
 
         @Test
         fun `calls to unknown functions`() = assertCompilationFails(
@@ -79,7 +69,7 @@ class FunctionTests {
         @Test
         fun `function calls with the wrong arity`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                "fn testMain(): Int {\n    return add(1)\n}",
+                "fn main(): Int {\n    return add(1)\n}",
             JvmLoweringException.FunctionArityMismatch::class,
             "function add requires 2 arguments, got 1",
         )
@@ -87,7 +77,7 @@ class FunctionTests {
         @Test
         fun `function arguments with the wrong type`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                "fn testMain(): Int {\n    return add(left = 1, right = \"wrong\")\n}",
+                "fn main(): Int {\n    return add(left = 1, right = \"wrong\")\n}",
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
             "function add parameter right requires Int, got String",
         )
@@ -96,65 +86,68 @@ class FunctionTests {
     @Nested
     inner class NamedArguments {
         @Test
-        fun `named arguments work for functions, constructors, and methods`(testInfo: TestInfo) {
-            val source = """
-                        class Rect {
-                            val width: Int
-                            val height: Int
-                            fn scaled(factor: Int, extra: Int): Int {
-                                return width * height * factor + extra
-                            }
-                        }
-                        fn area(width: Int, height: Int): Int {
-                            return width * height
-                        }
-                        fn $TEST_MAIN() {
-                            print(area(width = 3, height = 4))
-                            val rect = Rect(width = 2, height = 5)
-                            print(rect.scaled(factor = 2, extra = 1))
-                            print(Rect(
-                                width = 1,
-                                height = 1
-                            ).width)
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "12${EOL}21${EOL}1$EOL", testInfo)
-        }
+        fun `named arguments work for functions, constructors, and methods`() = assertPrints(
+            """
+            class Rect {
+                val width: Int
+                val height: Int
+                fn scaled(factor: Int, extra: Int): Int {
+                    return width * height * factor + extra
+                }
+            }
+            fn area(width: Int, height: Int): Int {
+                return width * height
+            }
+            fn main() {
+                print(area(width = 3, height = 4))
+                val rect = Rect(width = 2, height = 5)
+                print(rect.scaled(factor = 2, extra = 1))
+                print(Rect(
+                    width = 1,
+                    height = 1
+                ).width)
+            }
+            """,
+            "12",
+            "21",
+            "1",
+        )
 
         @Test
-        fun `bare locals with matching names count as named arguments`(testInfo: TestInfo) {
-            val source = """
-                        class Point {
-                            val x: Int
-                            val y: Int
-                        }
-                        fn $TEST_MAIN(): Int {
-                            val x = 3
-                            val y = 4
-                            val point = Point(x, y)
-                            val mixed = Point(x, y = 10)
-                            return point.x + point.y + mixed.y
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 17, testInfo)
-        }
+        fun `bare locals with matching names count as named arguments`() = assertReturns(
+            """
+            class Point {
+                val x: Int
+                val y: Int
+            }
+            fn main(): Int {
+                val x = 3
+                val y = 4
+                val point = Point(x, y)
+                val mixed = Point(x, y = 10)
+                return point.x + point.y + mixed.y
+            }
+            """,
+            17,
+        )
 
         @Test
-        fun `only written arguments count when naming forwarded calls`(testInfo: TestInfo) {
-            val source = """
-                        fn add(left: Int, right: Int): Int {
-                            return left + right
-                        }
-                        fn clamp(value: Int, low: Int, high: Int): Int {
-                            return if value < low { low } else if value > high { high } else { value }
-                        }
-                        fn $TEST_MAIN() {
-                            1 |> add(2) |> print
-                            42 |> clamp(low = 0, high = 10) |> print
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "3${EOL}10$EOL", testInfo)
-        }
+        fun `only written arguments count when naming forwarded calls`() = assertPrints(
+            """
+            fn add(left: Int, right: Int): Int {
+                return left + right
+            }
+            fn clamp(value: Int, low: Int, high: Int): Int {
+                return if value < low { low } else if value > high { high } else { value }
+            }
+            fn main() {
+                1 |> add(2) |> print
+                42 |> clamp(low = 0, high = 10) |> print
+            }
+            """,
+            "3",
+            "10",
+        )
 
         @Test
         fun `unnamed arguments in multi-argument calls`() = assertCompilationFails(
@@ -238,39 +231,41 @@ class FunctionTests {
     @Nested
     inner class Returns {
         @Test
-        fun `Int can be returned`(testInfo: TestInfo) {
-            val source = """
-                        fn $TEST_MAIN(): Int {
-                            val numberResult: Int = getInt() + 0
-                            return numberResult
-                        }
-                        fn getInt(): Int {
-                            return 698
-                        }
-                    """.trimIndent()
-            assertProgramReturns(source, 698, testInfo)
-        }
+        fun `Int can be returned`() = assertReturns(
+            """
+            fn main(): Int {
+                val numberResult: Int = getInt() + 0
+                return numberResult
+            }
+            fn getInt(): Int {
+                return 698
+            }
+            """,
+            698,
+        )
 
         @Test
-        fun `returning from both if branches ends a function`(testInfo: TestInfo) {
-            val source = """
-                        fn sign(value: Int): Int {
-                            if value > 0 {
-                                return 1
-                            } else if value < 0 {
-                                return -1
-                            } else {
-                                return 0
-                            }
-                        }
-                        fn $TEST_MAIN() {
-                            print(sign(5))
-                            print(sign(-5))
-                            print(sign(0))
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "1$EOL-1${EOL}0$EOL", testInfo)
-        }
+        fun `returning from both if branches ends a function`() = assertPrints(
+            """
+            fn sign(value: Int): Int {
+                if value > 0 {
+                    return 1
+                } else if value < 0 {
+                    return -1
+                } else {
+                    return 0
+                }
+            }
+            fn main() {
+                print(sign(5))
+                print(sign(-5))
+                print(sign(0))
+            }
+            """,
+            "1",
+            "-1",
+            "0",
+        )
 
         @Test
         fun `explicit Unit return types`() = assertCompilationFails(
@@ -281,28 +276,28 @@ class FunctionTests {
 
         @Test
         fun `returns without a value in non-Unit functions`() = assertCompilationFails(
-            "fn $TEST_MAIN(): Int {\n    return\n}",
+            "fn main(): Int {\n    return\n}",
             JvmLoweringException.MissingReturnValue::class,
             "return without an expression requires a Unit function",
         )
 
         @Test
         fun `function return values with the wrong type`() = assertCompilationFails(
-            "fn testMain(): Int {\n    return \"wrong\"\n}",
+            "fn main(): Int {\n    return \"wrong\"\n}",
             JvmLoweringException.ReturnTypeMismatch::class,
             "return requires Int, got String",
         )
 
         @Test
         fun `Unit functions returning a value`() = assertCompilationFails(
-            "fn testMain() {\n    return 1\n}",
+            "fn main() {\n    return 1\n}",
             JvmLoweringException.ReturnTypeMismatch::class,
             "return requires Unit, got Int",
         )
 
         @Test
         fun `non-Unit functions without a return statement`() = assertCompilationFails(
-            "fn testMain(): Int {\n}",
+            "fn main(): Int {\n}",
             JvmLoweringException.MissingReturnStatement::class,
             "missing return statement for type Int",
         )
@@ -311,32 +306,37 @@ class FunctionTests {
     @Nested
     inner class ExpressionBodies {
         @Test
-        fun `functions and methods can have expression bodies`(testInfo: TestInfo) {
-            val source = """
-                        trait Shape {
-                            fn area(): Int
-                        }
-                        class Square has Shape {
-                            val side: Int
-                            fn area(): Int = side * side
-                        }
-                        fn double(value: Int): Int = value * 2
-                        fn greet(name: String): String = "Hello, \{name}!"
-                        fn sign(value: Int): Int = if value > 0 { 1 } else if value < 0 { -1 } else { 0 }
-                        fn total(first: Int, second: Int): Int =
-                            first + second
-                        fn log(text: String) = print(text)
-                        fn $TEST_MAIN() {
-                            print(Square(3).area())
-                            print(4 |> double)
-                            print(greet("Vera"))
-                            print(sign(-7))
-                            print(total(first = 2, second = 3))
-                            log("done")
-                        }
-                    """.trimIndent()
-            assertProgramPrints(source, "9${EOL}8${EOL}Hello, Vera!${EOL}-1${EOL}5${EOL}done$EOL", testInfo)
-        }
+        fun `functions and methods can have expression bodies`() = assertPrints(
+            """
+            trait Shape {
+                fn area(): Int
+            }
+            class Square has Shape {
+                val side: Int
+                fn area(): Int = side * side
+            }
+            fn double(value: Int): Int = value * 2
+            fn greet(name: String): String = "Hello, \{name}!"
+            fn sign(value: Int): Int = if value > 0 { 1 } else if value < 0 { -1 } else { 0 }
+            fn total(first: Int, second: Int): Int =
+                first + second
+            fn log(text: String) = print(text)
+            fn main() {
+                print(Square(3).area())
+                print(4 |> double)
+                print(greet("Vera"))
+                print(sign(-7))
+                print(total(first = 2, second = 3))
+                log("done")
+            }
+            """,
+            "9",
+            "8",
+            "Hello, Vera!",
+            "-1",
+            "5",
+            "done",
+        )
 
         @Test
         fun `expression bodies without a return type`() = assertCompilationFails(
