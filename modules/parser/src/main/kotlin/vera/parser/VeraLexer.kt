@@ -297,6 +297,7 @@ private class VeraLexerState(private val source: String) {
             "trait" to VeraTokenType.TRAIT,
             "match" to VeraTokenType.MATCH,
             "has" to VeraTokenType.HAS,
+            "requires" to VeraTokenType.REQUIRES,
             "if" to VeraTokenType.IF,
             "else" to VeraTokenType.ELSE,
             "while" to VeraTokenType.WHILE,

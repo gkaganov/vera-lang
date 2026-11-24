@@ -66,9 +66,17 @@ object JvmProgramLowering {
             }
         }
 
+        val traitsByName = traitDeclarations.associateBy { it.name }
+        traitDeclarations.forEach { trait -> validateRequirements(trait, traitsByName) }
+        val requirements = JvmTraitRequirements(traitsByName)
+
         // Cases nested in trait blocks are classes too, named `Owner$Case`; only top-level classes
-        // take part in the top-level namespace below.
-        val allClassDeclarations = classDeclarations + traitDeclarations.flatMap { trait -> trait.cases }
+        // take part in the top-level namespace below. A case gets its owner's requirements.
+        val allClassDeclarations = classDeclarations + traitDeclarations.flatMap { trait ->
+            trait.cases.map { veraCase ->
+                veraCase.copy(traits = veraCase.traits + requirements.of(trait.name).filterNot { it in veraCase.traits })
+            }
+        }
         val duplicateClass = allClassDeclarations
             .groupBy { it.name }
             .values
@@ -96,8 +104,10 @@ object JvmProgramLowering {
         }
 
         val classesByName = allClassDeclarations.associateBy { it.name }
-        val traitsByName = traitDeclarations.associateBy { it.name }
-        allClassDeclarations.forEach { veraClass -> requireTraitForms(veraClass, traitsByName) }
+        allClassDeclarations.forEach { veraClass ->
+            requireTraitForms(veraClass, traitsByName)
+            requireRequiredTraits(veraClass, requirements)
+        }
         val typeNames = JvmTypeNames(classesByName.keys, traitsByName.keys)
         traitDeclarations.firstOrNull { it.name == mainClassName }?.let { conflicting ->
             throw JvmLoweringException.TraitNameConflictsWithProgramClass(mainClassName).at(conflicting.span)
@@ -108,7 +118,7 @@ object JvmProgramLowering {
 
         val jvmDeclaredClasses = allClassDeclarations.map { declaration ->
             located(declaration.span) {
-                lowerClass(declaration, mainClassName, functionDeclarations, classesByName, traitsByName)
+                lowerClass(declaration, mainClassName, functionDeclarations, classesByName, traitsByName, requirements)
             }
         }
 
@@ -122,7 +132,7 @@ object JvmProgramLowering {
             jvmMethods += adapter
         }
 
-        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames, allClassDeclarations) }
+        val jvmInterfaces = traitDeclarations.map { trait -> lowerTraitInterface(trait, typeNames, allClassDeclarations, traitDeclarations, requirements) }
         val jvmClasses = listOf(lowerUnitClass()) + jvmInterfaces + jvmDeclaredClasses +
             JvmClass(mainClassName, jvmMethods)
         return JvmProgram(jvmClasses)
@@ -136,25 +146,83 @@ object JvmProgramLowering {
         trait: VeraTraitDeclaration,
         typeNames: JvmTypeNames,
         classDeclarations: List<VeraClassDeclaration>,
-    ): JvmClass = JvmClass(
-        name = trait.name,
-        methods = emptyList(),
-        isInterface = true,
-        permittedSubclasses = classDeclarations
-            .filter { veraClass -> trait.name in veraClass.traits }
-            .map { veraClass -> veraClass.name },
-        abstractMethods = trait.methods.map { method ->
-            JvmAbstractMethod(
-                method.name,
-                JvmMethodSignature(
-                    method.parameters.map { parameter ->
-                        JvmParameter(parameter.name, JvmTypeLowering.lower(parameter.type, typeNames))
-                    },
-                    JvmTypeLowering.lowerReturn(method.returnType, typeNames),
-                ),
-            )
-        },
-    )
+        traitDeclarations: List<VeraTraitDeclaration>,
+        requirements: JvmTraitRequirements,
+    ): JvmClass {
+        // A required user trait is a superinterface; requiring `Eq` or `Display` makes `equals(Object)`
+        // or `toString()` part of the interface, so trait-typed values can be compared or printed.
+        val requiredBuiltins = requirements.of(trait.name).filter { it in JvmBuiltinTraits.names }
+        val objectMethods = buildList {
+            if (JvmBuiltinTraits.eq in requiredBuiltins) add(JvmAbstractMethod(JvmObjectMethods.equalsName, JvmObjectMethods.objectEqualsSignature))
+            if (JvmBuiltinTraits.display in requiredBuiltins) add(JvmAbstractMethod(JvmObjectMethods.toStringName, JvmObjectMethods.toStringSignature))
+        }
+        return JvmClass(
+            name = trait.name,
+            methods = emptyList(),
+            isInterface = true,
+            interfaces = trait.requirements.filter { it !in JvmBuiltinTraits.names },
+            // A sealed interface permits its classes and the traits that require it.
+            permittedSubclasses = classDeclarations
+                .filter { veraClass -> trait.name in veraClass.traits }
+                .map { veraClass -> veraClass.name } +
+                traitDeclarations.filter { other -> trait.name in other.requirements }.map { other -> other.name },
+            abstractMethods = trait.methods.map { method ->
+                JvmAbstractMethod(
+                    method.name,
+                    JvmMethodSignature(
+                        method.parameters.map { parameter ->
+                            JvmParameter(parameter.name, JvmTypeLowering.lower(parameter.type, typeNames))
+                        },
+                        JvmTypeLowering.lowerReturn(method.returnType, typeNames),
+                    ),
+                )
+            } + objectMethods,
+        )
+    }
+
+    /** Required traits must exist, appear once, and not lead back to the trait that requires them. */
+    private fun validateRequirements(trait: VeraTraitDeclaration, traitsByName: Map<Identifier, VeraTraitDeclaration>) {
+        val seen = mutableSetOf<Identifier>()
+        trait.requirements.forEach { required ->
+            if (!seen.add(required)) {
+                throw JvmLoweringException.DuplicateRequirement(trait.name, required).at(trait.span)
+            }
+            if (required !in JvmBuiltinTraits.names && required !in traitsByName) {
+                throw JvmLoweringException.UnknownTrait(
+                    required,
+                    JvmNameHints.closest(required, traitsByName.keys + JvmBuiltinTraits.names),
+                ).at(trait.span)
+            }
+        }
+        val visiting = mutableListOf(trait.name)
+        fun visit(name: Identifier) {
+            traitsByName[name]?.requirements?.forEach { required ->
+                if (required == trait.name) {
+                    throw JvmLoweringException.RequirementCycle(visiting + required).at(trait.span)
+                }
+                if (required !in visiting) {
+                    visiting += required
+                    visit(required)
+                    visiting.removeLast()
+                }
+            }
+        }
+        visit(trait.name)
+    }
+
+    /**
+     * A class joining a trait must list the traits it requires itself, so the class declaration shows
+     * every trait it has. Cases get their owner's requirements automatically.
+     */
+    private fun requireRequiredTraits(veraClass: VeraClassDeclaration, requirements: JvmTraitRequirements) {
+        veraClass.traits.forEach { trait ->
+            requirements.of(trait).forEach { required ->
+                if (required !in veraClass.traits) {
+                    throw JvmLoweringException.MissingRequiredTrait(veraClass.name, trait, required).at(veraClass.span)
+                }
+            }
+        }
+    }
 
     private fun lowerEntryPointAdapter(
         mainClassName: Identifier,
@@ -324,11 +392,13 @@ object JvmProgramLowering {
         veraClass: VeraClassDeclaration,
         jvmFields: List<JvmField>,
         classesByName: Map<Identifier, VeraClassDeclaration>,
+        requirements: JvmTraitRequirements,
         trait: Identifier,
     ) {
         veraClass.fields.zip(jvmFields).forEach { (veraField, field) ->
             val fieldType = field.type
-            if (fieldType is JvmType.InterfaceType) {
+            // A trait-typed field supports `Eq` or `Display` when its trait requires it.
+            if (fieldType is JvmType.InterfaceType && !requirements.satisfies(fieldType.name, trait)) {
                 throw JvmLoweringException.ClassFieldTraitTypeNotSupported(
                     veraClass.name,
                     field.name,
@@ -360,6 +430,7 @@ object JvmProgramLowering {
         functionDeclarations: Map<Identifier, VeraFunctionDeclaration>,
         classesByName: Map<Identifier, VeraClassDeclaration>,
         traitsByName: Map<Identifier, VeraTraitDeclaration>,
+        requirements: JvmTraitRequirements,
     ): JvmClass {
         val typeNames = JvmTypeNames(classesByName.keys, traitsByName.keys)
         val outerNames = buildSet {
@@ -388,10 +459,10 @@ object JvmProgramLowering {
             JvmField(field.name, located(field.span) { JvmTypeLowering.lower(field.type, typeNames) })
         }
         if (hasEq) {
-            requireFieldTraits(veraClass, jvmFields, classesByName, JvmBuiltinTraits.eq)
+            requireFieldTraits(veraClass, jvmFields, classesByName, requirements, JvmBuiltinTraits.eq)
         }
         if (hasDisplay) {
-            requireFieldTraits(veraClass, jvmFields, classesByName, JvmBuiltinTraits.display)
+            requireFieldTraits(veraClass, jvmFields, classesByName, requirements, JvmBuiltinTraits.display)
         }
         val seenMethods = mutableSetOf<Identifier>()
         veraClass.methods.forEach { method ->
@@ -431,7 +502,10 @@ object JvmProgramLowering {
                 )
             }
         } + buildList {
-            if (hasEq) add(JvmObjectMethods.equalsMethod(veraClass.name, jvmFields))
+            if (hasEq) {
+                add(JvmObjectMethods.equalsMethod(veraClass.name, jvmFields))
+                add(JvmObjectMethods.objectEqualsMethod(veraClass.name))
+            }
             if (hasDisplay) add(JvmObjectMethods.toStringMethod(veraClass.name, jvmFields))
         }
         val interfaces = veraClass.traits.filter { trait -> trait !in JvmBuiltinTraits.names }

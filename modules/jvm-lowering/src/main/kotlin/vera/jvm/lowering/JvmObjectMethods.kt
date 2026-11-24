@@ -1,6 +1,7 @@
 package vera.jvm.lowering
 
 import vera.jvm.ir.JvmBoolLiteral
+import vera.jvm.ir.JvmCheckCast
 import vera.jvm.ir.JvmComparison
 import vera.jvm.ir.JvmComparisonOperator
 import vera.jvm.ir.JvmExplicitReturnBlock
@@ -9,6 +10,7 @@ import vera.jvm.ir.JvmField
 import vera.jvm.ir.JvmGetField
 import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
+import vera.jvm.ir.JvmInstanceOf
 import vera.jvm.ir.JvmInstanceCall
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
@@ -20,6 +22,7 @@ import vera.jvm.ir.JvmParameter
 import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.JvmUpcast
 import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.render
 import vera.shared.model.Identifier
@@ -71,6 +74,54 @@ internal object JvmObjectMethods {
             listOf(JvmParameter(otherName, JvmType.ClassType(className))),
             JvmType.BOOL,
         ),
+    )
+
+    /** `equals(Object): Bool`, the signature trait-typed values compare through. */
+    val objectEqualsSignature: JvmMethodSignature =
+        JvmMethodSignature(listOf(JvmParameter(otherName, JvmType.OBJECT)), JvmType.BOOL)
+
+    /** `toString(): String`. */
+    val toStringSignature: JvmMethodSignature = JvmMethodSignature(emptyList(), JvmType.STRING)
+
+    /**
+     * Builds `equals(Object): Bool` for a class with `Eq`, overriding `Object.equals`: it is the
+     * structural `equals` when the other object has the same class, and `False` otherwise. Values of a
+     * trait that requires `Eq` compare through it.
+     */
+    fun objectEqualsMethod(className: Identifier): JvmMethod {
+        val classType = JvmType.ClassType(className)
+        val receiver = JvmLocal(thisName, classType)
+        val other = JvmLocal(otherName, JvmType.OBJECT)
+        val sameClass = JvmInstanceOf(JvmLocalRead(other), className)
+        val structurallyEqual = equalsCall(JvmLocalRead(receiver), className, JvmCheckCast(JvmLocalRead(other), classType))
+        return JvmMethod(
+            equalsName,
+            listOf(JvmParameter(otherName, JvmType.OBJECT)),
+            JvmType.BOOL,
+            JvmExplicitReturnBlock(listOf(JvmReturn(JvmLogicalAnd(sameClass, structurallyEqual)))),
+            receiver,
+        )
+    }
+
+    /** Compares two values of trait [trait] through the interface's `equals(Object)`. */
+    fun traitEqualsCall(receiver: JvmExpression, trait: Identifier, argument: JvmExpression): JvmExpression =
+        JvmInstanceCall(
+            receiver = receiver,
+            ownerClass = trait,
+            methodName = equalsName,
+            arguments = listOf(JvmUpcast(argument, JvmType.OBJECT)),
+            signature = objectEqualsSignature,
+            ownerIsInterface = true,
+        )
+
+    /** Renders a value of trait [trait] through the interface's `toString()`. */
+    fun traitToStringCall(receiver: JvmExpression, trait: Identifier): JvmExpression = JvmInstanceCall(
+        receiver = receiver,
+        ownerClass = trait,
+        methodName = toStringName,
+        arguments = emptyList(),
+        signature = toStringSignature,
+        ownerIsInterface = true,
     )
 
     /** Builds `toString(): String`, rendering `ClassName(field: value, ...)`, or `ClassName` without fields. */
@@ -166,6 +217,12 @@ internal object JvmObjectMethods {
                 fieldRead(owner, field, other),
             )
 
+            is JvmType.InterfaceType -> traitEqualsCall(
+                fieldRead(owner, field, receiver),
+                type.name,
+                fieldRead(owner, field, other),
+            )
+
             else -> throw JvmLoweringException.InternalInvariant(
                 "unsupported class field type ${type.render()}",
             )
@@ -186,6 +243,11 @@ internal object JvmObjectMethods {
             is JvmType.ClassType -> append(
                 builder,
                 toStringCall(fieldRead(owner, field, receiver), type.name),
+            )
+
+            is JvmType.InterfaceType -> append(
+                builder,
+                traitToStringCall(fieldRead(owner, field, receiver), type.name),
             )
 
             else -> throw JvmLoweringException.InternalInvariant(

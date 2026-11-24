@@ -133,6 +133,7 @@ private class JvmFunctionLoweringState(
 ) {
 
     private val typeNames = JvmTypeNames(visibleClasses.keys, visibleTraits.keys)
+    private val traitRequirements = JvmTraitRequirements(visibleTraits)
 
     private val receiverLocal: JvmLocal? = receiverClass?.let { veraClass ->
         JvmLocal(Identifier("<this>"), JvmType.ClassType(veraClass.name))
@@ -547,7 +548,7 @@ private class JvmFunctionLoweringState(
         distinctTypes.singleOrNull()?.let { jvmType -> return jvmType }
         val traitSets = distinctTypes.map { jvmType ->
             when (jvmType) {
-                is JvmType.InterfaceType -> setOf(jvmType.name)
+                is JvmType.InterfaceType -> setOf(jvmType.name) + traitRequirements.userTraitsOf(jvmType.name)
                 is JvmType.ClassType -> visibleClasses[jvmType.name]?.traits?.filter { it in visibleTraits }?.toSet()
                     ?: return null
                 else -> return null
@@ -613,6 +614,12 @@ private class JvmFunctionLoweringState(
         if (actualType is JvmType.ClassType && expectedType is JvmType.InterfaceType) {
             val veraClass = visibleClasses[actualType.name] ?: return null
             if (expectedType.name in veraClass.traits) return JvmUpcast(jvmExpression, expectedType)
+        }
+        // A trait value is also a value of every trait it requires.
+        if (actualType is JvmType.InterfaceType && expectedType is JvmType.InterfaceType &&
+            traitRequirements.satisfies(actualType.name, expectedType.name)
+        ) {
+            return JvmUpcast(jvmExpression, expectedType)
         }
         return null
     }
@@ -740,8 +747,15 @@ private class JvmFunctionLoweringState(
             throw JvmLoweringException.StringConcatenationNotSupported()
         }
         if (veraOperation.operator == VeraOperator.EQUALS || veraOperation.operator == VeraOperator.NOT_EQUALS) {
-            validateEqualityOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
-            return lowerEquality(veraOperation.operator, jvmLeft, jvmRight)
+            // Objects of different classes compare as the one trait they share, if it requires `Eq`.
+            val sharedType = if (jvmLeft.type != jvmRight.type) unifyTypes(listOf(jvmLeft.type, jvmRight.type)) else null
+            val (jvmLeftOperand, jvmRightOperand) = if (sharedType is JvmType.InterfaceType) {
+                (coerce(jvmLeft, sharedType) ?: jvmLeft) to (coerce(jvmRight, sharedType) ?: jvmRight)
+            } else {
+                jvmLeft to jvmRight
+            }
+            validateEqualityOperands(veraOperation.operator, jvmLeftOperand.type, jvmRightOperand.type)
+            return lowerEquality(veraOperation.operator, jvmLeftOperand, jvmRightOperand)
         }
         validateIntOperands(veraOperation.operator, jvmLeft.type, jvmRight.type)
 
@@ -803,6 +817,11 @@ private class JvmFunctionLoweringState(
         jvmRight: JvmExpression,
     ): JvmExpression {
         val jvmType = jvmLeft.type
+        if (jvmType is JvmType.InterfaceType) {
+            requireTraitBuiltin(jvmType.name, JvmBuiltinTraits.eq, "compared")
+            val equalsCall = JvmObjectMethods.traitEqualsCall(jvmLeft, jvmType.name, jvmRight)
+            return if (veraOperator == VeraOperator.EQUALS) equalsCall else JvmLogicalNot(equalsCall)
+        }
         if (jvmType is JvmType.ClassType) {
             if (!hasBuiltinTrait(jvmType.name, JvmBuiltinTraits.eq)) {
                 throw JvmLoweringException.ObjectEqualityRequiresTrait(jvmType.name)
@@ -818,6 +837,13 @@ private class JvmFunctionLoweringState(
         return JvmComparison(jvmOperator, jvmLeft, jvmRight)
     }
 
+    /** A trait-typed value can be [action] only when its trait requires the built-in trait [builtin]. */
+    private fun requireTraitBuiltin(trait: Identifier, builtin: Identifier, action: String) {
+        if (!traitRequirements.satisfies(trait, builtin)) {
+            throw JvmLoweringException.TraitRequirementMissing(trait, builtin, action)
+        }
+    }
+
     private fun hasBuiltinTrait(className: Identifier, trait: Identifier): Boolean =
         className == JvmUnitType.name || visibleClasses[className]?.traits?.contains(trait) == true
 
@@ -831,7 +857,7 @@ private class JvmFunctionLoweringState(
         }
         when (jvmLeftType) {
             JvmType.INT, JvmType.BOOL, JvmType.STRING -> {}
-            is JvmType.ClassType -> {}
+            is JvmType.ClassType, is JvmType.InterfaceType -> {}
             else -> throw JvmLoweringException.EqualityOperandsRequired(veraOperator.symbol, jvmLeftType)
         }
     }
@@ -925,12 +951,16 @@ private class JvmFunctionLoweringState(
                         val veraTrait = visibleTraits[receiverType.name]
                             ?: throw JvmLoweringException.UnknownClassType(receiverType.name).at(chainedData.span)
                         val member = chainedData.member
-                        val traitMethod = veraTrait.methods.firstOrNull { method -> method.name == member }
+                        // Its own methods, and those of the traits it requires, declared by one of them.
+                        val declaringTraits = listOf(veraTrait) +
+                            traitRequirements.userTraitsOf(veraTrait.name).mapNotNull { name -> visibleTraits[name] }
+                        val declaringTrait = declaringTraits.firstOrNull { trait -> trait.methods.any { it.name == member } }
                             ?: throw JvmLoweringException.UnknownTraitMethod(
                                 receiverType.name,
                                 member,
-                                JvmNameHints.closest(member, veraTrait.methods.map { method -> method.name }),
+                                JvmNameHints.closest(member, declaringTraits.flatMap { trait -> trait.methods.map { it.name } }),
                             ).at(chainedData.span)
+                        val traitMethod = declaringTrait.methods.first { method -> method.name == member }
                         val nextData = veraChainedExpression.data.getOrNull(dataIndex + 1)
                         if (nextData !is VeraArguments) {
                             throw JvmLoweringException.ClassMethodUsedAsValue(receiverType.name, member)
@@ -942,7 +972,7 @@ private class JvmFunctionLoweringState(
                         ) { lowerArguments(nextData) }
                         val jvmReceiver = jvmExpression
                         jvmExpression = located(chainedData.span) {
-                            lowerTraitMethodCall(jvmReceiver, veraTrait, traitMethod, loweredArguments)
+                            lowerTraitMethodCall(jvmReceiver, declaringTrait, traitMethod, loweredArguments)
                         }
                         dataIndex += 2
                         continue
@@ -1285,6 +1315,10 @@ private class JvmFunctionLoweringState(
                 val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
                 val argument = jvmArguments.first()
                 val argumentType = argument.type
+                if (argumentType is JvmType.InterfaceType) {
+                    requireTraitBuiltin(argumentType.name, JvmBuiltinTraits.display, "printed")
+                    return JvmBuiltinCall(JvmBuiltin.PRINT, listOf(JvmObjectMethods.traitToStringCall(argument, argumentType.name)))
+                }
                 if (argumentType is JvmType.ClassType) {
                     if (!hasBuiltinTrait(argumentType.name, JvmBuiltinTraits.display)) {
                         throw JvmLoweringException.PrintRequiresDisplayTrait(argumentType.name)
@@ -1404,6 +1438,10 @@ private class JvmFunctionLoweringState(
         return when {
             jvmType == JvmType.INT || jvmType == JvmType.STRING -> jvmValue
             jvmType == JvmType.BOOL -> JvmObjectMethods.boolToString(jvmValue)
+            jvmType is JvmType.InterfaceType -> {
+                requireTraitBuiltin(jvmType.name, JvmBuiltinTraits.display, "used in string templates")
+                JvmObjectMethods.traitToStringCall(jvmValue, jvmType.name)
+            }
             jvmType is JvmType.ClassType -> {
                 if (!hasBuiltinTrait(jvmType.name, JvmBuiltinTraits.display)) {
                     throw JvmLoweringException.TemplateValueRequiresDisplayTrait(jvmType.name)

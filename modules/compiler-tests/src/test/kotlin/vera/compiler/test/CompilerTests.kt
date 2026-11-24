@@ -2632,6 +2632,118 @@ class VeraCompilerTests {
     }
 
     @Test
+    fun `trait requirements let trait values be printed and compared`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape requires Display, Eq {
+                        fn area(): Int
+                    }
+                    class Square has Shape, Display, Eq {
+                        val side: Int
+                        fn area(): Int = side * side
+                    }
+                    class Rect has Shape, Display, Eq {
+                        val width: Int
+                        val height: Int
+                        fn area(): Int = width * height
+                    }
+                    fn $TEST_MAIN() {
+                        val first: Shape = Square(2)
+                        val second: Shape = Rect(width = 1, height = 4)
+                        print(first)
+                        print("second: \{second}")
+                        print(first == second)
+                        print(first == Square(2))
+                        print(first != second)
+                    }
+                """.trimIndent()
+        assertProgramPrints(
+            source,
+            "Square(side: 2)${EOL}second: Rect(width: 1, height: 4)${EOL}False${EOL}True${EOL}True$EOL",
+            testInfo,
+        )
+    }
+
+    @Test
+    fun `trait cases get their trait's requirements automatically`(testInfo: TestInfo) {
+        val source = """
+                    trait Color requires Display, Eq { Red, Green }
+                    fn $TEST_MAIN() {
+                        print(Color.Red)
+                        print(Color.Red == Color.Red)
+                        val color: Color = Color.Green
+                        print(color == Color.Red)
+                        print("color: \{color}")
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Color.Red${EOL}True${EOL}False${EOL}color: Color.Green$EOL", testInfo)
+    }
+
+    @Test
+    fun `a trait value is a value of the traits it requires`(testInfo: TestInfo) {
+        val source = """
+                    trait Named {
+                        fn name(): String
+                    }
+                    trait Pet requires Named {
+                        fn sound(): String
+                    }
+                    class Dog has Pet, Named {
+                        fn name(): String = "Rex"
+                        fn sound(): String = "woof"
+                    }
+                    fn greet(named: Named) = print("hello \{named.name()}")
+                    fn $TEST_MAIN() {
+                        val pet: Pet = Dog
+                        greet(pet)
+                        print(pet.name())
+                        print(pet.sound())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "hello Rex${EOL}Rex${EOL}woof$EOL", testInfo)
+    }
+
+    @Test
+    fun `Eq and Display classes can hold trait values whose trait requires them`(testInfo: TestInfo) {
+        val source = """
+                    trait Shape requires Display, Eq {}
+                    class Square has Shape, Display, Eq {
+                        val side: Int
+                    }
+                    class Holder has Display, Eq {
+                        val shape: Shape
+                    }
+                    fn $TEST_MAIN() {
+                        print(Holder(Square(2)))
+                        print(Holder(Square(2)) == Holder(Square(2)))
+                        print(Holder(Square(2)) == Holder(Square(3)))
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Holder(shape: Square(side: 2))${EOL}True${EOL}False$EOL", testInfo)
+    }
+
+    @Test
+    fun `required traits become superinterfaces on the JVM`() {
+        val source = """
+                    trait Named {
+                        fn name(): String
+                    }
+                    trait Pet requires Named, Display {}
+                    class Dog has Pet, Named, Display {
+                        fn name(): String = "Rex"
+                    }
+                    fn $TEST_MAIN() {
+                    }
+                """.trimIndent()
+        val bytecode = VeraCompiler.compile(Identifier("RequirementTest"), source)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+        val named = classLoader.loadClass("Named")
+        val pet = classLoader.loadClass("Pet")
+        Assertions.assertEquals(listOf(named), pet.interfaces.toList())
+        Assertions.assertEquals(setOf("Pet", "Dog"), named.permittedSubclasses.map { it.name }.toSet())
+        Assertions.assertTrue(pet.declaredMethods.any { it.name == "toString" })
+    }
+
+    @Test
     fun `trait methods with omitted return types match Unit methods`(testInfo: TestInfo) {
         val source = """
                     trait Greeter {

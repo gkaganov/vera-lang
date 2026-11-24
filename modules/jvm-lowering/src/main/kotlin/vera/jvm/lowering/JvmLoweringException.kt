@@ -228,6 +228,34 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "match arms must have the same type or share one trait, got ${types.joinToString(" and ") { it.render() }}",
     )
 
+    class DuplicateRequirement(val trait: Identifier, val required: Identifier) : JvmLoweringException(
+        "trait ${trait.display} requires ${required.display} more than once",
+    )
+
+    /** Requirements that lead back to their own trait, such as `A requires B` and `B requires A`. */
+    class RequirementCycle(val traits: List<Identifier>) : JvmLoweringException(
+        "trait requirements form a cycle: ${traits.joinToString(" requires ") { it.display }}",
+    )
+
+    /** A class joining a trait without listing a trait it requires. */
+    class MissingRequiredTrait(
+        val className: Identifier,
+        val trait: Identifier,
+        val required: Identifier,
+    ) : JvmLoweringException(
+        "${className.display} has ${trait.display}, which requires ${required.display}; add `has ${required.display}`",
+    )
+
+    /** Printing, interpolating, or comparing a trait-typed value whose trait does not require the built-in. */
+    class TraitRequirementMissing(
+        val trait: Identifier,
+        val builtin: Identifier,
+        val action: String,
+    ) : JvmLoweringException(
+        "trait ${trait.display} does not require ${builtin.display}, so its values cannot be $action; " +
+            "add `requires ${builtin.display}`",
+    )
+
     /** A class joining a block-form trait, whose cases are all declared inside it. */
     class BlockTraitJoined(val className: Identifier, val trait: Identifier) : JvmLoweringException(
         "${trait.display} lists its cases inside it; add ${className.display} there instead of joining with `has`",
@@ -255,7 +283,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val trait: Identifier,
     ) : JvmLoweringException(
         "class ${className.display} has ${trait.display}, but field ${field.display} has trait type ${fieldType.display}, " +
-            "which does not support ${trait.display} yet",
+            "which does not require ${trait.display}",
     )
 
     /** A trait-typed value has only the trait's methods. */

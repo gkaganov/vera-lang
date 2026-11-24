@@ -33,7 +33,6 @@ Not implemented:
 
 - Object mutation (including `mut fn` methods).
 - Trait default method bodies.
-- Printing, comparing, or interpolating trait-typed values.
 - Effects, capabilities, services, errors-as-values.
 - Java interop.
 - `long`, `float`, `double`, numeric conversions.
@@ -52,7 +51,7 @@ Reserved words cannot be used as identifiers:
 
 | Category | Keywords |
 |----------|----------|
-| Declarations | `fn`, `class`, `trait`, `has`, `val`, `mut` |
+| Declarations | `fn`, `class`, `trait`, `has`, `requires`, `val`, `mut` |
 | Control flow | `if`, `else`, `match`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or`, `not` |
 | Types | `Int`, `String`, `Bool`, `Unit` |
@@ -199,9 +198,19 @@ class Square has Shape {
   object's actual class (dynamic dispatch).
 - Traits compile to JVM interfaces that their classes implement, so Java code sees ordinary
   interfaces.
-- Trait-typed values cannot yet be printed, compared with `==`, or used in string templates, and a
-  class with `Eq` or `Display` cannot have a trait-typed field yet. The built-in traits `Eq` and
-  `Display` are not types.
+- A trait can require other traits: `trait Shape requires Display, Eq { ... }` means every member of
+  `Shape` has them. This is interface inheritance only; traits carry no fields or code.
+  - A class joining the trait lists the required traits itself (`class Square has Shape, Display, Eq`),
+    so its declaration shows every trait it has; a missing one is an error naming it. Cases in a
+    trait's block get the requirements automatically.
+  - A `Shape` value can be printed and used in string templates when `Shape` requires `Display`, and
+    compared with `==` when it requires `Eq`. Objects of different classes compare as the one trait
+    they share: equal only if they have the same class and equal fields.
+  - A `Shape` value is also a value of every trait `Shape` requires, and their methods can be called
+    on it.
+  - A class with `Eq` or `Display` can have a trait-typed field when that trait requires the same
+    built-in trait.
+  - Requirements must not form a cycle. The built-in traits `Eq` and `Display` are not types.
 - Traits cannot declare fields, default method bodies, or overloads.
 - Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
   follow the function rules, so a `Unit` method leaves its return type out.
@@ -653,7 +662,7 @@ class          = "class" IDENT [ "has" IDENT { "," IDENT } ] "{" { EOL } { membe
 member         = "val" IDENT ":" type
                | function
 
-trait          = "trait" IDENT "{" { EOL } { traitItem } "}"
+trait          = "trait" IDENT [ "requires" IDENT { "," IDENT } ] "{" { EOL } { traitItem } "}"
 traitItem      = traitMethod statementEnd | case ( "," | statementEnd )
 traitMethod    = "fn" IDENT signature
 case           = IDENT [ [ "has" IDENT { "," IDENT } ] classBody ]   (* `has` needs a body *)

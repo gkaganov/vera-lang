@@ -13,8 +13,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 ### Closed traits, trait cases, and structural interfaces (design in progress)
 
 - Status: design settled; implementing in steps. Done: trait-typed values with dynamic dispatch,
-  steps 1 (every trait closed and matchable), 2 (field-less singletons), and 3
-  (block-form cases).
+  steps 1 (every trait closed and matchable), 2 (field-less singletons), 3
+  (block-form cases), and 4 (trait requirements).
 - Area: parser, AST, lowering, emitter.
 - Model:
   - `trait` is closed: only classes in its module can join it. Traits compile to sealed interfaces
@@ -83,7 +83,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   2. Field-less classes as singletons, with `Unit` as one of them. Done.
   3. Block-form cases: qualified names, nested JVM classes, unqualified patterns, qualified
      `Display`. Done.
-  4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values.
+  4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values. Done; a
+     matching `hashCode` for Java collections is still missing.
   5. Required fields in traits.
   6. Structural `interface`s with `implements`.
 - Acceptance: a non-exhaustive `match` is rejected and names the missing cases; interfaces cannot

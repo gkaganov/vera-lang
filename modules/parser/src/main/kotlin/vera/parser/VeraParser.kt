@@ -154,6 +154,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
     private fun parseTraitDeclaration(startToken: VeraToken): VeraTraitDeclaration {
         val name = expect(VeraTokenType.IDENTIFIER, "trait name")
         val owner = Identifier(name.text)
+        val requirements = mutableListOf<Identifier>()
+        if (match(VeraTokenType.REQUIRES)) {
+            requirements += Identifier(expect(VeraTokenType.IDENTIFIER, "required trait").text)
+            while (match(VeraTokenType.COMMA)) {
+                requirements += Identifier(expect(VeraTokenType.IDENTIFIER, "required trait").text)
+            }
+        }
         expect(VeraTokenType.LBRACE)
         skipEols()
         val methods = mutableListOf<VeraTraitMethod>()
@@ -173,7 +180,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             skipEols()
         }
         expect(VeraTokenType.RBRACE)
-        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases)
+        return VeraTraitDeclaration(owner, methods, spanOf(startToken, name), cases, requirements)
     }
 
     /**

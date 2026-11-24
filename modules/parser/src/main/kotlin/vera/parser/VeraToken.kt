@@ -7,6 +7,7 @@ enum class VeraTokenType {
     TRAIT,
     MATCH,
     HAS,
+    REQUIRES,
     IF,
     ELSE,
     WHILE,

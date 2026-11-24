@@ -194,8 +194,11 @@ data class JvmBlockExpression(val block: JvmBlock) : JvmExpression {
     override val type = block.type
 }
 
-/** Uses a class value as one of its trait types. No runtime work; it only changes the static type. */
-data class JvmUpcast(val expression: JvmExpression, override val type: JvmType.InterfaceType) : JvmExpression
+/**
+ * Uses a value as one of its supertypes: a class as one of its traits, a trait as a trait it requires,
+ * or any object as `Object`. No runtime work; it only changes the static type.
+ */
+data class JvmUpcast(val expression: JvmExpression, override val type: JvmType) : JvmExpression
 
 enum class JvmBuiltin { PRINT }
 

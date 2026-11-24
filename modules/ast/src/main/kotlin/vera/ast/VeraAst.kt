@@ -51,6 +51,8 @@ data class VeraTraitDeclaration(
     val methods: List<VeraTraitMethod>,
     override val span: SourceSpan,
     val cases: List<VeraClassDeclaration> = emptyList(),
+    /** Traits every member must also have (`requires Display, Eq`); interface inheritance only. */
+    val requirements: List<Identifier> = emptyList(),
 ) : VeraDeclaration
 
 data class VeraTraitMethod(

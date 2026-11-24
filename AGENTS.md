@@ -101,6 +101,14 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- Trait requirements: `VeraTraitDeclaration.requirements` (`requires`). `JvmTraitRequirements` computes
+  their transitive closure after `validateRequirements` rejects unknown, repeated, or cyclic ones.
+  Cases get their owner's requirements added to `traits`; other classes must list them
+  (`MissingRequiredTrait`). A trait's interface extends its required user traits (which permit it in
+  turn) and declares `equals(Object)`/`toString()` when it requires `Eq`/`Display`. Classes with `Eq`
+  also get `JvmObjectMethods.objectEqualsMethod`, an `equals(Object)` that is structural for the
+  same class; trait values compare and print through the interface (`traitEqualsCall`,
+  `traitToStringCall`). `coerce` upcasts a trait value to a trait it requires.
 - Trait cases: `VeraParserState.parseTraitCase` turns each case in a trait block into a
   `VeraClassDeclaration` named `Owner$Case` (its JVM binary name; `Identifier.display` shows
   `Owner.Case`), with `owner` set and the owner first in `traits`; `VeraTraitDeclaration.cases`
