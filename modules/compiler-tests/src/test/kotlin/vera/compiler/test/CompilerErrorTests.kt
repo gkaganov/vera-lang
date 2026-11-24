@@ -639,6 +639,18 @@ class CompilerErrorTests {
                 "unreachable statement after a match whose arms all return",
             ),
             CompileErrorCase(
+                "constructing classes without fields",
+                classDeclaration("Empty") + function("val empty = Empty()"),
+                JvmLoweringException.SingletonConstructed::class,
+                "Empty has no fields, so it has a single value; write `Empty` instead of `Empty()`",
+            ),
+            CompileErrorCase(
+                "forwarding values into classes without fields",
+                classDeclaration("Empty") + function("val empty = 1 |> Empty"),
+                JvmLoweringException.SingletonConstructed::class,
+                "Empty has no fields, so it has a single value",
+            ),
+            CompileErrorCase(
                 "undefined names",
                 function("print(missing)"),
                 JvmLoweringException.UnknownVariable::class,

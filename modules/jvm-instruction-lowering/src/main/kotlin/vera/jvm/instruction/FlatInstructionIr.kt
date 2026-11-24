@@ -29,6 +29,7 @@ data class FlatMethod(
     val instructions: List<FlatInstructionWithDebugInfo>,
     val signature: JvmMethodSignature,
     val isStatic: Boolean = true,
+    val isPrivate: Boolean = false,
 )
 
 data class FlatFrameSnapshot(

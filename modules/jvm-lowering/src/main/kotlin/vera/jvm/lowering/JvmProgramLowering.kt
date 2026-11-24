@@ -184,9 +184,29 @@ object JvmProgramLowering {
         )
     }
 
+    /** `Unit` is the built-in field-less class: a singleton with `Eq` and a `Display` of `Unit`. */
     private fun lowerUnitClass(): JvmClass {
         val unitClassName = JvmUnitType.name
-        val instanceField = JvmField(Identifier("INSTANCE"), JvmUnitType, isStatic = true)
+        val (instanceField, staticInitializer) = singletonMembers(unitClassName)
+        return JvmClass(
+            name = unitClassName,
+            methods = listOf(
+                staticInitializer,
+                JvmObjectMethods.equalsMethod(unitClassName, emptyList()),
+                JvmObjectMethods.toStringMethod(unitClassName, emptyList()),
+            ),
+            fields = listOf(instanceField),
+            constructors = listOf(JvmConstructor(emptyList(), isPrivate = true)),
+        )
+    }
+
+    /**
+     * The static `INSTANCE` field and the `<clinit>` that creates it, which hold the single value of a
+     * field-less class. Its constructor is private, so no other instance exists.
+     */
+    private fun singletonMembers(className: Identifier): Pair<JvmField, JvmMethod> {
+        val classType = JvmType.ClassType(className)
+        val instanceField = JvmField(Identifier("INSTANCE"), classType, isStatic = true)
         val staticInitializer = JvmMethod(
             Identifier("<clinit>"),
             emptyList(),
@@ -194,12 +214,12 @@ object JvmProgramLowering {
             JvmExplicitReturnBlock(
                 listOf(
                     JvmPutStatic(
-                        ownerClass = unitClassName,
+                        ownerClass = className,
                         fieldName = instanceField.name,
-                        fieldType = JvmUnitType,
-                        fieldDescriptor = Identifier("Unit"),
+                        fieldType = classType,
+                        fieldDescriptor = className,
                         value = JvmObjectConstruction(
-                            className = unitClassName,
+                            className = className,
                             arguments = emptyList(),
                             signature = JvmMethodSignature(emptyList(), JvmType.VOID),
                         ),
@@ -208,16 +228,7 @@ object JvmProgramLowering {
                 ),
             ),
         )
-        return JvmClass(
-            name = unitClassName,
-            methods = listOf(
-                staticInitializer,
-                JvmObjectMethods.equalsMethod(unitClassName, emptyList()),
-                JvmObjectMethods.constantToStringMethod(unitClassName, "Unit"),
-            ),
-            fields = listOf(instanceField),
-            constructors = listOf(JvmConstructor(emptyList())),
-        )
+        return instanceField to staticInitializer
     }
 
     private fun validateTrait(trait: VeraTraitDeclaration, typeNames: JvmTypeNames) {
@@ -406,6 +417,18 @@ object JvmProgramLowering {
             if (hasEq) add(JvmObjectMethods.equalsMethod(veraClass.name, jvmFields))
             if (hasDisplay) add(JvmObjectMethods.toStringMethod(veraClass.name, jvmFields))
         }
+        val interfaces = veraClass.traits.filter { trait -> trait !in JvmBuiltinTraits.names }
+        if (jvmFields.isEmpty()) {
+            // A class without fields has exactly one value, written by its name.
+            val (instanceField, staticInitializer) = singletonMembers(veraClass.name)
+            return JvmClass(
+                name = veraClass.name,
+                methods = jvmMethods + staticInitializer,
+                fields = listOf(instanceField),
+                constructors = listOf(JvmConstructor(emptyList(), isPrivate = true)),
+                interfaces = interfaces,
+            )
+        }
         val constructorParameters = jvmFields.map { field ->
             JvmParameter(field.name, field.type)
         }
@@ -414,7 +437,7 @@ object JvmProgramLowering {
             methods = jvmMethods,
             fields = jvmFields,
             constructors = listOf(JvmConstructor(constructorParameters)),
-            interfaces = veraClass.traits.filter { trait -> trait !in JvmBuiltinTraits.names },
+            interfaces = interfaces,
         )
     }
 }

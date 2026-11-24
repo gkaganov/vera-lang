@@ -159,6 +159,9 @@ fn main() {
 - Objects are immutable; fields are read-only from Vera source.
 - The compiler generates a constructor with one parameter per field, in field declaration order.
   Construction follows the named-argument rules: `Point(x = 1, y = 2)`.
+- A class without fields has exactly one value, so it is a singleton written by its name, with no
+  constructor call: `Empty`, `print(Empty)`, `Geometry.square(3)`. Writing `Empty()` is an error with
+  a hint. `Display` prints its name (`Empty`). `Unit` is the built-in example.
 - Field access uses `.` and can be chained: `line.start.x`.
 - Class types can be used in parameter, return, and local type annotations.
 - Each class compiles to its own JVM class with final fields, a generated constructor, and public
@@ -268,7 +271,8 @@ fn countdown(from: Int) {
 | `Unit`   | Exactly one value             | `Unit`                 |
 | Class    | User-defined immutable object | `Point`                |
 
-- `Unit` is a real value: it can be stored in fields and variables, passed, and returned.
+- `Unit` is a real value: it can be stored in fields and variables, passed, and returned. It is the
+  built-in class without fields, so like any such class it is a singleton written by its name.
   The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
 - `True` and `False` are the two variants of `Bool`, just as `Unit` is the single variant of `Unit`.
   They print as written: `print(1 < 2)` outputs `True`.

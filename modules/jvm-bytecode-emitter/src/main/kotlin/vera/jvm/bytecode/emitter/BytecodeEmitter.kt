@@ -41,6 +41,7 @@ import java.lang.classfile.ClassFile
 import java.lang.classfile.ClassFile.ACC_ABSTRACT
 import java.lang.classfile.ClassFile.ACC_FINAL
 import java.lang.classfile.ClassFile.ACC_INTERFACE
+import java.lang.classfile.ClassFile.ACC_PRIVATE
 import java.lang.classfile.ClassFile.ACC_PUBLIC
 import java.lang.classfile.ClassFile.ACC_STATIC
 import java.lang.classfile.ClassHierarchyResolver
@@ -104,7 +105,8 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                     )
                 }
                 clazz.methods.forEach { method ->
-                    val methodFlags = ACC_PUBLIC or if (method.isStatic) ACC_STATIC else 0
+                    val visibility = if (method.isPrivate) ACC_PRIVATE else ACC_PUBLIC
+                    val methodFlags = visibility or if (method.isStatic) ACC_STATIC else 0
                     classBuilder.withMethod(
                         method.name.value,
                         method.signature.toMethodTypeDesc(),

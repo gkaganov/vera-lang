@@ -2298,8 +2298,8 @@ class VeraCompilerTests {
                     }
                     fn apply(scaler: Scaler): Int = scaler.scale(value = 5, offset = 1)
                     fn $TEST_MAIN() {
-                        print(apply(Doubler()))
-                        val scaler: Scaler = Doubler()
+                        print(apply(Doubler))
+                        val scaler: Scaler = Doubler
                         3 |> scaler.scale(10) |> print
                     }
                 """.trimIndent()
@@ -2348,7 +2348,7 @@ class VeraCompilerTests {
                     fn $TEST_MAIN() {
                         print(area(Circle(2)))
                         print(area(Rect(width = 2, height = 3)))
-                        print(area(Empty()))
+                        print(area(Empty))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "12${EOL}6${EOL}0$EOL", testInfo)
@@ -2373,7 +2373,7 @@ class VeraCompilerTests {
                     }
                     fn $TEST_MAIN() {
                         print(describe(Click(4)))
-                        print(describe(Quit()))
+                        print(describe(Quit))
                     }
                 """.trimIndent()
         assertProgramPrints(source, "click 8${EOL}quit$EOL", testInfo)
@@ -2392,7 +2392,7 @@ class VeraCompilerTests {
                     class Empty has Shape {
                         fn size(): Int = 0
                     }
-                    fn make(big: Bool): Shape = if big { Circle(5) } else { Empty() }
+                    fn make(big: Bool): Shape = if big { Circle(5) } else { Empty }
                     fn grow(shape: Shape): Shape = match shape {
                         Circle(radius) -> Circle(radius + 1)
                         Empty -> Circle(1)
@@ -2453,6 +2453,51 @@ class VeraCompilerTests {
         Assertions.assertTrue(shape.isSealed)
         Assertions.assertEquals(setOf("Circle", "Empty"), shape.permittedSubclasses.map { it.name }.toSet())
         Assertions.assertTrue(shape.isAssignableFrom(classLoader.loadClass("Circle")))
+    }
+
+    @Test
+    fun `classes without fields are singletons written by name`(testInfo: TestInfo) {
+        val source = """
+                    class Empty has Display, Eq {}
+                    class Geometry {
+                        fn square(x: Int): Int = x * x
+                    }
+                    trait Shape {
+                        fn area(): Int
+                    }
+                    class Nothing has Shape {
+                        fn area(): Int = 0
+                    }
+                    fn describe(shape: Shape): Int = shape.area()
+                    fn $TEST_MAIN() {
+                        print(Empty)
+                        print(Empty == Empty)
+                        print("empty: \{Empty}")
+                        print(Geometry.square(3))
+                        print(describe(Nothing))
+                        val geometry = Geometry
+                        print(4 |> geometry.square())
+                    }
+                """.trimIndent()
+        assertProgramPrints(source, "Empty${EOL}True${EOL}empty: Empty${EOL}9${EOL}0${EOL}16$EOL", testInfo)
+    }
+
+    @Test
+    fun `singletons have one instance and a private constructor`() {
+        val source = """
+                    class Empty {}
+                    fn first(): Empty = Empty
+                    fn $TEST_MAIN() {
+                    }
+                """.trimIndent()
+        val className = Identifier("SingletonTest")
+        val bytecode = VeraCompiler.compile(className, source)
+        val classLoader = ByteArrayClassLoader(bytecode.mapKeys { it.key.value })
+        val empty = classLoader.loadClass("Empty")
+        val first = classLoader.loadClass(className.value).getMethod("first")
+        Assertions.assertSame(first.invoke(null), first.invoke(null))
+        Assertions.assertSame(empty.getField("INSTANCE").get(null), first.invoke(null))
+        Assertions.assertTrue(empty.declaredConstructors.all { java.lang.reflect.Modifier.isPrivate(it.modifiers) })
     }
 
     @Test
@@ -2582,8 +2627,8 @@ class VeraCompilerTests {
                     class Empty has Eq {
                     }
                     fn $TEST_MAIN() {
-                        print(Empty() == Empty())
-                        print(Empty() != Empty())
+                        print(Empty == Empty)
+                        print(Empty != Empty)
                     }
                 """.trimIndent()
         assertProgramPrints(source, "True${EOL}False$EOL", testInfo)

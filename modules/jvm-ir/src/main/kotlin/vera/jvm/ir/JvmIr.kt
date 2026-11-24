@@ -25,7 +25,8 @@ data class JvmAbstractMethod(val name: Identifier, val signature: JvmMethodSigna
 
 data class JvmField(val name: Identifier, val type: JvmType, val isStatic: Boolean = false)
 
-data class JvmConstructor(val parameters: List<JvmParameter>)
+/** A constructor taking one parameter per field; singleton classes have a [isPrivate] one. */
+data class JvmConstructor(val parameters: List<JvmParameter>, val isPrivate: Boolean = false)
 
 data class JvmMethod(
     val name: Identifier,
@@ -88,6 +89,9 @@ data class JvmBoolLiteral(val value: Boolean) : JvmExpression {
 data object JvmUnitLiteral : JvmExpression {
     override val type = JvmUnitType
 }
+
+/** The single value of a field-less class, read from its static `INSTANCE` field. */
+data class JvmSingletonValue(override val type: JvmType.ClassType) : JvmExpression
 
 data class JvmLocalRead(val local: JvmLocal) : JvmExpression {
     override val type = local.type

@@ -144,8 +144,12 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   object lowers to `toString` and requires `Display`. Missing traits are lowering errors. `!=`
   negates the call with `JvmLogicalNot`, and generated methods are never visible to Vera
   name resolution.
-- `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class;
-  it stores a static `INSTANCE` singleton initialized by a generated `<clinit>`. The unit value is
+- Field-less classes are singletons: `JvmProgramLowering.singletonMembers` gives each one a static
+  `INSTANCE` field, a `<clinit>` that creates it, and a private constructor (`JvmConstructor.isPrivate`,
+  `FlatMethod.isPrivate`). A bare class name lowers to `JvmSingletonValue` (`FlatGetStatic`), and
+  `Empty()` is `SingletonConstructed`.
+- `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class, a
+  field-less class built with the same singleton members. The unit value is
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
   `Unit` implicitly has `Eq` and `Display`; its generated `equals` always returns `true`
   and its generated `toString` returns `Unit`, so `Unit` equality and printing use the object path.

@@ -81,6 +81,7 @@ import vera.jvm.ir.JvmUnitLiteral
 import vera.jvm.ir.JvmUnitReturnBlock
 import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmUpcast
+import vera.jvm.ir.JvmSingletonValue
 import vera.jvm.ir.JvmBlockExpression
 import vera.jvm.ir.JvmCheckCast
 import vera.jvm.ir.JvmInstanceOf
@@ -635,18 +636,26 @@ private class JvmFunctionLoweringState(
             is VeraChainedExpression -> lowerChainedExpression(veraPrimaryExpression)
             else -> when (val resolution = resolvePrimaryExpression(veraPrimaryExpression)) {
                 is PrimaryResolution.Resolved -> resolution.expression
-                is PrimaryResolution.Pending -> {
-                    if (visibleClasses.containsKey(resolution.identifier)) {
-                        throw JvmLoweringException.ClassTypeUsedAsValue(resolution.identifier)
-                    }
-                    val receiver = receiverClass
-                    if (receiver != null && receiver.methods.any { it.name == resolution.identifier }) {
-                        throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, resolution.identifier)
-                    }
-                    throw unknownVariable(resolution.identifier)
-                }
+                is PrimaryResolution.Pending -> lowerNamedValue(resolution.identifier)
             }
         }
+    }
+
+    /**
+     * A bare name used as a value that is not a local or field: the single value of a field-less
+     * class (`Empty`), or an error explaining why the name is not a value.
+     */
+    private fun lowerNamedValue(name: Identifier): JvmExpression {
+        val veraClass = visibleClasses[name]
+        if (veraClass != null) {
+            if (veraClass.fields.isEmpty()) return JvmSingletonValue(JvmType.ClassType(name))
+            throw JvmLoweringException.ClassTypeUsedAsValue(name)
+        }
+        val receiver = receiverClass
+        if (receiver != null && receiver.methods.any { method -> method.name == name }) {
+            throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, name)
+        }
+        throw unknownVariable(name)
     }
 
     private fun lowerUnaryOperation(veraUnaryOperation: VeraUnaryOperation): JvmExpression {
@@ -843,23 +852,18 @@ private class JvmFunctionLoweringState(
                 val veraName = resolution.identifier
                 val firstData = veraChainedExpression.data.firstOrNull()
                 val nameSpan = veraChainedExpression.primaryExpression.span
-                if (firstData !is VeraArguments) {
-                    if (visibleClasses.containsKey(veraName)) {
-                        throw JvmLoweringException.ClassTypeUsedAsValue(veraName).at(nameSpan)
-                    }
-                    val receiver = receiverClass
-                    if (receiver != null && receiver.methods.any { it.name == veraName }) {
-                        throw JvmLoweringException.ClassMethodUsedAsValue(receiver.name, veraName).at(nameSpan)
-                    }
-                    throw unknownVariable(veraName).at(nameSpan)
+                if (firstData is VeraArguments) {
+                    val loweredArguments = lowerForwardedArguments(
+                        forwardedArgument,
+                        forwardedArgumentIndex == 0,
+                    ) { lowerArguments(firstData) }
+                    jvmExpression = located(nameSpan) { lowerNamedCall(veraName, loweredArguments) }
+                    dataIndex = 1
+                } else {
+                    // `Empty.describe()`: a field-less class's name is its single value.
+                    jvmExpression = located(nameSpan) { lowerNamedValue(veraName) }
+                    dataIndex = 0
                 }
-
-                val loweredArguments = lowerForwardedArguments(
-                    forwardedArgument,
-                    forwardedArgumentIndex == 0,
-                ) { lowerArguments(firstData) }
-                jvmExpression = located(nameSpan) { lowerNamedCall(veraName, loweredArguments) }
-                dataIndex = 1
             }
         }
 
@@ -1075,6 +1079,9 @@ private class JvmFunctionLoweringState(
         veraClass: VeraClassDeclaration,
         loweredArguments: List<LoweredArgument>,
     ): JvmExpression {
+        if (veraClass.fields.isEmpty()) {
+            throw JvmLoweringException.SingletonConstructed(veraClass.name)
+        }
         if (loweredArguments.size != veraClass.fields.size) {
             throw JvmLoweringException.ClassConstructorArityMismatch(
                 veraClass.name,

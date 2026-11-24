@@ -334,6 +334,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${className.value} method ${method.value} must be called",
     )
 
+    /** `Empty()`: a field-less class is a singleton written by its name. */
+    class SingletonConstructed(val className: Identifier) : JvmLoweringException(
+        "${className.value} has no fields, so it has a single value; write `${className.value}` instead of `${className.value}()`",
+    )
+
     class ClassTypeUsedAsValue(val name: Identifier) : JvmLoweringException(
         "class type ${name.value} cannot be used as a value",
     )

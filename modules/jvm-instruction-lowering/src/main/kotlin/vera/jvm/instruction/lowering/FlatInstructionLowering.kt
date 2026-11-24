@@ -41,6 +41,7 @@ import vera.jvm.ir.JvmUnitType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmUpcast
+import vera.jvm.ir.JvmSingletonValue
 import vera.jvm.ir.JvmBlockExpression
 import vera.jvm.ir.JvmCheckCast
 import vera.jvm.ir.JvmInstanceOf
@@ -167,7 +168,7 @@ private class FlatInstructionLoweringState {
                 append(FlatPutField(jvmClass.name, jvmField.name, jvmField.type))
             }
         append(FlatReturn(JvmType.VOID))
-        return flatBuilder.build()
+        return flatBuilder.build().copy(isPrivate = jvmConstructor.isPrivate)
     }
 
     private fun lowerMethod(jvmMethod: JvmMethod): FlatMethod {
@@ -315,6 +316,12 @@ private class FlatInstructionLoweringState {
             is JvmUnitLiteral -> {
                 emitUnitValue()
                 JvmUnitType
+            }
+
+            is JvmSingletonValue -> {
+                val className = jvmExpression.type.name
+                append(FlatGetStatic(className, Identifier("INSTANCE"), jvmExpression.type, className))
+                jvmExpression.type
             }
 
             is JvmLocalRead -> {
