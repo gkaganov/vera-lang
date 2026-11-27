@@ -121,6 +121,16 @@ class MatchTests {
             JvmLoweringException.ShadowingNotAllowed::class,
             "name radius is already in scope; shadowing is not allowed",
         )
+
+        @Test
+        fun `rejects patterns that bind a field twice`() = assertCompilationFails(
+            "trait Shape {}\n" + classDeclaration("Rect has Shape", "val width: Int") +
+                "fn area(shape: Shape): Int = match shape {\n    Rect(width, width = w) -> w\n}",
+            JvmLoweringException.PatternFieldBoundTwice::class,
+            "field width is bound more than once in the pattern",
+            line = 6,
+            column = 17,
+        )
     }
 
     @Nested

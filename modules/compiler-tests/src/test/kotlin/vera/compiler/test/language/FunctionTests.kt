@@ -167,6 +167,20 @@ class FunctionTests {
         )
 
         @Test
+        fun `rejects misspelled argument names`() = assertCompilationFails(
+            "fn add(left: Int, right: Int): Int = left + right\n" + function("print(add(left = 1, rigth = 2))"),
+            JvmLoweringException.UnknownArgumentName::class,
+            "function add has no parameter named rigth; did you mean `right`?",
+        )
+
+        @Test
+        fun `rejects argument names that match no parameter`() = assertCompilationFails(
+            classDeclaration("Point", "val x: Int", "val y: Int") + function("print(Point(x = 1, depth = 2).x)"),
+            JvmLoweringException.UnknownArgumentName::class,
+            "class Point has no parameter named depth",
+        )
+
+        @Test
         fun `rejects shorthand arguments out of parameter order`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("val left = 1", "val right = 2", "print(add(right, left))"),

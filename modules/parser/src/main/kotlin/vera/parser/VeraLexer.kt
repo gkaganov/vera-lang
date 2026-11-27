@@ -218,6 +218,7 @@ private class VeraLexerState(private val source: String) {
             '&' if next == '&' -> throw javaOperator("&&", "write `and` instead")
             '|' if next == '|' -> throw javaOperator("||", "write `or` instead")
             '+' if next == '+' -> throw javaOperator("++", "write `x = x + 1` instead")
+            '-' if next == '-' -> throw javaOperator("--", "write `x = x - 1` instead")
             '+' if next == '=' -> throw compoundAssignment(char)
             '-' if next == '=' -> throw compoundAssignment(char)
             '-' if next == '>' -> VeraTokenType.ARROW to 2

@@ -206,6 +206,10 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "${className.display} is matched more than once",
     )
 
+    class PatternFieldBoundTwice(val field: Identifier) : JvmLoweringException(
+        "field ${field.display} is bound more than once in the pattern",
+    )
+
     /** A `match` that leaves cases uncovered; Vera has no catch-all arm, so each case is listed. */
     class MatchNotExhaustive(val scrutinee: Identifier, val missing: List<Identifier>) : JvmLoweringException(
         "match on ${scrutinee.display} does not cover ${missing.joinToString(", ") { it.display }}",
@@ -592,6 +596,15 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val parameter: Identifier,
     ) : JvmLoweringException(
         "argument $position of $callee must be named: write `${parameter.display} = ...`",
+    )
+
+    /** An argument is named after no parameter of the callee. */
+    class UnknownArgumentName(
+        val callee: String,
+        val name: Identifier,
+        val suggestion: Identifier?,
+    ) : JvmLoweringException(
+        JvmNameHints.withHelp("$callee has no parameter named ${name.display}", null, suggestion),
     )
 
     /** An argument names a different parameter than the one at its position. */

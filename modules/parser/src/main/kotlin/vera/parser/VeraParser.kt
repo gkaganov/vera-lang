@@ -676,6 +676,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             token.type == VeraTokenType.IDENTIFIER && token.text == "for" && next.type == VeraTokenType.LPAREN ->
                 throw VeraParseException.JavaSyntax(token, "Vera has no `for` loop; use `while`")
 
+            token.type == VeraTokenType.IDENTIFIER &&
+                (next.type == VeraTokenType.VAL || next.type == VeraTokenType.IDENTIFIER && next.text == "var") ->
+                throw VeraParseException.JavaSyntax(
+                    token,
+                    "Vera has no `${token.text}` modifier; declare the binding with its value: `val name = ...`",
+                )
+
             startsWithType && next.type == VeraTokenType.IDENTIFIER ->
                 throw VeraParseException.JavaSyntax(
                     token,

@@ -865,7 +865,7 @@ error: argument 1 of function add must be named: write `left = ...`
 | Java | Hint |
 |------|------|
 | `!done`, `&&`, `\|\|` | use `not`, `and`, `or` |
-| `x++`, `x += 1` | write `x = x + 1` |
+| `x++`, `x--`, `x += 1` | write `x = x + 1` |
 | `;` | end the statement with a newline |
 | `new Point()` | call the class directly: `Point(...)` |
 | `extends`, `implements` | no inheritance; list traits with `has` |

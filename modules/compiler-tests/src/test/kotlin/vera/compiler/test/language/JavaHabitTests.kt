@@ -42,6 +42,22 @@ class JavaHabitTests {
         )
 
         @Test
+        fun `Java decrements`() = assertCompilationFails(
+            function("mut val count = 0", "count--"),
+            VeraLexException.JavaOperator::class,
+            "Vera does not use `--`; write `x = x - 1` instead",
+        )
+
+        @Test
+        fun `Java decrements do not continue onto the next line`() = assertCompilationFails(
+            function("mut val count = 5", "val other = 2", "count = count--", "other"),
+            VeraLexException.JavaOperator::class,
+            "Vera does not use `--`",
+            line = 4,
+            column = 18,
+        )
+
+        @Test
         fun `Java compound assignments`() = assertCompilationFails(
             function("val count = 0", "count -= 2"),
             VeraLexException.JavaOperator::class,
@@ -119,6 +135,20 @@ class JavaHabitTests {
             function("var count = 0"),
             VeraParseException.JavaSyntax::class,
             "Vera has no `var`; declare with `val`, or `mut val` for a binding you rebind",
+        )
+
+        @Test
+        fun `Kotlin lateinit var declarations`() = assertCompilationFails(
+            function("lateinit var count: Int"),
+            VeraParseException.JavaSyntax::class,
+            "Vera has no `lateinit` modifier; declare the binding with its value: `val name = ...`",
+        )
+
+        @Test
+        fun `Kotlin const val declarations`() = assertCompilationFails(
+            function("const val limit = 1"),
+            VeraParseException.JavaSyntax::class,
+            "Vera has no `const` modifier",
         )
     }
 

@@ -518,7 +518,11 @@ private class JvmFunctionLoweringState(
             if (veraArm.pattern.fields.isNotEmpty()) {
                 val jvmCase = JvmLocal(Identifier("<case${temporaryCount++}>"), classType)
                 jvmBindings += JvmVarDeclaration(jvmCase, JvmCheckCast(JvmLocalRead(jvmTemporary), classType))
+                val boundFields = mutableSetOf<Identifier>()
                 veraArm.pattern.fields.forEach { veraFieldPattern ->
+                    if (!boundFields.add(veraFieldPattern.field)) {
+                        throw JvmLoweringException.PatternFieldBoundTwice(veraFieldPattern.field).at(veraFieldPattern.span)
+                    }
                     val veraField = veraClass.fields.firstOrNull { field -> field.name == veraFieldPattern.field }
                         ?: throw JvmLoweringException.UnknownClassField(
                             veraClass.name,
@@ -1332,6 +1336,12 @@ private class JvmFunctionLoweringState(
             when {
                 loweredArgument.forwarded -> {}
                 explicitName == expectedName -> {}
+                explicitName != null && explicitName !in parameterNames ->
+                    throw JvmLoweringException.UnknownArgumentName(
+                        callee,
+                        explicitName,
+                        JvmNameHints.closest(explicitName, parameterNames),
+                    ).at(loweredArgument.span)
                 explicitName != null ->
                     throw JvmLoweringException.ArgumentNameMismatch(callee, position, explicitName, expectedName)
                         .at(loweredArgument.span)

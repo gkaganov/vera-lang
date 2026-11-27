@@ -43,7 +43,7 @@ class ExpressionTests {
                 print(-value)
                 print(-2 * 3)
                 print(1 - -2)
-                print(--4)
+                print(-(-4))
             }
             """,
             "-1",
