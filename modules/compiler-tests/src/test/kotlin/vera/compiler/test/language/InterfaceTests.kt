@@ -270,7 +270,7 @@ class InterfaceTests {
 
         @Test
         fun `rejects stated interfaces whose required built-in trait is missing`() = assertCompilationFails(
-            "interface Named requires Display {}\nclass Dog implements Named {}",
+            "interface Named requires Display {}\nclass Dog implements Named {\n    val age: Int\n}",
             JvmLoweringException.MissingRequiredTrait::class,
             "Dog implements Named, which requires Display; add `has Display`",
         )

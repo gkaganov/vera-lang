@@ -238,7 +238,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val parameters = mutableListOf<VeraParameter>()
         if (!at(VeraTokenType.RPAREN)) {
             parameters += parseParameter()
-            while (match(VeraTokenType.COMMA)) {
+            while (match(VeraTokenType.COMMA) && !at(VeraTokenType.RPAREN)) {
                 parameters += parseParameter()
             }
         }
@@ -507,7 +507,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val arguments = mutableListOf<VeraArgument>()
         if (!at(VeraTokenType.RPAREN)) {
             arguments += parseArgument()
-            while (match(VeraTokenType.COMMA)) {
+            while (match(VeraTokenType.COMMA) && !at(VeraTokenType.RPAREN)) {
                 arguments += parseArgument()
             }
         }
@@ -743,7 +743,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 throw VeraParseException.EmptyPatternParentheses(current(), patternName.display)
             }
             fields += parseFieldPattern()
-            while (match(VeraTokenType.COMMA)) {
+            while (match(VeraTokenType.COMMA) && !at(VeraTokenType.RPAREN)) {
                 fields += parseFieldPattern()
             }
             expect(VeraTokenType.RPAREN)

@@ -15,6 +15,25 @@ class TraitCaseTests {
     @Nested
     inner class Cases {
         @Test
+        fun `case lists mix commas and newlines and allow a trailing comma`() = assertPrints(
+            """
+            trait Color {
+                Red, Green
+                Blue,
+            }
+            fn name(color: Color): String = match color {
+                Red -> "red"
+                Green -> "green"
+                Blue -> "blue"
+            }
+            fn main() {
+                print(name(Color.Blue))
+            }
+            """,
+            "blue",
+        )
+
+        @Test
         fun `trait blocks declare constant cases that match unqualified`() = assertPrints(
             """
             trait Color { Red, Green, Blue }
@@ -58,7 +77,7 @@ class TraitCaseTests {
                 print(radiusOf(circle))
                 val shape: Shape = Shape.Empty
                 print(shape.area())
-                print(3 |> Shape.Circle() |> radiusOf)
+                print(3 |> Shape.Circle() |> radiusOf())
             }
             """,
             "Shape.Circle(radius: 2)",

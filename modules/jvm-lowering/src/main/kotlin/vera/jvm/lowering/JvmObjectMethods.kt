@@ -38,6 +38,9 @@ internal object JvmObjectMethods {
     val equalsName: Identifier = Identifier("equals")
     val toStringName: Identifier = Identifier("toString")
 
+    /** Member names reserved because they are `java.lang.Object` methods that Vera generates. */
+    val reservedNames: Set<String> = setOf("toString", "equals", "hashCode")
+
     private val thisName = Identifier("<this>")
     private val otherName = Identifier("other")
     private val valueName = Identifier("value")

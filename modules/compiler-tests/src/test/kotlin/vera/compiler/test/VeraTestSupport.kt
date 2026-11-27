@@ -25,8 +25,6 @@ import kotlin.reflect.KClass
 // A source that starts with a line break is trimmed with `trimIndent`; any other source is used as is,
 // so a test can build exact input such as CRLF line endings.
 
-internal val EOL: String = System.lineSeparator()
-
 /** The program class every test program compiles into; each program gets its own class loader. */
 internal const val PROGRAM_CLASS = "VeraTestProgram"
 
@@ -172,7 +170,8 @@ internal fun assertMatches(
 
 private fun prepared(source: String): String = if (source.startsWith("\n")) source.trimIndent() else source
 
-private fun expectedOutput(lines: Array<out String>): String = lines.joinToString("") { line -> line + EOL }
+/** `print` ends every line with `\n` on every platform. */
+private fun expectedOutput(lines: Array<out String>): String = lines.joinToString("") { line -> "$line\n" }
 
 private fun <T> capturingOutput(block: () -> T): Pair<T, String> {
     val oldOut = System.out

@@ -33,6 +33,30 @@ class StringTests {
         )
 
         @Test
+        fun `unicode escapes take four hex digits`() = assertPrints(
+            """
+            fn main() {
+                print("\u0041\u00e9\u00C9!")
+            }
+            """,
+            "A\u00e9\u00c9!",
+        )
+
+        @Test
+        fun `rejects unicode escapes without four hex digits`() = assertCompilationFails(
+            function("print(\"\\u00G1\")"),
+            VeraLexException.InvalidUnicodeEscape::class,
+            "`\\u` needs exactly four hex digits, as in `\\u00E9`",
+        )
+
+        @Test
+        fun `rejects unicode escapes cut short by the end of the string`() = assertCompilationFails(
+            function("print(\"\\u12\")"),
+            VeraLexException.InvalidUnicodeEscape::class,
+            "`\\u` needs exactly four hex digits",
+        )
+
+        @Test
         fun `rejects invalid string escapes`() = assertCompilationFails(
             function("print(\"bad \\q\")"),
             VeraLexException.InvalidStringEscape::class,
@@ -128,7 +152,7 @@ class StringTests {
             fn main() {
                 val text = "\{first()}-\{second()}"
                 print(text)
-                text |> print
+                text |> print()
             }
             """,
             "first",

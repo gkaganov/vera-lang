@@ -180,10 +180,21 @@ private class VeraLexerState(private val source: String) {
             'r' -> '\r'
             '"' -> '"'
             '\\' -> '\\'
+            'u' -> return lexUnicodeEscape(escapeLocation)
             else -> throw VeraLexException.InvalidStringEscape(source[index], escapeLocation)
         }
         advance()
         return decoded
+    }
+
+    /** `\uXXXX`, exactly four hex digits as in Java and Kotlin; [index] is at the `u`. */
+    private fun lexUnicodeEscape(escapeLocation: SourceLocation): Char {
+        val digits = source.substring(index + 1, minOf(index + 5, source.length))
+        if (digits.length != 4 || !digits.all { digit -> digit in '0'..'9' || digit.lowercaseChar() in 'a'..'f' }) {
+            throw VeraLexException.InvalidUnicodeEscape(escapeLocation)
+        }
+        repeat(5) { advance() }
+        return digits.toInt(16).toChar()
     }
 
     private fun lexInt() {

@@ -320,7 +320,7 @@ class TraitTests {
             fn main() {
                 print(apply(Doubler))
                 val scaler: Scaler = Doubler
-                3 |> scaler.scale(10) |> print
+                3 |> scaler.scale(10) |> print()
             }
             """,
             "11",

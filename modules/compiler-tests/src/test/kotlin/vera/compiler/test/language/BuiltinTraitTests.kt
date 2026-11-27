@@ -7,6 +7,7 @@ import vera.compiler.test.assertPrints
 import vera.compiler.test.assertReturns
 import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
+import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
 
 /** The built-in traits `Eq` and `Display`. */
@@ -74,17 +75,45 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `objects with Eq and no fields are equal`() = assertPrints(
+        fun `classes without fields have Eq and Display without declaring them`() = assertPrints(
             """
-            class Empty has Eq {
+            class Empty {}
+            class Other {}
+            trait Color { Red, Green }
+            trait Named requires Display {}
+            class Anonymous has Named {}
+            class Holder has Eq, Display {
+                val empty: Empty
             }
+            fn show(named: Named) = print(named)
             fn main() {
                 print(Empty == Empty)
                 print(Empty != Empty)
+                print(Empty)
+                print("in a template: \{Other}")
+                print(Color.Red == Color.Red)
+                print(Color.Green)
+                show(Anonymous)
+                print(Holder(Empty) == Holder(Empty))
+                print(Holder(Empty))
             }
             """,
             "True",
             "False",
+            "Empty",
+            "in a template: Other",
+            "True",
+            "Color.Green",
+            "Anonymous",
+            "True",
+            "Holder(empty: Empty)",
+        )
+
+        @Test
+        fun `rejects comparing trait values of singleton cases without requires Eq`() = assertCompilationFails(
+            "trait Color { Red, Green }\nfn same(first: Color, second: Color): Bool = first == second\n",
+            JvmLoweringException.TraitRequirementMissing::class,
+            "trait Color does not require Eq, so its values cannot be compared",
         )
 
         @Test
@@ -119,14 +148,6 @@ class BuiltinTraitTests {
             JvmLoweringException.ClassFieldRequiresTrait::class,
             "class Line field start has type Point, which does not have the Eq trait",
         )
-
-        @Test
-        fun `rejects class methods conflicting with generated trait methods`() = assertCompilationFails(
-            "class Point has Eq {\n    val x: Int\n" +
-                "    fn equals(other: Point): Bool {\n        return True\n    }\n}",
-            JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
-            "class Point method equals conflicts with the generated method for trait Eq",
-        )
     }
 
     @Nested
@@ -153,7 +174,7 @@ class BuiltinTraitTests {
                 val y: Int
             }
             fn main() {
-                Point(x = 1, y = 2) |> print
+                Point(x = 1, y = 2) |> print()
                 Point(x = 3, y = 4) |> print()
             }
             """,
@@ -238,18 +259,50 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `rejects class methods conflicting with generated Display methods`() = assertCompilationFails(
-            "class Point has Display {\n    val x: Int\n" +
-                "    fn toString(): String {\n        return \"point\"\n    }\n}",
-            JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
-            "class Point method toString conflicts with the generated method for trait Display",
+        fun `rejects forwarding objects without the Display trait to print`() = assertCompilationFails(
+            classDeclaration("Point", "val x: Int") + function("Point(1) |> print()"),
+            JvmLoweringException.PrintRequiresDisplayTrait::class,
+            "class Point does not have the Display trait",
+        )
+    }
+
+    /** `toString`, `equals`, and `hashCode` are generated `Object` methods, so members cannot take them. */
+    @Nested
+    inner class ReservedNames {
+        @Test
+        fun `rejects equals methods`() = assertCompilationFails(
+            classDeclaration("Point has Eq", "val x: Int", "fn equals(other: Point): Bool = True"),
+            JvmLoweringException.ReservedMemberName::class,
+            "equals is reserved for the method that Vera generates; `==` comes from the `Eq` trait, so add `has Eq`",
         )
 
         @Test
-        fun `rejects forwarding objects without the Display trait to print`() = assertCompilationFails(
-            classDeclaration("Point", "val x: Int") + function("Point(1) |> print"),
-            JvmLoweringException.PrintRequiresDisplayTrait::class,
-            "class Point does not have the Display trait",
+        fun `rejects toString methods even without Display`() = assertCompilationFails(
+            classDeclaration("Point", "val x: Int", "fn toString(): String = \"point\""),
+            JvmLoweringException.ReservedMemberName::class,
+            "toString is reserved for the method that Vera generates; printing comes from the `Display` trait, " +
+                "so add `has Display`",
+        )
+
+        @Test
+        fun `rejects hashCode methods`() = assertCompilationFails(
+            classDeclaration("Point", "val x: Int", "fn hashCode(): Int = 7"),
+            JvmLoweringException.ReservedMemberName::class,
+            "hashCode is reserved for the method that Vera generates; it belongs with the `Eq` trait",
+        )
+
+        @Test
+        fun `rejects trait methods with reserved names`() = assertCompilationFails(
+            traitDeclaration("Named", "fn toString(): String"),
+            JvmLoweringException.ReservedMemberName::class,
+            "toString is reserved",
+        )
+
+        @Test
+        fun `rejects required fields with reserved names`() = assertCompilationFails(
+            "interface Hashed {\n    val hashCode: Int\n}",
+            JvmLoweringException.ReservedMemberName::class,
+            "hashCode is reserved",
         )
     }
 }

@@ -279,29 +279,34 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `if without else produces Unit`() = assertReturns(
+        fun `if without else produces Unit`() = assertPrints(
             """
-            fn main(): Int {
-                val result: Unit = if False {
+            fn main() {
+                val result = if False {
                     print("no")
                 }
-                return 1
+                print(result)
+                print(if True { print("yes") })
             }
             """,
-            1,
+            "Unit",
+            "yes",
+            "Unit",
         )
 
         @Test
-        fun `if without else discards a non-Unit branch value`() = assertReturns(
-            """
-            fn main(): Int {
-                val result: Unit = if False {
-                    1
-                }
-                return 1
-            }
-            """,
-            1,
+        fun `rejects if without else whose value is used and not Unit`() = assertCompilationFails(
+            function("val value = if True {", "    1", "}"),
+            JvmLoweringException.IfBranchTypeMismatch::class,
+            "if branches must have the same type, got Int and Unit; an `if` without `else` produces `Unit` " +
+                "when the condition is false, so add an `else`",
+        )
+
+        @Test
+        fun `rejects returning a non-Unit if without else`() = assertCompilationFails(
+            "fn pick(flag: Bool): Int = if flag { 1 }",
+            JvmLoweringException.IfBranchTypeMismatch::class,
+            "got Int and Unit",
         )
 
         @Test

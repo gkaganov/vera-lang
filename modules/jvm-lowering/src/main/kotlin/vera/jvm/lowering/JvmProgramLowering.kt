@@ -24,6 +24,7 @@ import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUnitType
 import vera.shared.model.Identifier
+import vera.shared.model.SourceSpan
 import vera.shared.model.at
 
 object JvmProgramLowering {
@@ -71,12 +72,15 @@ object JvmProgramLowering {
         val requirements = JvmTraitRequirements(traitsByName)
 
         // Cases nested in trait blocks are classes too, named `Owner$Case`; only top-level classes
-        // take part in the top-level namespace below. A case gets its owner's requirements.
-        val allClassDeclarations = classDeclarations + traitDeclarations.flatMap { trait ->
-            trait.cases.map { veraCase ->
-                veraCase.copy(traits = veraCase.traits + requirements.of(trait.name).filterNot { it in veraCase.traits })
+        // take part in the top-level namespace below. A case gets its owner's requirements. A class
+        // without fields has a single value, so like `Unit` it always has `Eq` and `Display`.
+        val allClassDeclarations = (
+            classDeclarations + traitDeclarations.flatMap { trait ->
+                trait.cases.map { veraCase ->
+                    veraCase.copy(traits = veraCase.traits + requirements.of(trait.name).filterNot { it in veraCase.traits })
+                }
             }
-        }
+        ).map(::withSingletonTraits)
         val duplicateClass = allClassDeclarations
             .groupBy { it.name }
             .values
@@ -307,6 +311,16 @@ object JvmProgramLowering {
     }
 
     /** `Unit` is the built-in field-less class: a singleton with `Eq` and a `Display` of `Unit`. */
+    /** Adds `Eq` and `Display` to a class without fields, which has a single value like `Unit`. */
+    private fun withSingletonTraits(veraClass: VeraClassDeclaration): VeraClassDeclaration =
+        if (veraClass.fields.isEmpty()) {
+            veraClass.copy(traits = veraClass.traits + singletonTraits.filterNot { it in veraClass.traits })
+        } else {
+            veraClass
+        }
+
+    private val singletonTraits = listOf(JvmBuiltinTraits.eq, JvmBuiltinTraits.display)
+
     private fun lowerUnitClass(): JvmClass {
         val unitClassName = JvmUnitType.name
         val (instanceField, staticInitializer) = singletonMembers(unitClassName)
@@ -353,6 +367,17 @@ object JvmProgramLowering {
         return instanceField to staticInitializer
     }
 
+    /**
+     * `toString`, `equals`, and `hashCode` would override (or silently fail to override) the JVM's
+     * `Object` methods, so no class, trait, or interface member may use them; `Eq` and `Display`
+     * generate them instead.
+     */
+    private fun requireUnreservedMemberName(name: Identifier, span: SourceSpan) {
+        if (name.value in JvmObjectMethods.reservedNames) {
+            throw JvmLoweringException.ReservedMemberName(name).at(span)
+        }
+    }
+
     private fun validateTrait(trait: VeraTraitDeclaration, typeNames: JvmTypeNames) {
         val seenMethods = mutableSetOf<Identifier>()
         trait.methods.forEach { method ->
@@ -366,6 +391,7 @@ object JvmProgramLowering {
                 }
                 located(parameter.span) { JvmTypeLowering.lower(parameter.type, typeNames) }
             }
+            requireUnreservedMemberName(method.name, method.span)
             located(method.span) { JvmTypeLowering.lowerReturn(method.returnType, typeNames) }
         }
         val seenFields = mutableSetOf<Identifier>()
@@ -376,6 +402,7 @@ object JvmProgramLowering {
             if (field.name in seenMethods) {
                 throw JvmLoweringException.TraitFieldConflictsWithMethod(trait.name, field.name, trait.kind).at(field.span)
             }
+            requireUnreservedMemberName(field.name, field.span)
             located(field.span) { JvmTypeLowering.lower(field.type, typeNames) }
         }
     }
@@ -529,20 +556,7 @@ object JvmProgramLowering {
             if (method.name in outerNames) {
                 throw JvmLoweringException.ShadowingNotAllowed(method.name).at(method.span)
             }
-            if (hasEq && method.name == JvmObjectMethods.equalsName) {
-                throw JvmLoweringException.ClassMethodConflictsWithGeneratedMethod(
-                    veraClass.name,
-                    method.name,
-                    JvmBuiltinTraits.eq,
-                ).at(method.span)
-            }
-            if (hasDisplay && method.name == JvmObjectMethods.toStringName) {
-                throw JvmLoweringException.ClassMethodConflictsWithGeneratedMethod(
-                    veraClass.name,
-                    method.name,
-                    JvmBuiltinTraits.display,
-                ).at(method.span)
-            }
+            requireUnreservedMemberName(method.name, method.span)
         }
         val jvmMethods = veraClass.methods.map { method ->
             located(method.span) {

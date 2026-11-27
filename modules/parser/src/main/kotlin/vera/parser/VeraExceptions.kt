@@ -20,6 +20,10 @@ sealed class VeraLexException(message: String, val location: SourceLocation) : V
         location: SourceLocation,
     ) : VeraLexException("invalid string escape '\\$escape'", location)
 
+    class InvalidUnicodeEscape(
+        location: SourceLocation,
+    ) : VeraLexException("`\\u` needs exactly four hex digits, as in `\\u00E9`", location)
+
     class UnexpectedSemicolon(
         location: SourceLocation,
     ) : VeraLexException("Vera does not use semicolons; end the statement with a newline", location)

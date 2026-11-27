@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertPrints
 import vera.compiler.test.assertReturns
+import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
 import vera.jvm.lowering.JvmLoweringException
 
@@ -16,7 +17,7 @@ class ForwardApplicationTests {
         fun `forward application passes the left value as the first argument`() = assertPrints(
             """
             fn main() {
-                print(2 |> double)
+                print(2 |> double())
                 print(1 |> add(2))
             }
             fn double(value: Int): Int {
@@ -34,7 +35,7 @@ class ForwardApplicationTests {
         fun `forward application works without surrounding spaces`() = assertPrints(
             """
             fn main() {
-                print(2|>double)
+                print(2|>double())
             }
             fn double(value: Int): Int {
                 return value * 2
@@ -47,7 +48,7 @@ class ForwardApplicationTests {
         fun `forward application chains left to right`() = assertPrints(
             """
             fn main() {
-                print(3 |> add(4) |> double)
+                print(3 |> add(4) |> double())
             }
             fn double(value: Int): Int {
                 return value * 2
@@ -70,7 +71,7 @@ class ForwardApplicationTests {
                 return point.x + point.y
             }
             fn main(): Int {
-                return Point(x = 1, y = 2) |> sum
+                return Point(x = 1, y = 2) |> sum()
             }
             """,
             3,
@@ -80,7 +81,7 @@ class ForwardApplicationTests {
         fun `forward application works inside arguments`() = assertReturns(
             """
             fn main(): Int {
-                return 1 |> add(2 |> double)
+                return 1 |> add(2 |> double())
             }
             fn double(value: Int): Int {
                 return value * 2
@@ -99,7 +100,7 @@ class ForwardApplicationTests {
         fun `forward application binds looser than arithmetic`() = assertPrints(
             """
             fn main() {
-                print(1 + 2 |> double)
+                print(1 + 2 |> double())
             }
             fn double(value: Int): Int {
                 return value * 2
@@ -112,7 +113,7 @@ class ForwardApplicationTests {
         fun `forward application binds looser than or`() = assertPrints(
             """
             fn main() {
-                print(True or False |> negate)
+                print(True or False |> negate())
             }
             fn negate(value: Bool): Bool {
                 return if value {
@@ -129,7 +130,7 @@ class ForwardApplicationTests {
         fun `forward application binds looser than and`() = assertPrints(
             """
             fn main() {
-                print(False and True |> negate)
+                print(False and True |> negate())
             }
             fn negate(value: Bool): Bool {
                 return if value {
@@ -146,7 +147,7 @@ class ForwardApplicationTests {
         fun `forward application binds looser than equality`() = assertPrints(
             """
             fn main() {
-                print(1 == 1 |> identityBool)
+                print(1 == 1 |> identityBool())
             }
             fn identityBool(value: Bool): Bool {
                 return value
@@ -169,7 +170,7 @@ class ForwardApplicationTests {
         fun `forward application works with builtins`() = assertPrints(
             """
             fn main() {
-                2 |> print
+                2 |> print()
             }
             """,
             "2",
@@ -186,7 +187,7 @@ class ForwardApplicationTests {
                 }
 
                 fn viaForward(amount: Int): Int {
-                    return amount |> add
+                    return amount |> add()
                 }
             }
             fn main(): Int {
@@ -219,10 +220,18 @@ class ForwardApplicationTests {
         )
 
         @Test
-        fun `rejects forward application to a member access without a call`() = assertCompilationFails(
-            function("print(1 |> value.name)"),
-            JvmLoweringException.InvalidForwardApplication::class,
-            "right-hand side of '|>' must be a callable name or member call",
+        fun `rejects forward application to a function name without a call`() = assertCompilationFails(
+            "fn double(value: Int): Int = value * 2\n" + function("print(2 |> double)"),
+            JvmLoweringException.ForwardApplicationNeedsCall::class,
+            "the right side of `|>` must be a call: write `double()`",
+        )
+
+        @Test
+        fun `rejects forward application to a method without a call`() = assertCompilationFails(
+            classDeclaration("Calc", "val offset: Int", "fn add(value: Int): Int = value + offset") +
+                function("val calc = Calc(1)", "print(1 |> calc.add)"),
+            JvmLoweringException.ForwardApplicationNeedsCall::class,
+            "the right side of `|>` must be a call: write `calc.add()`",
         )
 
         @Test
@@ -246,7 +255,7 @@ class ForwardApplicationTests {
                 return value * 2
             }
             fn main(): Int {
-                return Point(x = 3, y = 4).x |> double
+                return Point(x = 3, y = 4).x |> double()
             }
             """,
             6,

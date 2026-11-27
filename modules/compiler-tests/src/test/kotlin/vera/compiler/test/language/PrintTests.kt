@@ -1,16 +1,31 @@
 package vera.compiler.test.language
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertPrints
 import vera.compiler.test.function
+import vera.compiler.test.runMain
 import vera.jvm.lowering.JvmLoweringException
 
 /** The built-in `print`. */
 class PrintTests {
     @Nested
     inner class Values {
+        @Test
+        fun `print ends every line with a line feed on every platform`() {
+            val (_, output) = runMain(
+                """
+                fn main() {
+                    print(1)
+                    print("a\nb")
+                }
+                """,
+            )
+            Assertions.assertEquals("1\na\nb\n", output)
+        }
+
         @Test
         fun `print function prints to system-out`() = assertPrints(
             """

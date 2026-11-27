@@ -264,7 +264,7 @@ private class JvmFunctionLoweringState(
             is VeraBindStatement -> LoweredStatement(lowerBindStatement(veraStatement), false)
 
             is VeraExpression -> {
-                val loweredExpression = lowerStatementExpression(veraStatement.expression)
+                val loweredExpression = lowerStatementExpression(veraStatement.expression, valueUsed = false)
                 LoweredStatement(
                     JvmExpressionStatement(loweredExpression.jvmExpression),
                     loweredExpression.returns,
@@ -397,25 +397,37 @@ private class JvmFunctionLoweringState(
 
     /**
      * Lowers an expression that forms a whole statement, so it starts on an empty operand stack. Only an
-     * `if` keeps that position for its branches; any other expression nests its operands.
+     * `if` keeps that position for its branches; any other expression nests its operands. [valueUsed] is
+     * false for an expression statement and a block's final expression, whose `if` may omit `else`
+     * with a non-`Unit` branch (a block's value is still checked where it is used).
      */
-    private fun lowerStatementExpression(veraExpression: VeraPrimaryExpression): LoweredExpression =
+    private fun lowerStatementExpression(veraExpression: VeraPrimaryExpression, valueUsed: Boolean = true): LoweredExpression =
         if (veraExpression is VeraIfExpression) {
-            located(veraExpression.span) { lowerIfExpression(veraExpression) }
+            located(veraExpression.span) { lowerIfExpression(veraExpression, valueUsed) }
         } else if (veraExpression is VeraMatchExpression) {
             located(veraExpression.span) { lowerMatchExpression(veraExpression) }
         } else {
             LoweredExpression(nested { lowerPrimaryExpression(veraExpression) }, returns = false)
         }
 
-    private fun lowerIfExpression(veraIfExpression: VeraIfExpression): LoweredExpression {
+    /**
+     * Lowers `if`. A missing `else` is `else { Unit }`: as a statement the branch value is discarded, but
+     * where the value is used ([valueUsed]) the branch must be `Unit` like any other branch pair.
+     */
+    private fun lowerIfExpression(veraIfExpression: VeraIfExpression, valueUsed: Boolean = true): LoweredExpression {
         val jvmCondition = nested { lowerPrimaryExpression(veraIfExpression.condition) }
         if (jvmCondition.type != JvmType.BOOL) {
             throw JvmLoweringException.ConditionNotBool(jvmCondition.type).at(veraIfExpression.condition.span)
         }
         val loweredThen = lowerBlock(veraIfExpression.thenBlock)
         val loweredElse = veraIfExpression.elseBlock?.let { veraElseBlock -> lowerBlock(veraElseBlock) }
-            ?: return LoweredExpression(JvmIfExpression(jvmCondition, loweredThen.jvmBlock, null), returns = false)
+        if (loweredElse == null) {
+            val thenType = loweredThen.jvmBlock.type
+            if (valueUsed && !loweredThen.returns && thenType != JvmUnitType) {
+                throw JvmLoweringException.IfBranchTypeMismatch(thenType, JvmUnitType, missingElse = true)
+            }
+            return LoweredExpression(JvmIfExpression(jvmCondition, loweredThen.jvmBlock, null), returns = false)
+        }
         val thenType = loweredThen.jvmBlock.type
         val elseType = loweredElse.jvmBlock.type
         val jvmType = unifyTypes(listOf(thenType, elseType))
@@ -795,12 +807,8 @@ private class JvmFunctionLoweringState(
 
     private fun lowerForwardApplication(veraOperation: VeraBinaryOperation): JvmExpression {
         return when (val veraRight = veraOperation.right) {
-            is VeraIdentifierAsExpression -> {
-                val loweredArguments = listOf(
-                    LoweredArgument(lowerPrimaryExpression(veraOperation.left), forwarded = true),
-                )
-                lowerNamedCall(veraRight.identifier, loweredArguments)
-            }
+            is VeraIdentifierAsExpression ->
+                throw JvmLoweringException.ForwardApplicationNeedsCall(veraRight.identifier.display).at(veraRight.span)
 
             // A bare call such as `f(a)` evaluates the forwarded value first anyway.
             is VeraChainedExpression if veraRight.data.size == 1 -> lowerChainedExpression(veraRight) {
@@ -897,6 +905,20 @@ private class JvmFunctionLoweringState(
         }
     }
 
+    /** Source-like text of a call-free member chain such as `calc.add`, for hints that append `()`. */
+    private fun memberChainText(veraChainedExpression: VeraChainedExpression): String {
+        val primary = when (val veraPrimary = veraChainedExpression.primaryExpression) {
+            is VeraIdentifierAsExpression -> veraPrimary.identifier.display
+            else -> "..."
+        }
+        return primary + veraChainedExpression.data.joinToString("") { chainedData ->
+            when (chainedData) {
+                is VeraMemberAccess -> ".${chainedData.member.display}"
+                is VeraArguments -> "(...)"
+            }
+        }
+    }
+
     private fun lowerChainedExpression(
         veraChainedExpression: VeraChainedExpression,
         forwardedArgument: (() -> JvmExpression)? = null,
@@ -905,9 +927,8 @@ private class JvmFunctionLoweringState(
             -1
         } else {
             if (veraChainedExpression.data.lastOrNull() !is VeraArguments) {
-                throw JvmLoweringException.InvalidForwardApplication(
-                    JvmForwardApplicationIssue.RIGHT_SIDE_NOT_CALLABLE,
-                )
+                throw JvmLoweringException.ForwardApplicationNeedsCall(memberChainText(veraChainedExpression))
+                    .at(veraChainedExpression.span)
             }
             var previousWasArguments = false
             veraChainedExpression.data.forEach { chainedData ->
@@ -1405,7 +1426,7 @@ private class JvmFunctionLoweringState(
 
             is VeraImplicitReturnBlock -> {
                 requireReachable(loweredStatements, veraBlock.result.span)
-                val loweredResult = lowerStatementExpression(veraBlock.result)
+                val loweredResult = lowerStatementExpression(veraBlock.result, valueUsed = false)
                 LoweredBlock(
                     JvmImplicitReturnBlock(jvmStatements, loweredResult.jvmExpression),
                     statementsReturn || loweredResult.returns,
@@ -1456,7 +1477,7 @@ private class JvmFunctionLoweringState(
 
             is VeraUnaryOperation -> PrimaryResolution.Resolved(lowerUnaryOperation(veraPrimaryExpression))
 
-            is VeraIfExpression -> PrimaryResolution.Resolved(lowerIfExpression(veraPrimaryExpression).jvmExpression)
+            is VeraIfExpression -> PrimaryResolution.Resolved(lowerIfExpression(veraPrimaryExpression, valueUsed = true).jvmExpression)
 
             is VeraMatchExpression -> PrimaryResolution.Resolved(lowerMatchExpression(veraPrimaryExpression).jvmExpression)
 

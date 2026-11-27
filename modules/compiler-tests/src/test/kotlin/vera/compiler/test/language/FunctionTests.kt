@@ -114,6 +114,37 @@ class FunctionTests {
         )
 
         @Test
+        fun `parameter, argument, and pattern lists allow a trailing comma`() = assertPrints(
+            """
+            trait Shape {
+                Rect {
+                    val width: Int
+                    val height: Int
+                }
+            }
+            fn area(
+                width: Int,
+                height: Int,
+            ): Int = width * height
+            fn describe(shape: Shape): Int = match shape {
+                Rect(width, height,) -> width + height
+            }
+            fn main() {
+                print(area(width = 2, height = 3,))
+                val rect = Shape.Rect(
+                    width = 4,
+                    height = 5,
+                )
+                print(describe(rect))
+                print(1 |> area(7,))
+            }
+            """,
+            "6",
+            "9",
+            "7",
+        )
+
+        @Test
         fun `bare locals with matching names count as named arguments`() = assertReturns(
             """
             class Point {
@@ -141,8 +172,8 @@ class FunctionTests {
                 return if value < low { low } else if value > high { high } else { value }
             }
             fn main() {
-                1 |> add(2) |> print
-                42 |> clamp(low = 0, high = 10) |> print
+                1 |> add(2) |> print()
+                42 |> clamp(low = 0, high = 10) |> print()
             }
             """,
             "3",
@@ -337,7 +368,7 @@ class FunctionTests {
             fn log(text: String) = print(text)
             fn main() {
                 print(Square(3).area())
-                print(4 |> double)
+                print(4 |> double())
                 print(greet("Vera"))
                 print(sign(-7))
                 print(total(first = 2, second = 3))

@@ -101,6 +101,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
+- A missing `else` is `else { Unit }`: `lowerIfExpression` takes `valueUsed` (false for expression
+  statements and block results) and rejects a non-`Unit` branch with `IfBranchTypeMismatch(missingElse)`
+  where the value is used.
 - Trait requirements: `VeraTraitDeclaration.requirements` (`requires`). `JvmTraitRequirements` computes
   their transitive closure after `validateRequirements` rejects unknown, repeated, or cyclic ones.
   Cases get their owner's requirements added to `traits`; other classes must list them
@@ -176,11 +179,14 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `Display`. Object `==`/`!=` lower to the generated `equals` and require `Eq`; `print` of an
   object lowers to `toString` and requires `Display`. Missing traits are lowering errors. `!=`
   negates the call with `JvmLogicalNot`, and generated methods are never visible to Vera
-  name resolution.
+  name resolution. Members cannot be named `toString`, `equals`, or `hashCode`
+  (`JvmObjectMethods.reservedNames`, `ReservedMemberName`), in classes, traits, and interfaces.
 - Field-less classes are singletons: `JvmProgramLowering.singletonMembers` gives each one a static
   `INSTANCE` field, a `<clinit>` that creates it, and a private constructor (`JvmConstructor.isPrivate`,
   `FlatMethod.isPrivate`). A bare class name lowers to `JvmSingletonValue` (`FlatGetStatic`), and
   `Empty()` is `SingletonConstructed`.
+  Like `Unit`, they always have `Eq` and `Display`: `JvmProgramLowering.withSingletonTraits` adds both to
+  every class and case without fields before validation, so requirements and field checks see them.
 - `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class, a
   field-less class built with the same singleton members. The unit value is
   `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
@@ -203,6 +209,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   stack maps need when branch types merge.
 - Trait method calls use `FlatInvokeInterface` (`invokeinterface`). `FlatUpcast` retypes a class
   value to an interface on the simulated stack and emits no bytecode.
+- `print` lowers to two `PrintStream.print` calls, the value and then `"\n"`, so output ends lines with
+  `\n` on every platform (`println` would use the platform separator).
 - `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
   statements.
 - `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
@@ -370,8 +378,8 @@ uncommitted changes:
 - `VeraLexer` skips `//` comments and `///` doc comments up to the line break, so comments never
   change line continuation; the leading-`|>`/`.` lookahead skips comment-only lines. There are no
   block comments.
-- String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`,
-  and `\r` escapes.
+- String literals allow arbitrary non-newline characters and decode `\"`, `\\`, `\n`, `\t`, `\r`,
+  and `\uXXXX` (exactly four hex digits, else `InvalidUnicodeEscape`) escapes.
 - String templates: `VeraLexer` splits `"a \{x} b"` into `TEMPLATE_START`, the placeholder's tokens,
   `TEMPLATE_MIDDLE`, and `TEMPLATE_END`, tracking open placeholders by bracket depth so `{ }` blocks
   inside a placeholder work; a line break inside a placeholder is an unterminated string. The
@@ -398,12 +406,13 @@ uncommitted changes:
   `JvmObjectMethods.boolToString`, used by both `print` and generated `toString`.
 - `and` and `or` are short-circuiting reserved keywords; `not` is the `Bool`-only negation keyword.
   It lowers to `JvmLogicalNot` and `FlatBoolNot` (`iconst_1; ixor`).
-- `|>` is forward application: `value |> f` lowers to `f(value)`. The forwarded value becomes the
+- `|>` is forward application: `value |> f()` lowers to `f(value)`. The forwarded value becomes the
   first argument, unnamed, and does not count toward the named-argument rules: `1 |> add(2)`.
 - Call arguments are `name = value` or a bare expression (`VeraParserState.parseArgument`).
   Calls with two or more arguments must name them; see Lowering.
-- The right side of `|>` may be a bare callable (function, built-in, class constructor, sibling
-  object method) or a member call chain, e.g. `data |> processor.runtime.process() |> print()`.
+- The right side of `|>` must be a call: of a function, built-in, class constructor, or sibling
+  object method, or a member call chain, e.g. `data |> processor.runtime.process() |> print()`. A bare
+  name or a member without `()` is `ForwardApplicationNeedsCall`.
 - `print` is a built-in, not a keyword; top-level functions cannot reuse built-in names.
 - Trait and interface names share the top-level namespace with functions and classes; the built-in trait names
   `Eq` and `Display` are reserved.

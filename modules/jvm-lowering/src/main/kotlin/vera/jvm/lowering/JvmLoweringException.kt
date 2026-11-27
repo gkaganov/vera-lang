@@ -85,8 +85,15 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class IfBranchTypeMismatch(
         val thenType: JvmType,
         val elseType: JvmType,
+        val missingElse: Boolean = false,
     ) : JvmLoweringException(
-        "if branches must have the same type, got ${thenType.render()} and ${elseType.render()}",
+        "if branches must have the same type, got ${thenType.render()} and ${elseType.render()}" +
+            if (missingElse) "; an `if` without `else` produces `Unit` when the condition is false, so add an `else`" else "",
+    )
+
+    /** The right side of `|>` names a callable without calling it. */
+    class ForwardApplicationNeedsCall(val callee: String) : JvmLoweringException(
+        "the right side of `|>` must be a call: write `$callee()`",
     )
 
     class InvalidForwardApplication(val issue: JvmForwardApplicationIssue) : JvmLoweringException(
@@ -501,12 +508,13 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${className.display} field ${field.display} has type ${fieldType.display}, which does not have the ${trait.display} trait",
     )
 
-    class ClassMethodConflictsWithGeneratedMethod(
-        val className: Identifier,
-        val method: Identifier,
-        val trait: Identifier,
-    ) : JvmLoweringException(
-        "class ${className.display} method ${method.display} conflicts with the generated method for trait ${trait.display}",
+    /** A member named like a generated `java.lang.Object` method. */
+    class ReservedMemberName(val name: Identifier) : JvmLoweringException(
+        "${name.display} is reserved for the method that Vera generates; " + when (name.value) {
+            "toString" -> "printing comes from the `Display` trait, so add `has Display`"
+            "equals" -> "`==` comes from the `Eq` trait, so add `has Eq`"
+            else -> "it belongs with the `Eq` trait"
+        },
     )
 
     class DuplicateTrait(val name: Identifier, val kind: VeraTraitKind = VeraTraitKind.TRAIT) : JvmLoweringException(

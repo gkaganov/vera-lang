@@ -100,6 +100,8 @@ fn log(text: String) = print(text)
 ```
 
 - Parameters require a name and type.
+- Parameter, argument, and pattern lists may end with a trailing comma (`add(left = 1, right = 2,)`),
+  which keeps multi-line lists uniform.
 - Return types are written out, except for `Unit`: a function without a return type returns `Unit`.
   Writing `: Unit` is a compile error, so there is one way to declare a `Unit` function.
 - `= expression` is a short form for a function whose body is a single expression; it returns the
@@ -269,8 +271,8 @@ fn name(color: Color): String = match color {
 ```
 
 - A case is `Name`, optionally followed by `has Traits` and a body with `val` fields and `fn` methods,
-  without the `class` keyword. Cases are separated by commas or newlines. A case with `has` needs a
-  body, which ends its trait list.
+  without the `class` keyword. Cases are separated by commas or newlines, and a trailing comma is
+  allowed. A case with `has` needs a body, which ends its trait list.
 - A trait takes one form: either it lists its cases, or classes join it with `has`. A class cannot
   join a trait that lists its cases.
 - Cases are classes owned by their trait and always written qualified: `Color.Red`,
@@ -292,9 +294,13 @@ fn name(color: Color): String = match color {
 - Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
 - A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
   objects stay comparable and printable.
-- `Unit` implicitly has `Eq` and `Display`, so `Unit == Unit` holds and `print(Unit)` works.
-- A class that declares `Eq` or `Display` cannot define the corresponding `equals` or `toString`
-  method itself.
+- Classes without fields, including `Unit` and field-less trait cases, implicitly have `Eq` and
+  `Display`: they have a single value, so `Empty == Empty` holds and `print(Color.Red)` prints
+  `Color.Red`. Writing `has Eq` on them is allowed but redundant. A trait value still needs its trait
+  to require `Eq` or `Display`.
+- `toString`, `equals`, and `hashCode` are reserved member names in every class, trait, and
+  interface: they are the JVM's `Object` methods, which `Display` and `Eq` generate. Customizing
+  them by hand, as in Java or Kotlin, is an error that points to the trait.
 
 ## Interfaces
 
@@ -406,7 +412,8 @@ fn countdown(from: Int) {
   parameters, fields, functions, and methods are lowercase. Vera has no primitive types to treat
   differently.
 - String literals may contain any character except an unescaped `"` and raw newlines.
-  Supported escapes: `\"`, `\\`, `\n`, `\t`, `\r`.
+  Supported escapes: `\"`, `\\`, `\n`, `\t`, `\r`, and `\uXXXX` with exactly four hex digits, as in
+  Java and Kotlin (`"caf\u00E9"`).
 - `\{` starts a string template placeholder; see [String templates](#string-templates).
 - Other numeric types are not implemented.
 
@@ -511,9 +518,10 @@ data |> processor.runtime.process() |> print()
   name.
 - Only written arguments count for the naming rules, so `2 |> add(1)` is a call with one written
   argument and stays unnamed, while `42 |> clamp(low = 0, high = 10)` names both written arguments.
-- `value |> f` lowers to `f(value)`.
-- The right side may be a bare callable (function, built-in, class constructor, sibling object
-  method) or a member call chain; the forwarded value becomes the first argument.
+- `value |> f()` lowers to `f(value)`.
+- The right side must be a call: of a function, built-in, class constructor, or sibling object
+  method, or a member call chain. A bare name is an error, so `2 |> print` is written
+  `2 |> print()`; this keeps every call visibly a call.
 - Chained `|>` feeds each result into the next call.
 - Evaluation is left to right: the forwarded value is evaluated before the receiver chain and the
   explicit arguments of the call it is passed to.
@@ -556,7 +564,9 @@ if condition {
 - A branch result is its final expression; earlier expressions are discarded.
 - Both branches must have the same type.
 - A branch without a final expression produces `Unit`.
-- `if` without `else` produces `Unit`.
+- `if` without `else` produces `Unit`: a missing `else` is `else { Unit }`. As a statement its branch
+  value is discarded, but where its value is used the branch must be `Unit` too, so
+  `val x = if c { 1 }` is an error that asks for an `else`.
 
 ```vera
 val label = if count > 0 {
@@ -661,7 +671,8 @@ print(Unit)
 print(Point(x = 1, y = 2))
 ```
 
-- Writes one value followed by a newline to standard output.
+- Writes one value followed by a line feed (`\n`) to standard output. The line ending is `\n` on
+  every platform, so output is the same on Windows and Linux.
 - Prints `Int` and `String` values directly, `Bool` values as `True` or `False`, and `Unit` as
   `Unit`.
 - Prints an object as `ClassName(field: value, ...)` only when its class has the `Display`
@@ -728,7 +739,7 @@ program        = { EOL } { declaration { EOL } } EOF
 declaration    = function | class | trait | interface
 
 function       = "fn" IDENT signature ( block | "=" expression )
-signature      = "(" [ parameter { "," parameter } ] ")" [ ":" type ]   (* type is not "Unit" *)
+signature      = "(" [ parameter { "," parameter } [ "," ] ] ")" [ ":" type ]   (* type is not "Unit" *)
 parameter      = IDENT ":" type
 
 class          = "class" IDENT [ hasList ] [ implementsList ] "{" { EOL } { member statementEnd } "}"
@@ -783,7 +794,7 @@ multiply       = unary    { ( "*" | "/" | "%" ) unary }
 unary          = "-" INT                          (* folded into one literal, e.g. -2147483648 *)
                | ( "-" | "not" ) unary
                | chained
-chained        = primary { "." IDENT | "(" [ argument { "," argument } ] ")" }
+chained        = primary { "." IDENT | "(" [ argument { "," argument } [ "," ] ] ")" }
 argument       = [ IDENT "=" ] expression      (* names required for 2+ written arguments *)
 primary        = INT | STRING | template | "True" | "False" | "Unit" | IDENT
                | "(" expression ")"
@@ -794,7 +805,7 @@ template       = TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLA
 if             = "if" expression block [ { EOL } "else" ( if | block ) ]
 match          = "match" expression "{" { EOL } arm statementEnd { arm statementEnd } "}"
 arm            = pattern "->" ( block | expression | "return" [ expression ] | "break" | "continue" )
-pattern        = typeName [ "(" fieldPattern { "," fieldPattern } ")" ]
+pattern        = typeName [ "(" fieldPattern { "," fieldPattern } [ "," ] ")" ]
 typeName       = IDENT [ "." IDENT ]                (* Owner.Case names a trait case *)
 fieldPattern   = IDENT [ "=" IDENT ]
 ```
@@ -809,7 +820,7 @@ fieldPattern   = IDENT [ "=" IDENT ]
 IDENT           = ( letter | "_" ) { letter | digit | "_" }  (* ASCII; keywords excluded *)
 INT             = digit { digit }                             (* must fit in a 32-bit Int *)
 STRING          = '"' { character | escape } '"'              (* no line breaks inside *)
-escape          = "\n" | "\t" | "\r" | '\"' | "\\"
+escape          = "\n" | "\t" | "\r" | '\"' | "\\" | "\u" HEX HEX HEX HEX   (* HEX: 0-9, a-f, A-F *)
 TEMPLATE_START  = '"' { character | escape } "\{"             (* text before the first placeholder *)
 TEMPLATE_MIDDLE = "}" { character | escape } "\{"             (* text between placeholders *)
 TEMPLATE_END    = "}" { character | escape } '"'              (* text after the last placeholder *)

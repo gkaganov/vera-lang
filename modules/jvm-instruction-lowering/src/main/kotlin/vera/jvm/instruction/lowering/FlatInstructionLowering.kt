@@ -564,21 +564,34 @@ private class FlatInstructionLoweringState {
                         Identifier("java.io.PrintStream"),
                     ),
                 )
+                // `print` ends the line with `\n` on every platform, unlike `println`, which uses the
+                // platform line separator; the line break is appended to the printed text.
                 val jvmArgumentType = lowerExpression(jvmBuiltinCall.arguments.first())
+                appendPrintStreamPrint(jvmArgumentType)
                 append(
-                    FlatInvokeVirtual(
+                    FlatGetStatic(
+                        Identifier("java.lang.System"),
+                        Identifier("out"),
+                        JvmType.OBJECT,
                         Identifier("java.io.PrintStream"),
-                        Identifier("println"),
-                        JvmMethodSignature(
-                            listOf(JvmParameter(Identifier("value"), jvmArgumentType)),
-                            JvmType.VOID,
-                        ),
                     ),
                 )
+                append(FlatLoadConstant(JvmType.STRING, "\n"))
+                appendPrintStreamPrint(JvmType.STRING)
                 emitUnitValue()
                 JvmUnitType
             }
         }
+    }
+
+    private fun appendPrintStreamPrint(jvmArgumentType: JvmType) {
+        append(
+            FlatInvokeVirtual(
+                Identifier("java.io.PrintStream"),
+                Identifier("print"),
+                JvmMethodSignature(listOf(JvmParameter(Identifier("value"), jvmArgumentType)), JvmType.VOID),
+            ),
+        )
     }
 
     private fun lowerIfExpression(jvmIfExpression: JvmIfExpression) {

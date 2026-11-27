@@ -279,8 +279,8 @@ class LexicalTests {
                 box
                     .inner
                     .doubled()
-                    |> increment
-                    |> print
+                    |> increment()
+                    |> print()
             }
             """,
             "41",
@@ -345,10 +345,10 @@ class LexicalTests {
                 print(total)
                 total
                     // a comment between pipeline stages
-                    |> increment
+                    |> increment()
 
                     // and after a blank line
-                    |> print
+                    |> print()
                 print(4) // a trailing comment still ends the statement
             }
             """,

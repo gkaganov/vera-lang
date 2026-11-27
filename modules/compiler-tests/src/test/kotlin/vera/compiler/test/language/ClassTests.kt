@@ -627,7 +627,7 @@ class ClassTests {
 
         @Test
         fun `rejects forwarding values into classes without fields`() = assertCompilationFails(
-            classDeclaration("Empty") + function("val empty = 1 |> Empty"),
+            classDeclaration("Empty") + function("val empty = 1 |> Empty()"),
             JvmLoweringException.SingletonConstructed::class,
             "Empty has no fields, so it has a single value",
         )
