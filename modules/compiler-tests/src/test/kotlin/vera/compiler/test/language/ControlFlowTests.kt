@@ -450,7 +450,7 @@ class ControlFlowTests {
         fun `rejects break inside call arguments`() = assertCompilationFails(
             "fn add(a: Int, b: Int): Int {\n    return a + b\n}\n" + function(
                 "while True {",
-                "    print(add(1, if True {",
+                "    print(add(a = 1, b = if True {",
                 "        break",
                 "        0",
                 "    } else {",

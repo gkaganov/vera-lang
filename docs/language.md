@@ -245,6 +245,10 @@ class Square has Shape {
   Writing `sealed trait` is an error with a hint, since every trait is already closed.
 - When `if` or `match` branches produce objects of different classes, the result has the one user
   trait they all share: `if big { Circle(5) } else { Empty }` is a `Shape`.
+- Where the value has a known type (a declared `val`, a return type, an argument, a field, or a
+  rebinding), each branch only has to convert to that type, so classes that share no trait can meet in
+  an interface they both fit: `val named: Named = if c { Dog } else { User("Ann") }`. A branch that does
+  not convert is reported at that branch.
 - Two built-in traits are always available and are implemented by the compiler:
   - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects, and a
     matching `hashCode`, so objects passed to Java work as keys in its collections.
@@ -568,7 +572,7 @@ if condition {
 - `else` may appear on the next line, including after blank lines.
 - `if` is an expression when both branches are present.
 - A branch result is its final expression; earlier expressions are discarded.
-- Both branches must have the same type.
+- Both branches must have the same type, or convert to the type expected where the value goes.
 - A branch without a final expression produces `None`.
 - `if` without `else` produces `None`: a missing `else` is `else { None }`. As a statement its branch
   value is discarded, but where its value is used the branch must be `None` too, so
@@ -620,7 +624,8 @@ fn area(shape: Shape): Int = match shape {
 - Bindings are local to their arm and follow the no-shadowing rule.
 - An arm is `Pattern -> expression`, `Pattern -> { block }`, or `Pattern -> return / break /
   continue`, one arm per line.
-- `match` is an expression. Arms must have the same type or share one user trait. A `match` used as a
+- `match` is an expression. Arms must have the same type, share one user trait, or convert to the type
+  expected where the value goes. A `match` used as a
   statement may have `None` arms, and one whose arms all return ends the function like an `if`.
 - The matched expression is evaluated once.
 

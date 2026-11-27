@@ -398,6 +398,96 @@ class MatchTests {
         )
 
         @Test
+        fun `branches convert to the type expected where the value goes`() = assertPrints(
+            """
+            fn main() {
+                val named: Named = if True { Dog } else { User("Ann") }
+                print(named.name())
+                print(pick(False).name())
+                print(pickWithReturn(True).name())
+                describe(if False { Dog } else { User("Bob") })
+                print(Greeter("hi").greet(match 1 < 2 {
+                    True -> User("Cy")
+                    False -> Dog
+                }))
+                print(Holder(if True { Dog } else { User("Di") }).named.name())
+                mut val current: Named = Dog
+                current = if False {
+                    Dog
+                } else if True {
+                    User("Ed")
+                } else {
+                    Dog
+                }
+                print(current.name())
+            }
+            interface Named {
+                fn name(): String
+            }
+            class Dog {
+                fn name(): String = "dog"
+            }
+            class User {
+                val label: String
+                fn name(): String = label
+            }
+            class Greeter {
+                val greeting: String
+                fn greet(named: Named): String = "\{greeting} \{named.name()}"
+            }
+            class Holder {
+                val named: Named
+            }
+            fn pick(dog: Bool): Named = if dog { Dog } else { User("Flo") }
+            fn pickWithReturn(dog: Bool): Named {
+                return match dog {
+                    True -> Dog
+                    False -> User("Gus")
+                }
+            }
+            fn describe(named: Named) = print(named.name())
+            """,
+            "dog",
+            "Flo",
+            "dog",
+            "Bob",
+            "hi Cy",
+            "dog",
+            "Ed",
+        )
+
+        @Test
+        fun `rejects a branch that does not convert to the expected type at that branch`() = assertCompilationFails(
+            function("val named: Named = if True { Dog } else { 5 }") +
+                "interface Named {\n    fn name(): String\n}\nclass Dog {\n    fn name(): String = \"dog\"\n}",
+            JvmLoweringException.BindTypeMismatch::class,
+            "variable named is declared as Named but bound to a value of type Int; built-in type Int cannot fit an interface yet",
+            line = 2,
+            column = 47,
+        )
+
+        @Test
+        fun `rejects an argument branch that does not fit the parameter's interface`() = assertCompilationFails(
+            function("describe(match True {", "    True -> Dog", "    False -> Cat", "})") +
+                "interface Named {\n    fn name(): String\n}\nclass Dog {\n    fn name(): String = \"dog\"\n}\n" +
+                "class Cat {\n    fn sound(): String = \"meow\"\n}\nfn describe(named: Named) = print(named.name())",
+            JvmLoweringException.FunctionArgumentTypeMismatch::class,
+            "function describe parameter named requires Named, got Cat; Cat does not fit Named",
+            line = 4,
+            column = 18,
+        )
+
+        @Test
+        fun `rejects a returned branch that does not convert, inside a nested if`() = assertCompilationFails(
+            "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") + classDeclaration("Box") +
+                "fn make(round: Bool, big: Bool): Shape = if round {\n    Circle(1)\n} else if big {\n    Box\n} else {\n    Circle(2)\n}",
+            JvmLoweringException.ReturnTypeMismatch::class,
+            "return requires Shape, got Box",
+            line = 10,
+            column = 5,
+        )
+
+        @Test
         fun `rejects match arms of unrelated types`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 classDeclaration("Empty has Shape") +

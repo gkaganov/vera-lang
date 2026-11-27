@@ -88,8 +88,6 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   6. Structural `interface`s with `implements`. Done. Traits whose values fit an interface extend
      it; traits and interfaces cannot require each other.
 - Remaining:
-  - Branch types from the expected type: `val named: Named = if c { Dog } else { User(...) }` is
-    rejected today, because branches of different classes unify only to a shared trait.
   - Generic singletons (decision 7) and sugar against long trait lists.
   - Adapters for classes compiled separately, once there are modules (decision 10).
 - Acceptance: a non-exhaustive `match` is rejected and names the missing cases; interfaces cannot

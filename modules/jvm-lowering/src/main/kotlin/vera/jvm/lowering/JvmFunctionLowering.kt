@@ -167,7 +167,9 @@ private class JvmFunctionLoweringState(
      * passed by `|>`, which always fills the first parameter.
      */
     private data class LoweredArgument(
-        val jvmExpression: JvmExpression,
+        /** The lowered value, or `null` for an `if` or `match` lowered once its parameter type is known. */
+        val jvmExpression: JvmExpression?,
+        val branching: VeraPrimaryExpression? = null,
         val explicitName: Identifier? = null,
         val shorthandName: Identifier? = null,
         val forwarded: Boolean = false,
@@ -179,6 +181,13 @@ private class JvmFunctionLoweringState(
 
     /** A lowered block and whether executing it always returns from the current function. */
     private data class LoweredBlock(val jvmBlock: JvmBlock, val returns: Boolean)
+
+    /**
+     * The type a value must have where it is used (a declared `val`, a return, an argument, a field, a
+     * rebinding), and the error for a value of [actual] type that does not convert to it. `if` and
+     * `match` check each branch against it, so branches of unrelated classes can meet in an interface.
+     */
+    private class ExpectedType(val jvmType: JvmType, val mismatch: (actual: JvmType) -> JvmLoweringException)
 
     /** `Bool` is the closed trait `trait Bool { True, False }`, whose cases are written unqualified. */
     private val trueCase = Identifier("True")
@@ -278,7 +287,9 @@ private class JvmFunctionLoweringState(
         veraFunction: VeraFunctionDeclaration,
         veraBody: VeraExpressionBody,
     ): JvmExpression {
-        val jvmValue = lowerStatementExpression(veraBody.expression).jvmExpression
+        // Only a written return type is expected; without one, the value's own type is reported.
+        val expected = returnExpected().takeIf { veraFunction.returnType != VeraType.UNKNOWN }
+        val jvmValue = lowerStatementExpression(veraBody.expression, expected = expected).jvmExpression
         val jvmReturned = coerce(jvmValue, currentReturnType)
         if (jvmReturned == null) {
             if (veraFunction.returnType == VeraType.UNKNOWN) {
@@ -289,6 +300,11 @@ private class JvmFunctionLoweringState(
                 .at(veraBody.expression.span)
         }
         return jvmReturned
+    }
+
+    /** The function's return type, expected by `return` and an expression body. */
+    private fun returnExpected(): ExpectedType = ExpectedType(currentReturnType) { actual ->
+        JvmLoweringException.ReturnTypeMismatch(currentReturnType, actual, conversionHint(actual, currentReturnType))
     }
 
     /** @return the lowered statement and whether it explicitly returns from the current function. */
@@ -314,7 +330,7 @@ private class JvmFunctionLoweringState(
 
             is VeraReturnStatement -> {
                 val jvmValue = veraStatement.expression
-                    ?.let { veraExpression -> lowerExpression(veraExpression) }
+                    ?.let { veraExpression -> lowerExpression(veraExpression, returnExpected()) }
                 val jvmReturnExpression = if (jvmValue == null) {
                     if (currentReturnType != JvmNoneType) {
                         throw JvmLoweringException.MissingReturnValue(currentReturnType)
@@ -407,67 +423,81 @@ private class JvmFunctionLoweringState(
             }
         }
         val jvmLocal = binding.jvmLocal
-        val jvmExpression = lowerExpression(veraRebindStatement.expression)
-        val jvmValue = coerce(jvmExpression, jvmLocal.type)
-            ?: throw JvmLoweringException.RebindTypeMismatch(
-                jvmLocal.name,
-                jvmLocal.type,
-                jvmExpression.type,
-                conversionHint(jvmExpression.type, jvmLocal.type),
-            )
+        val expected = ExpectedType(jvmLocal.type) { actual ->
+            JvmLoweringException.RebindTypeMismatch(jvmLocal.name, jvmLocal.type, actual, conversionHint(actual, jvmLocal.type))
+        }
+        val jvmExpression = lowerExpression(veraRebindStatement.expression, expected)
+        val jvmValue = coerce(jvmExpression, jvmLocal.type) ?: throw expected.mismatch(jvmExpression.type)
         return JvmRebind(jvmLocal, jvmValue)
     }
 
     private fun lowerBindStatement(veraBindStatement: VeraBindStatement): JvmStatement {
         requireFreshName(veraBindStatement.name)
-        val jvmExpression = lowerExpression(veraBindStatement.expression)
         // A declared type wins over the value's type, so `val shape: Shape = Circle(...)` holds a Shape.
-        val jvmValue = if (veraBindStatement.type == VeraType.UNKNOWN) {
-            jvmExpression
+        val expected = if (veraBindStatement.type == VeraType.UNKNOWN) {
+            null
         } else {
             val jvmDeclaredType = lowerType(veraBindStatement.type)
-            coerce(jvmExpression, jvmDeclaredType)
-                ?: throw JvmLoweringException.BindTypeMismatch(
+            ExpectedType(jvmDeclaredType) { actual ->
+                JvmLoweringException.BindTypeMismatch(
                     veraBindStatement.name,
                     veraBindStatement.type.render(),
-                    jvmExpression.type,
-                    conversionHint(jvmExpression.type, jvmDeclaredType),
+                    actual,
+                    conversionHint(actual, jvmDeclaredType),
                 )
+            }
+        }
+        val jvmExpression = lowerExpression(veraBindStatement.expression, expected)
+        val jvmValue = if (expected == null) {
+            jvmExpression
+        } else {
+            coerce(jvmExpression, expected.jvmType) ?: throw expected.mismatch(jvmExpression.type)
         }
         val jvmLocal = declareLocal(veraBindStatement.name, jvmValue.type, mutable = veraBindStatement.mutable)
         return JvmVarDeclaration(jvmLocal, jvmValue)
     }
 
-    /** Lowers the expression of a bind, rebind, or return statement. */
-    private fun lowerExpression(veraExpression: VeraExpression): JvmExpression =
-        lowerStatementExpression(veraExpression.expression).jvmExpression
+    /** Lowers the expression of a bind, rebind, or return statement, whose value must be [expected]. */
+    private fun lowerExpression(veraExpression: VeraExpression, expected: ExpectedType? = null): JvmExpression =
+        lowerStatementExpression(veraExpression.expression, expected = expected).jvmExpression
 
     /**
      * Lowers an expression that forms a whole statement, so it starts on an empty operand stack. Only an
      * `if` keeps that position for its branches; any other expression nests its operands. [valueUsed] is
      * false for an expression statement and a block's final expression, whose `if` may omit `else`
-     * with a non-`None` branch (a block's value is still checked where it is used).
+     * with a non-`None` branch (a block's value is still checked where it is used). [expected] reaches
+     * the branches of an `if` or `match`; other expressions are converted by the caller.
      */
-    private fun lowerStatementExpression(veraExpression: VeraPrimaryExpression, valueUsed: Boolean = true): LoweredExpression =
+    private fun lowerStatementExpression(
+        veraExpression: VeraPrimaryExpression,
+        valueUsed: Boolean = true,
+        expected: ExpectedType? = null,
+    ): LoweredExpression =
         if (veraExpression is VeraIfExpression) {
-            located(veraExpression.span) { lowerIfExpression(veraExpression, valueUsed) }
+            located(veraExpression.span) { lowerIfExpression(veraExpression, valueUsed, expected) }
         } else if (veraExpression is VeraMatchExpression) {
-            located(veraExpression.span) { lowerMatchExpression(veraExpression) }
+            located(veraExpression.span) { lowerMatchExpression(veraExpression, expected) }
         } else {
             LoweredExpression(nested { lowerPrimaryExpression(veraExpression) }, returns = false)
         }
 
     /**
      * Lowers `if`. A missing `else` is `else { None }`: as a statement the branch value is discarded, but
-     * where the value is used ([valueUsed]) the branch must be `None` like any other branch pair.
+     * where the value is used ([valueUsed]) the branch must be `None` like any other branch pair. With an
+     * [expected] type, each branch converts to it; otherwise the branches unify through [unifyTypes].
      */
-    private fun lowerIfExpression(veraIfExpression: VeraIfExpression, valueUsed: Boolean = true): LoweredExpression {
+    private fun lowerIfExpression(
+        veraIfExpression: VeraIfExpression,
+        valueUsed: Boolean = true,
+        expected: ExpectedType? = null,
+    ): LoweredExpression {
         val jvmCondition = nested { lowerPrimaryExpression(veraIfExpression.condition) }
         if (jvmCondition.type != JvmType.BOOL) {
             throw JvmLoweringException.ConditionNotBool(jvmCondition.type).at(veraIfExpression.condition.span)
         }
-        val loweredThen = lowerBlock(veraIfExpression.thenBlock)
-        val loweredElse = veraIfExpression.elseBlock?.let { veraElseBlock -> lowerBlock(veraElseBlock) }
+        val veraElseBlock = veraIfExpression.elseBlock
+        val loweredThen = lowerBlock(veraIfExpression.thenBlock, expected.takeIf { veraElseBlock != null })
+        val loweredElse = veraElseBlock?.let { lowerBlock(it, expected) }
         if (loweredElse == null) {
             val thenType = loweredThen.jvmBlock.type
             if (valueUsed && !loweredThen.returns && thenType != JvmNoneType) {
@@ -475,18 +505,31 @@ private class JvmFunctionLoweringState(
             }
             return LoweredExpression(JvmIfExpression(jvmCondition, loweredThen.jvmBlock, null), returns = false)
         }
-        val thenType = loweredThen.jvmBlock.type
-        val elseType = loweredElse.jvmBlock.type
-        val jvmType = unifyTypes(listOf(thenType, elseType))
-            ?: throw JvmLoweringException.IfBranchTypeMismatch(thenType, elseType)
+        val (jvmThen, jvmElse) = if (expected != null) {
+            convertBranch(loweredThen.jvmBlock, veraIfExpression.thenBlock, expected) to
+                convertBranch(loweredElse.jvmBlock, veraElseBlock, expected)
+        } else {
+            val thenType = loweredThen.jvmBlock.type
+            val elseType = loweredElse.jvmBlock.type
+            val jvmType = unifyTypes(listOf(thenType, elseType))
+                ?: throw JvmLoweringException.IfBranchTypeMismatch(thenType, elseType)
+            coerceBlock(loweredThen.jvmBlock, jvmType) to coerceBlock(loweredElse.jvmBlock, jvmType)
+        }
         return LoweredExpression(
-            JvmIfExpression(
-                jvmCondition,
-                coerceBlock(loweredThen.jvmBlock, jvmType),
-                coerceBlock(loweredElse.jvmBlock, jvmType),
-            ),
+            JvmIfExpression(jvmCondition, jvmThen, jvmElse),
             returns = loweredThen.returns && loweredElse.returns,
         )
+    }
+
+    /**
+     * Converts the value of one branch to the [expected] type, or rejects it at the branch's final
+     * expression with the error of the place the value goes to.
+     */
+    private fun convertBranch(jvmBlock: JvmBlock, veraBlock: VeraBlock, expected: ExpectedType): JvmBlock {
+        if (jvmBlock.type == expected.jvmType) return jvmBlock
+        val jvmResult = (jvmBlock as? JvmImplicitReturnBlock)?.let { block -> coerce(block.result, expected.jvmType) }
+            ?: throw expected.mismatch(jvmBlock.type).at((veraBlock as? VeraImplicitReturnBlock)?.result?.span)
+        return JvmImplicitReturnBlock(jvmBlock.statements, jvmResult)
     }
 
     /**
@@ -494,9 +537,9 @@ private class JvmFunctionLoweringState(
      * The scrutinee must be a trait (or a single class), every case must be covered exactly once,
      * and the last arm needs no test because the earlier arms rule out every other case.
      */
-    private fun lowerMatchExpression(veraMatch: VeraMatchExpression): LoweredExpression {
+    private fun lowerMatchExpression(veraMatch: VeraMatchExpression, expected: ExpectedType? = null): LoweredExpression {
         val jvmScrutinee = nested { lowerPrimaryExpression(veraMatch.scrutinee) }
-        if (jvmScrutinee.type == JvmType.BOOL) return lowerBoolMatch(veraMatch, jvmScrutinee)
+        if (jvmScrutinee.type == JvmType.BOOL) return lowerBoolMatch(veraMatch, jvmScrutinee, expected)
         val cases = matchCases(jvmScrutinee.type, veraMatch.scrutinee)
         val scrutineeName = Identifier(jvmScrutinee.type.render())
         val jvmTemporary = JvmLocal(Identifier("<match${temporaryCount++}>"), jvmScrutinee.type)
@@ -522,17 +565,15 @@ private class JvmFunctionLoweringState(
             if (!coveredClasses.add(veraClass.name)) {
                 throw JvmLoweringException.MatchArmRepeated(veraClass.name).at(pattern.span)
             }
-            veraClass to lowerMatchArm(veraArm, veraClass, jvmTemporary)
+            Triple(veraClass, veraArm, lowerMatchArm(veraArm, veraClass, jvmTemporary, expected))
         }
         val missing = cases.map { case -> case.name }.filterNot { name -> name in coveredClasses }
         if (missing.isNotEmpty()) {
             throw JvmLoweringException.MatchNotExhaustive(scrutineeName, missing).at(veraMatch.span)
         }
 
-        val armTypes = loweredArms.map { (_, loweredArm) -> loweredArm.jvmBlock.type }
-        val jvmType = unifyTypes(armTypes)
-            ?: throw JvmLoweringException.MatchArmTypeMismatch(armTypes.distinct()).at(veraMatch.span)
-        val jvmArms = loweredArms.map { (veraClass, loweredArm) -> veraClass to coerceBlock(loweredArm.jvmBlock, jvmType) }
+        val jvmBlocks = convertArms(loweredArms.map { (_, veraArm, loweredArm) -> veraArm to loweredArm }, expected, veraMatch)
+        val jvmArms = loweredArms.map { (veraClass, _, _) -> veraClass }.zip(jvmBlocks)
 
         val (_, lastBlock) = jvmArms.last()
         val jvmChain = jvmArms.dropLast(1).foldRight(JvmBlockExpression(lastBlock) as JvmExpression) { (veraClass, jvmBlock), rest ->
@@ -544,7 +585,7 @@ private class JvmFunctionLoweringState(
         }
         return LoweredExpression(
             JvmLet(jvmTemporary, jvmScrutinee, jvmChain),
-            returns = loweredArms.all { (_, loweredArm) -> loweredArm.returns },
+            returns = loweredArms.all { (_, _, loweredArm) -> loweredArm.returns },
         )
     }
 
@@ -552,9 +593,13 @@ private class JvmFunctionLoweringState(
      * Lowers a `match` on a `Bool`, whose cases are `True` and `False`. It stays a JVM `boolean`, so the
      * match is an `if` on the scrutinee with the `True` arm first, whatever order the arms are written in.
      */
-    private fun lowerBoolMatch(veraMatch: VeraMatchExpression, jvmScrutinee: JvmExpression): LoweredExpression {
+    private fun lowerBoolMatch(
+        veraMatch: VeraMatchExpression,
+        jvmScrutinee: JvmExpression,
+        expected: ExpectedType?,
+    ): LoweredExpression {
         val boolName = Identifier(JvmType.BOOL.render())
-        val loweredArms = linkedMapOf<Identifier, LoweredBlock>()
+        val loweredArms = linkedMapOf<Identifier, Pair<VeraMatchArm, LoweredBlock>>()
         veraMatch.arms.forEach { veraArm ->
             val case = veraArm.pattern.className
             if (case !in boolCases) {
@@ -562,7 +607,7 @@ private class JvmFunctionLoweringState(
                     .at(veraArm.pattern.span)
             }
             if (case in loweredArms) throw JvmLoweringException.MatchArmRepeated(case).at(veraArm.pattern.span)
-            loweredArms[case] = withScope { lowerBlock(veraArm.body) }
+            loweredArms[case] = veraArm to withScope { lowerBlock(veraArm.body, expected) }
         }
         val trueArm = loweredArms[trueCase]
         val falseArm = loweredArms[falseCase]
@@ -571,13 +616,26 @@ private class JvmFunctionLoweringState(
             throw JvmLoweringException.MatchNotExhaustive(boolName, missing).at(veraMatch.span)
         }
 
-        val armTypes = loweredArms.values.map { loweredArm -> loweredArm.jvmBlock.type }
+        val (jvmTrue, jvmFalse) = convertArms(listOf(trueArm, falseArm), expected, veraMatch)
+        return LoweredExpression(
+            JvmIfExpression(jvmScrutinee, jvmTrue, jvmFalse),
+            returns = trueArm.second.returns && falseArm.second.returns,
+        )
+    }
+
+    /** Converts each arm to the [expected] type, or else unifies the arm types through [unifyTypes]. */
+    private fun convertArms(
+        loweredArms: List<Pair<VeraMatchArm, LoweredBlock>>,
+        expected: ExpectedType?,
+        veraMatch: VeraMatchExpression,
+    ): List<JvmBlock> {
+        if (expected != null) {
+            return loweredArms.map { (veraArm, loweredArm) -> convertBranch(loweredArm.jvmBlock, veraArm.body, expected) }
+        }
+        val armTypes = loweredArms.map { (_, loweredArm) -> loweredArm.jvmBlock.type }
         val jvmType = unifyTypes(armTypes)
             ?: throw JvmLoweringException.MatchArmTypeMismatch(armTypes.distinct()).at(veraMatch.span)
-        return LoweredExpression(
-            JvmIfExpression(jvmScrutinee, coerceBlock(trueArm.jvmBlock, jvmType), coerceBlock(falseArm.jvmBlock, jvmType)),
-            returns = trueArm.returns && falseArm.returns,
-        )
+        return loweredArms.map { (_, loweredArm) -> coerceBlock(loweredArm.jvmBlock, jvmType) }
     }
 
     /** The classes a `match` on a value of [jvmType] must cover. */
@@ -603,7 +661,12 @@ private class JvmFunctionLoweringState(
      * Lowers one arm: casts the scrutinee to the arm's class, binds the pattern's fields as locals in
      * the arm's own scope, then lowers the body.
      */
-    private fun lowerMatchArm(veraArm: VeraMatchArm, veraClass: VeraClassDeclaration, jvmTemporary: JvmLocal): LoweredBlock =
+    private fun lowerMatchArm(
+        veraArm: VeraMatchArm,
+        veraClass: VeraClassDeclaration,
+        jvmTemporary: JvmLocal,
+        expected: ExpectedType?,
+    ): LoweredBlock =
         withScope {
             val classType = JvmType.ClassType(veraClass.name)
             val jvmBindings = mutableListOf<JvmStatement>()
@@ -632,7 +695,7 @@ private class JvmFunctionLoweringState(
                     )
                 }
             }
-            val loweredBody = lowerBlock(veraArm.body)
+            val loweredBody = lowerBlock(veraArm.body, expected)
             LoweredBlock(prependStatements(jvmBindings, loweredBody.jvmBlock), loweredBody.returns)
         }
 
@@ -1366,16 +1429,19 @@ private class JvmFunctionLoweringState(
             loweredArguments,
         )
         val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
-            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmParameters[index].type
-            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.MethodArgumentTypeMismatch(
-                ownerName,
-                methodName,
-                parameters[index].name,
-                expectedType,
-                jvmArgument.type,
-                conversionHint(jvmArgument.type, expectedType),
-            ).at(loweredArgument.span)
+            val expected = ExpectedType(expectedType) { actual ->
+                JvmLoweringException.MethodArgumentTypeMismatch(
+                    ownerName,
+                    methodName,
+                    parameters[index].name,
+                    expectedType,
+                    actual,
+                    conversionHint(actual, expectedType),
+                )
+            }
+            val jvmArgument = argumentValue(loweredArgument, expected)
+            coerce(jvmArgument, expectedType) ?: throw expected.mismatch(jvmArgument.type).at(loweredArgument.span)
         }
         return JvmInstanceCall(
             receiver = jvmReceiver,
@@ -1412,15 +1478,18 @@ private class JvmFunctionLoweringState(
         )
         val jvmFieldTypes = veraClass.fields.map { field -> lowerType(field.type) }
         val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
-            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmFieldTypes[index]
-            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.ClassConstructorArgumentTypeMismatch(
-                veraClass.name,
-                veraClass.fields[index].name,
-                expectedType,
-                jvmArgument.type,
-                conversionHint(jvmArgument.type, expectedType),
-            ).at(loweredArgument.span)
+            val expected = ExpectedType(expectedType) { actual ->
+                JvmLoweringException.ClassConstructorArgumentTypeMismatch(
+                    veraClass.name,
+                    veraClass.fields[index].name,
+                    expectedType,
+                    actual,
+                    conversionHint(actual, expectedType),
+                )
+            }
+            val jvmArgument = argumentValue(loweredArgument, expected)
+            coerce(jvmArgument, expectedType) ?: throw expected.mismatch(jvmArgument.type).at(loweredArgument.span)
         }
 
         val jvmParameters = veraClass.fields.mapIndexed { index, field ->
@@ -1466,15 +1535,18 @@ private class JvmFunctionLoweringState(
             loweredArguments,
         )
         val jvmArguments = loweredArguments.mapIndexed { index, loweredArgument ->
-            val jvmArgument = loweredArgument.jvmExpression
             val expectedType = jvmParameters[index].type
-            coerce(jvmArgument, expectedType) ?: throw JvmLoweringException.FunctionArgumentTypeMismatch(
-                veraFunctionName,
-                veraFunctionDeclaration.parameters[index].name,
-                expectedType,
-                jvmArgument.type,
-                conversionHint(jvmArgument.type, expectedType),
-            ).at(loweredArgument.span)
+            val expected = ExpectedType(expectedType) { actual ->
+                JvmLoweringException.FunctionArgumentTypeMismatch(
+                    veraFunctionName,
+                    veraFunctionDeclaration.parameters[index].name,
+                    expectedType,
+                    actual,
+                    conversionHint(actual, expectedType),
+                )
+            }
+            val jvmArgument = argumentValue(loweredArgument, expected)
+            coerce(jvmArgument, expectedType) ?: throw expected.mismatch(jvmArgument.type).at(loweredArgument.span)
         }
         val jvmSignature = JvmMethodSignature(
             jvmParameters,
@@ -1488,11 +1560,17 @@ private class JvmFunctionLoweringState(
         )
     }
 
+    /**
+     * Lowers call arguments in order. An `if` or `match` argument waits for [argumentValue], so its
+     * branches see the parameter type the callee expects.
+     */
     private fun lowerArguments(veraArguments: VeraArguments): List<LoweredArgument> =
         veraArguments.arguments.map { veraArgument ->
             val veraExpression = veraArgument.expression
+            val branching = veraExpression is VeraIfExpression || veraExpression is VeraMatchExpression
             LoweredArgument(
-                jvmExpression = lowerPrimaryExpression(veraExpression),
+                jvmExpression = if (branching) null else lowerPrimaryExpression(veraExpression),
+                branching = veraExpression.takeIf { branching },
                 explicitName = veraArgument.name,
                 span = veraArgument.span,
                 shorthandName = (veraExpression as? VeraIdentifierAsExpression)
@@ -1500,6 +1578,20 @@ private class JvmFunctionLoweringState(
                     ?.takeIf { veraArgument.name == null },
             )
         }
+
+    /** The value of [loweredArgument], lowering a waiting `if` or `match` with its [expected] type. */
+    private fun argumentValue(loweredArgument: LoweredArgument, expected: ExpectedType?): JvmExpression {
+        loweredArgument.jvmExpression?.let { jvmExpression -> return jvmExpression }
+        val veraExpression = loweredArgument.branching
+            ?: throw JvmLoweringException.InternalInvariant("argument without a value")
+        return located(veraExpression.span) {
+            when (veraExpression) {
+                is VeraIfExpression -> lowerIfExpression(veraExpression, valueUsed = true, expected = expected).jvmExpression
+                is VeraMatchExpression -> lowerMatchExpression(veraExpression, expected).jvmExpression
+                else -> lowerPrimaryExpression(veraExpression)
+            }
+        }
+    }
 
     /**
      * Checks argument names against [parameterNames] once the arity is known to match. Only written
@@ -1559,7 +1651,7 @@ private class JvmFunctionLoweringState(
                     )
                 }
                 requireArgumentNames("print", listOf(Identifier("value")), loweredArguments)
-                val jvmArguments = loweredArguments.map { loweredArgument -> loweredArgument.jvmExpression }
+                val jvmArguments = loweredArguments.map { loweredArgument -> argumentValue(loweredArgument, expected = null) }
                 val argument = jvmArguments.first()
                 val argumentType = argument.type
                 if (argumentType is JvmType.InterfaceType) {
@@ -1586,7 +1678,8 @@ private class JvmFunctionLoweringState(
         }
     }
 
-    private fun lowerBlock(veraBlock: VeraBlock): LoweredBlock = withScope {
+    /** Lowers a block in its own scope; [expected] reaches an `if` or `match` that is its final expression. */
+    private fun lowerBlock(veraBlock: VeraBlock, expected: ExpectedType? = null): LoweredBlock = withScope {
         val loweredStatements = lowerStatementList(veraBlock.statements)
         val jvmStatements = loweredStatements.mapNotNull { loweredStatement -> loweredStatement.jvmStatement }
         val statementsReturn = loweredStatements.any { loweredStatement -> loweredStatement.returns }
@@ -1595,7 +1688,7 @@ private class JvmFunctionLoweringState(
 
             is VeraImplicitReturnBlock -> {
                 requireReachable(loweredStatements, veraBlock.result.span)
-                val loweredResult = lowerStatementExpression(veraBlock.result, valueUsed = false)
+                val loweredResult = lowerStatementExpression(veraBlock.result, valueUsed = false, expected = expected)
                 LoweredBlock(
                     JvmImplicitReturnBlock(jvmStatements, loweredResult.jvmExpression),
                     statementsReturn || loweredResult.returns,

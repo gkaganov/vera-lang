@@ -143,9 +143,14 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   must be a trait (cases: the classes that have it, since traits are closed) or a single class. Arms bind fields from a
   `JvmCheckCast` of the temporary in their own scope. A `match` on a `Bool` (`lowerBoolMatch`) has the cases
   `True` and `False` and lowers to one `JvmIfExpression` on the scrutinee, with the `True` arm first;
-  the parser reads `True`/`False` patterns as `VeraPattern`s without fields. `if` and `match` branch types unify through
-  `unifyTypes` (equal types, a branch type the others convert to, or the single trait they share) and
-  `coerceBlock`.
+  the parser reads `True`/`False` patterns as `VeraPattern`s without fields.
+- Branch types: where a value has a known type, `ExpectedType` (the type and the context's mismatch
+  error) flows into `if` and `match` and through blocks to nested ones, and `convertBranch` converts each
+  branch or throws that error at the branch's final expression. Bind, rebind, `return`, and expression
+  bodies with a written return type pass one; call arguments that are an `if` or `match` wait in
+  `LoweredArgument.branching` until `argumentValue` lowers them with the parameter type. Without an
+  expected type, branch types unify through `unifyTypes` (equal types, a branch type the others convert
+  to, or the single trait they share) and `coerceBlock`.
 - Bindings: `val` is immutable and `mut val` (`VeraBindStatement.mutable`) can be rebound; the lowering
   scope stack records each local's mutability. Rebinding a `val` is `ImmutableBindingRebound` and
   rebinding a parameter is `ParameterRebound`; parameters cannot be marked `mut` in a signature.
