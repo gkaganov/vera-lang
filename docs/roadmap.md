@@ -46,7 +46,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   7. Deferred to the generics design: the type of a field-less case of a generic trait
      (`Tree.Leaf` in `trait Tree<T> { Node { val value: T }, Leaf }`). It needs either a bottom type
      (`Never`) with covariance, or typing from context. Owned cases share their owner's type
-     parameters. An optional value is `T | None` (see union types), not a generic `Option` trait.
+     parameters. An optional value is `T or None` (see union types), not a generic `Option` trait.
   8. Trait requirements: `trait Shape requires Display, Eq` means every member of `Shape` has
      those traits, so a `Shape` value can be printed, compared, or used where a required trait is
      expected. This is interface inheritance only: traits carry no storage or code. In the separate
@@ -118,9 +118,9 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
     time. Overflow does not wrap silently; until this exists, overflow is left untested so no test
     pins the current wrapping behavior.
   - Division and modulo by zero: undecided; likely a divisor proven non-zero.
-  - Map keys: `map.get(key)` returns the value type, not `V | None`, and is allowed only where the key
+  - Map keys: `map.get(key)` returns the value type, not `V or None`, and is allowed only where the key
     is proven present, for example inside `if map.has(key) { ... }`, like a Kotlin smart cast. This
-    also keeps lookups clear of the `T | None` flattening (see union types).
+    also keeps lookups clear of the `T or None` flattening (see union types).
   - List bounds: indexing needs an index proven in range.
 - Rules to design:
   - A rebinding (`mut val`) ends the facts about that variable. Keys and indexes must be stable: a
@@ -141,16 +141,27 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   document and test the result.
 - Update blocks: `x = { ... }` is currently rejected by the parser; either implement it as part of
   object mutation or remove the reserved syntax.
-- Union types (`Int | None`): an `if` without `else` could produce "the branch type or `None`", Vera's
-  null-free optional value. Decide whether unions are inferred (then `if c { 1 } else { "a" }` is
-  `Int | String` and branch mismatches move to the use site) or only declared; how a union is consumed
-  (`match` on built-in types such as `Int(n) -> ...`); what `==`, `print`, and templates do on one; the
-  JVM representation (boxed values in an `Object` slot with `instanceof` checks); and how anonymous
-  unions relate to closed traits. Until then, an `if` without `else` whose value is used must have a
-  `None` branch, so adding unions later changes no existing program. Decided: `None` means both "no
-  result" and "absent", so `T | None` flattens when `T` is itself `None`, as Java's `null` does in
-  `Map.get`. An API that must tell the two apart returns a closed trait, and map lookups avoid it
-  through proven facts.
+- Union types (`A or B`): decided that a union may join any types (`type Input = Int or String`). A
+  union is a type expression, never a new type; closed traits stay the way to declare cases that
+  belong together, and unions join types defined separately. Decided rules:
+  - Unions are declared, never inferred: `if c { 1 } else { "a" }` stays a branch mismatch unless a
+    union is expected there.
+  - An optional value is `T or None`, and an error as a value is `Int or ParseError`, which may replace
+    a `Result` type.
+  - `None` means both "no result" and "absent", so `T or None` flattens when `T` is itself `None`, as
+    Java's `null` does in `Map.get`; an API that must tell the two apart returns a closed trait, and map
+    lookups avoid it through proven facts.
+  - A member another covers is folded in (`Shape or Circle` is `Shape`). A `match` on a union needs
+    members it can tell apart at run time: overlapping interfaces cannot be matched, and a type
+    parameter only where the other members cannot be it (settled with generics).
+  - A union written inline more than once gets a hint to name it with `type`.
+
+  To decide: how a union is consumed (narrowing with `if value is Int`, and `match` arms on built-in
+  types such as `Int(n) ->` and `None ->`); which members are usable without narrowing; what `==`,
+  `print`, and templates do on one; whether an `if` without `else` produces `T or None` where one is
+  expected; and the JVM representation (an `Object` slot with `instanceof` checks; `Int` and `Bool`
+  boxed, as Kotlin's `Int?` is). Until then, an `if` without `else` whose value is used must have a
+  `None` branch, so adding unions later changes no existing program.
 - Built-in types fitting interfaces: decided that `Int`, `String`, `Bool`, and `None` fit an interface
   through their built-in traits (`Eq`, `Display`), so they fit interfaces without members of their
   own, such as `interface Anything {}`. Such interfaces need an `Object` representation on the JVM
