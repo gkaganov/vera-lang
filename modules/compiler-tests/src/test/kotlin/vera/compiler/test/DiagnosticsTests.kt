@@ -14,7 +14,7 @@ class DiagnosticsTests {
         assertRendersAs(
             "fn main() {\n    print(1 + True)\n}\n",
             """
-            error: operator '+' is only defined for Int operands, got Bool
+            error: operator `+` is only defined for Int operands, got Bool
              --> main.vera:2:11
               |
             2 |     print(1 + True)
@@ -43,7 +43,7 @@ class DiagnosticsTests {
         assertRendersAs(
             "fn main() {\n    val value =\n}\n",
             """
-            error: expected an expression, found '}'
+            error: expected an expression, found `}`
              --> main.vera:3:1
               |
             3 | }

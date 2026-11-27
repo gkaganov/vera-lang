@@ -60,7 +60,7 @@ class StringTests {
         fun `rejects invalid string escapes`() = assertCompilationFails(
             function("print(\"bad \\q\")"),
             VeraLexException.InvalidStringEscape::class,
-            "invalid string escape '\\q'",
+            "invalid string escape `\\q`",
         )
 
         @Test

@@ -217,7 +217,7 @@ class ForwardApplicationTests {
         fun `rejects forward application to a non-callable value`() = assertCompilationFails(
             function("print(1 |> 2)"),
             JvmLoweringException.InvalidForwardApplication::class,
-            "right-hand side of '|>' must be a callable name or member call",
+            "the right side of `|>` must be a call or a member call chain",
         )
 
         @Test
@@ -253,7 +253,7 @@ class ForwardApplicationTests {
         fun `rejects forward application calling a call result`() = assertCompilationFails(
             function("print(1 |> f()())"),
             JvmLoweringException.InvalidForwardApplication::class,
-            "right-hand side of '|>' cannot call the result of another call",
+            "the right side of `|>` cannot call the result of another call",
         )
     }
 

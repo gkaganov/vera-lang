@@ -476,14 +476,14 @@ class ControlFlowTests {
         fun `rejects break outside loops`() = assertCompilationFails(
             function("break"),
             JvmLoweringException.BreakOutsideLoop::class,
-            "break is only allowed inside a loop",
+            "`break` is only allowed inside a loop",
         )
 
         @Test
         fun `rejects continue outside loops`() = assertCompilationFails(
             function("continue"),
             JvmLoweringException.ContinueOutsideLoop::class,
-            "continue is only allowed inside a loop",
+            "`continue` is only allowed inside a loop",
         )
 
         @Test
@@ -499,7 +499,7 @@ class ControlFlowTests {
                 "}",
             ),
             JvmLoweringException.LoopJumpInsideExpression::class,
-            "break cannot be used inside a nested expression",
+            "`break` cannot be used inside a nested expression",
         )
 
         @Test
@@ -515,7 +515,7 @@ class ControlFlowTests {
                 "}",
             ),
             JvmLoweringException.LoopJumpInsideExpression::class,
-            "continue cannot be used inside a nested expression",
+            "`continue` cannot be used inside a nested expression",
         )
     }
 
@@ -525,28 +525,28 @@ class ControlFlowTests {
         fun `rejects statements after return`() = assertCompilationFails(
             function("return", "print(1)"),
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after return",
+            "unreachable statement after `return`",
         )
 
         @Test
         fun `rejects statements after break`() = assertCompilationFails(
             function("while True {", "    break", "    print(1)", "}"),
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after break",
+            "unreachable statement after `break`",
         )
 
         @Test
         fun `rejects statements after continue`() = assertCompilationFails(
             function("while True {", "    continue", "    print(1)", "}"),
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after continue",
+            "unreachable statement after `continue`",
         )
 
         @Test
         fun `rejects block results after break`() = assertCompilationFails(
             function("while True {", "    val value = if True {", "        break", "        0", "    } else {", "        1", "    }", "}"),
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after break",
+            "unreachable statement after `break`",
         )
 
         @Test
@@ -554,7 +554,7 @@ class ControlFlowTests {
             "fn pick(flag: Bool): Int {\n    if flag {\n        return 1\n    } else {\n        return 2\n    }\n" +
                 "    return 3\n}",
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after an if whose branches all return",
+            "unreachable statement after an `if` whose branches all return",
         )
 
         @Test
@@ -562,7 +562,7 @@ class ControlFlowTests {
             "trait Shape {}\n" + classDeclaration("Empty has Shape") +
                 "fn area(shape: Shape): Int {\n    match shape {\n        Empty -> return 0\n    }\n    return 1\n}",
             JvmLoweringException.UnreachableStatement::class,
-            "unreachable statement after a match whose arms all return",
+            "unreachable statement after a `match` whose arms all return",
         )
     }
 }

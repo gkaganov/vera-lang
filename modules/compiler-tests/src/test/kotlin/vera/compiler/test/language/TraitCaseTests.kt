@@ -119,7 +119,7 @@ class TraitCaseTests {
         fun `rejects trait cases with traits but no body`() = assertCompilationFails(
             "trait Printable {\n    fn label(): String\n}\ntrait Color { Red has Printable, Green }",
             VeraParseException.CaseTraitsWithoutBody::class,
-            "a case with `has` needs a body to end its list: write `Red has ... { }`, found '}'",
+            "a case with `has` needs a body to end its list: write `Red has ... { }`, found `}`",
         )
 
         @Test

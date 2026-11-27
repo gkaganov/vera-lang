@@ -242,6 +242,10 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - Exceptions carry structured fields and build a user-facing `render()` message.
 - User-facing messages name types with `VeraType.render()` / `JvmType.render()`, which use Vera's
   spelling (`Int`, `Bool`, `() -> String`), and never mention compiler internals.
+- Message style: identifiers and type names appear plain (`variable count is not defined`, `got Int`);
+  everything written as code appears in backticks: operators, keywords, found and expected tokens,
+  suggestions, and fixes (``operator `+` ``, ``found `}` ``, ``write `val x = ...` ``). A message that
+  can say how to fix the problem ends with the fix after a `;`.
 - `VeraCompiler.compile` propagates exceptions; CLI and tests catch `VeraException`.
 - Errors carry a `SourceSpan` (`VeraException.span`). Lexer and parser errors attach their character
   or token span. Every AST declaration, statement, and expression has a `span`; lowering attaches the

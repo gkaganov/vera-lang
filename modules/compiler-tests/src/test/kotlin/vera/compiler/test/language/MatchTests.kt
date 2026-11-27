@@ -173,7 +173,7 @@ class MatchTests {
         fun `rejects match arms without an arrow`() = assertCompilationFails(
             function("match value {", "    Empty 0", "}"),
             VeraParseException.ExpectedToken::class,
-            "expected `->` after the pattern, found '0'",
+            "expected `->` after the pattern, found `0`",
         )
     }
 

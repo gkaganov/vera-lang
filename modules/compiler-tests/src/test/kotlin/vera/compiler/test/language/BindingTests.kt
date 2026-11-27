@@ -134,7 +134,7 @@ class BindingTests {
         fun `rejects mut without val`() = assertCompilationFails(
             function("mut count = 0"),
             VeraParseException.ExpectedToken::class,
-            "expected `val` after `mut`, found 'count'",
+            "expected `val` after `mut`, found `count`",
         )
 
         @Test

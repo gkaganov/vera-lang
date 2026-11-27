@@ -277,7 +277,7 @@ class InterfaceTests {
         fun `rejects trait cases with interfaces but no body`() = assertCompilationFails(
             "interface Named {}\ntrait Color { Red implements Named, Green }",
             VeraParseException.CaseTraitsWithoutBody::class,
-            "a case with `implements` needs a body to end its list: write `Red implements ... { }`, found '}'",
+            "a case with `implements` needs a body to end its list: write `Red implements ... { }`, found `}`",
         )
 
         @Test

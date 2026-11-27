@@ -301,8 +301,8 @@ private class JvmFunctionLoweringState(
                     loweredExpression.returns,
                     exit = when {
                         !loweredExpression.returns -> null
-                        veraStatement.expression is VeraMatchExpression -> "a match whose arms all return"
-                        else -> "an if whose branches all return"
+                        veraStatement.expression is VeraMatchExpression -> "a `match` whose arms all return"
+                        else -> "an `if` whose branches all return"
                     },
                 )
             }
@@ -323,7 +323,7 @@ private class JvmFunctionLoweringState(
                             conversionHint(jvmValue.type, currentReturnType),
                         )
                 }
-                LoweredStatement(JvmReturn(jvmReturnExpression), true, exit = "return")
+                LoweredStatement(JvmReturn(jvmReturnExpression), true, exit = "`return`")
             }
 
             is VeraWhileStatement -> LoweredStatement(lowerWhileStatement(veraStatement), false)
@@ -339,14 +339,14 @@ private class JvmFunctionLoweringState(
                 val loopDepth = loopExpressionDepths.lastOrNull()
                     ?: throw JvmLoweringException.BreakOutsideLoop()
                 requireLoopJumpDepth("break", loopDepth)
-                LoweredStatement(JvmBreak, false, exit = "break")
+                LoweredStatement(JvmBreak, false, exit = "`break`")
             }
 
             is VeraContinueStatement -> {
                 val loopDepth = loopExpressionDepths.lastOrNull()
                     ?: throw JvmLoweringException.ContinueOutsideLoop()
                 requireLoopJumpDepth("continue", loopDepth)
-                LoweredStatement(JvmContinue, false, exit = "continue")
+                LoweredStatement(JvmContinue, false, exit = "`continue`")
             }
         }
     }

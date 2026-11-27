@@ -34,7 +34,7 @@ class ClassTests {
         fun `rejects statements in class bodies`() = assertCompilationFails(
             "class Point {\n    print(1)\n}",
             VeraParseException.ExpectedToken::class,
-            "expected a field (`val`) or method (`fn`), found 'print'",
+            "expected a field (`val`) or method (`fn`), found `print`",
         )
 
         @Test

@@ -17,7 +17,7 @@ class LexicalTests {
         fun `rejects unexpected characters`() = assertCompilationFails(
             "fn main() { # }",
             VeraLexException.UnexpectedCharacter::class,
-            "unexpected character '#'",
+            "unexpected character `#`",
         )
     }
 

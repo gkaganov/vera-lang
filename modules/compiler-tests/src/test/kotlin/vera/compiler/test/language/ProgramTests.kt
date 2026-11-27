@@ -24,7 +24,7 @@ class ProgramTests {
         fun `rejects non-function declarations`() = assertCompilationFails(
             "print(1)",
             VeraParseException.ExpectedDeclaration::class,
-            "expected a function, class, trait, or interface declaration, found 'print'",
+            "expected a function, class, trait, or interface declaration, found `print`",
         )
 
         @Test
@@ -45,7 +45,7 @@ class ProgramTests {
         fun `rejects missing types`() = assertCompilationFails(
             "fn scale(by: 2): Int = by",
             VeraParseException.ExpectedType::class,
-            "expected a type, found '2'",
+            "expected a type, found `2`",
         )
     }
 

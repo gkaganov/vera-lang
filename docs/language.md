@@ -871,25 +871,47 @@ error: argument 1 of function add must be named: write `left = ...`
   statement, or a declaration header such as `fn add`.
 - A span that continues onto later lines is underlined to the end of its first line.
 - Unknown names suggest a close match: ``variable cuont is not defined; did you mean `count`?``.
-- Common Java habits get a hint saying what to write in Vera instead:
+- Common Java and Kotlin habits get a hint saying what to write in Vera instead:
 
-| Java | Hint |
-|------|------|
+| Java / Kotlin | Hint |
+|---------------|------|
 | `!done`, `&&`, `\|\|` | use `not`, `and`, `or` |
 | `x++`, `x--`, `x += 1` | write `x = x + 1` |
+| `a = b = 3` | rebind each variable on its own line |
 | `;` | end the statement with a newline |
-| `new Point()` | call the class directly: `Point(...)` |
-| `extends`, `implements` | no inheritance; list traits with `has` |
-| `sealed trait` (Kotlin) | traits are closed by default |
-| `var count = 0`, `int count = 0`, `String name = ...` | declare with `val name: Type = ...` (or `mut val`) |
+| `/* ... */` | start each line with `//` |
+| `===`, `!==` | use `==` and `!=`, which compare values |
+| `!!`, `?.`, `?:`, `null` | Vera has no `null` |
+| `c ? a : b` | write `if c { a } else { b }` |
+| `&`, `\|`, `^`, `~`, `<<`, `>>` | no bitwise operators |
+| `0x10`, `1_000`, `10L`, `1.5` | only decimal `Int` literals |
+| `'c'`, `"""..."""` | strings use double quotes and stay on one line |
+| `true`, `false` | write `True`, `False` |
+| `int`, `boolean`, `void`, `Long`, `Any` as types | use `Int`, `Bool`, `Unit`; there is no universal type |
+| `var count = 0`, `int count = 0`, `lateinit var` | declare with `val name: Type = ...` (or `mut val`) |
+| `val x: Int` assigned later | give the `val` its value, or choose it with `if` |
+| top-level `val`, `const val` | use a function: `fn limit(): Int = 1` |
 | `public`, `private`, `static`, `final` | no modifiers; bindings are immutable by default |
+| `fun`, `int add(int a)`, `a: Int = 1` | declare `fn add(a: Int): Int`; no default parameter values |
+| `if (c) x`, `do`, `when`, `switch`, `break outer` | use braces, `while`, `match`, and plain `break` |
 | `for (...)` | use `while` |
-| `int`, `boolean`, `void` as types | use `Int`, `Bool`, `Unit` |
-| `null`, `this` | not part of Vera |
-| `"a" + name` | use a string template: `"a\{name}"` |
+| `else ->`, `_ ->`, `is Circle`, `case Circle c` | list every case as `Circle ->` |
+| `new Point()` | call the class directly: `Point(...)` |
+| `class Point(val x: Int)`, `record`, `data class` | declare fields in the body; every class is a data class |
+| `object Config` | a class without fields is a singleton |
+| `enum`, `sealed class` | a trait with cases: `trait Color { Red, Green }` |
+| `extends`, `class A : B` | no inheritance; list traits with `has` and interfaces with `implements` |
+| `sealed trait` | traits are closed by default |
+| `override`, `@Override`, `default` | no annotations; a matching method implements the trait |
+| `constructor`, `init`, `val x = 0` field | the constructor is generated; fields have no defaults |
+| `toString`, `equals`, `hashCode` methods | use `has Display` and `has Eq` |
+| `point.x = 3` | objects are immutable; create a new object |
+| `this`, `super` | refer to fields and methods by name; no inheritance |
+| `"a" + name`, `"a".equals(b)` | use a string template and `==` |
+| `println`, `System.out.println` | use `print`, which ends the line |
 
-- Words such as `var`, `new`, `final`, or `for` are not reserved; the hints only appear where the code
-  would not compile anyway.
+- Words such as `var`, `new`, `final`, `for`, `fun`, or `when` are not reserved; the hints only appear
+  where the code would not compile anyway.
 
 ## Further reading
 

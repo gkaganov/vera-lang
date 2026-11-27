@@ -79,7 +79,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     )
 
     class BoolOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
-        "operator '$operator' is only defined for Bool operands, got ${actual.render()}",
+        "operator `$operator` is only defined for Bool operands, got ${actual.render()}",
     )
 
     class OperandTypesDiffer(
@@ -87,11 +87,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val left: JvmType,
         val right: JvmType,
     ) : JvmLoweringException(
-        "operator '$operator' requires both operands to have the same type, got ${left.render()} and ${right.render()}",
+        "operator `$operator` requires both operands to have the same type, got ${left.render()} and ${right.render()}",
     )
 
     class IntOperandsRequired(val operator: String, val actual: JvmType, val hint: String? = null) : JvmLoweringException(
-        "operator '$operator' is only defined for Int operands, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
+        "operator `$operator` is only defined for Int operands, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class IfBranchTypeMismatch(
@@ -117,9 +117,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     class InvalidForwardApplication(val issue: JvmForwardApplicationIssue) : JvmLoweringException(
         when (issue) {
             JvmForwardApplicationIssue.RIGHT_SIDE_NOT_CALLABLE ->
-                "right-hand side of '|>' must be a callable name or member call"
+                "the right side of `|>` must be a call or a member call chain"
             JvmForwardApplicationIssue.RIGHT_SIDE_CALLS_CALL_RESULT ->
-                "right-hand side of '|>' cannot call the result of another call"
+                "the right side of `|>` cannot call the result of another call"
         },
     )
 
@@ -692,16 +692,16 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     )
 
     class BreakOutsideLoop : JvmLoweringException(
-        "break is only allowed inside a loop",
+        "`break` is only allowed inside a loop",
     )
 
     class ContinueOutsideLoop : JvmLoweringException(
-        "continue is only allowed inside a loop",
+        "`continue` is only allowed inside a loop",
     )
 
     /** `break` or `continue` inside an expression whose evaluation is still in progress. */
     class LoopJumpInsideExpression(val keyword: String) : JvmLoweringException(
-        "$keyword cannot be used inside a nested expression; use it in a statement or in an if that forms a whole statement",
+        "`$keyword` cannot be used inside a nested expression; use it in a statement or in an `if` that forms a whole statement",
     )
 
     class InternalInvariant(val detail: String) : JvmLoweringException(

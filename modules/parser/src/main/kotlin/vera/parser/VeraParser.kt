@@ -1028,16 +1028,16 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         )
     }
 
-    /** How an expected token reads in an error message: `'{'` rather than `LBRACE`. */
+    /** How an expected token reads in an error message: a backticked `{` rather than `LBRACE`. */
     private fun VeraTokenType.describeExpected(): String = when (this) {
-        VeraTokenType.LPAREN -> "'('"
-        VeraTokenType.RPAREN -> "')'"
-        VeraTokenType.LBRACE -> "'{'"
-        VeraTokenType.RBRACE -> "'}'"
-        VeraTokenType.COLON -> "':'"
-        VeraTokenType.COMMA -> "','"
-        VeraTokenType.BIND -> "'='"
+        VeraTokenType.LPAREN -> "`(`"
+        VeraTokenType.RPAREN -> "`)`"
+        VeraTokenType.LBRACE -> "`{`"
+        VeraTokenType.RBRACE -> "`}`"
+        VeraTokenType.COLON -> "`:`"
+        VeraTokenType.COMMA -> "`,`"
+        VeraTokenType.BIND -> "`=`"
         VeraTokenType.IDENTIFIER -> "a name"
-        else -> "'${name.lowercase()}'"
+        else -> "`${name.lowercase()}`"
     }
 }

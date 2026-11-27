@@ -13,13 +13,13 @@ sealed class VeraLexException(message: String, val location: SourceLocation) : V
     class UnexpectedCharacter(
         val character: Char,
         location: SourceLocation,
-    ) : VeraLexException("unexpected character '$character'", location)
+    ) : VeraLexException("unexpected character `$character`", location)
 
     class InvalidStringEscape(
         val escape: Char,
         location: SourceLocation,
     ) : VeraLexException(
-        "invalid string escape '\\$escape'; the escapes are `\\\"`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\uXXXX`, and `\\{` " +
+        "invalid string escape `\\$escape`; the escapes are `\\\"`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\uXXXX`, and `\\{` " +
             "to start a placeholder",
         location,
     )
@@ -175,5 +175,5 @@ internal fun VeraToken.span(): SourceSpan = SourceSpan(location(), SourceLocatio
 private fun VeraToken.describe(): String = when (type) {
     VeraTokenType.EOL -> "end of line"
     VeraTokenType.EOF -> "end of input"
-    else -> "'$text'"
+    else -> "`$text`"
 }
