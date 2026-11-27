@@ -15,9 +15,10 @@ internal object JvmNameHints {
             .minWithOrNull(compareBy({ it.second }, { it.first.value }))
             ?.first
 
-    /** Advice for names that only exist in Java, used where a variable is expected. */
+    /** Advice for names that only exist in Java or Kotlin, used where a variable is expected. */
     fun forJavaValue(name: Identifier): String? = when (name.value) {
-        "null" -> "Vera has no `null`"
+        "null" -> "Vera has no `null`, and its value for nothing is `None`"
+        "Unit" -> "Kotlin's `Unit` is `None` in Vera"
         "this" -> "Vera has no `this`; refer to fields and methods by their names"
         "super" -> "Vera has no inheritance, so there is no `super`"
         "true", "false" -> "Vera's Bool values are `True` and `False`"
@@ -25,16 +26,17 @@ internal object JvmNameHints {
         else -> null
     }
 
-    /** Advice for Java type names, used where a type is expected. */
+    /** Advice for Java and Kotlin type names, used where a type is expected. */
     fun forJavaType(name: Identifier): String? = when (name.value) {
         "int", "Integer" -> "Vera's integer type is `Int`"
         "boolean", "Boolean" -> "Vera's boolean type is `Bool`"
         "string" -> "Vera's string type is `String`"
-        "void", "Void" -> "use `Unit`, or leave out the return type"
+        "void", "Void" -> "a function that returns nothing leaves out its return type, and the value for nothing is `None`"
+        "Unit" -> "Kotlin's `Unit` is `None` in Vera, and a function that returns nothing leaves out its return type"
         "long", "short", "byte", "double", "float", "char",
         "Long", "Short", "Byte", "Double", "Float", "Char" -> "Vera does not support `${name.value}` yet; use `Int`"
         "Object", "Any" -> "Vera has no universal `${name.value}` type"
-        "Nothing" -> "Vera has no `Nothing` type; a function that returns no value returns `Unit`"
+        "Nothing" -> "Vera has no `Nothing` type; a function that returns no value returns `None`"
         else -> null
     }
 

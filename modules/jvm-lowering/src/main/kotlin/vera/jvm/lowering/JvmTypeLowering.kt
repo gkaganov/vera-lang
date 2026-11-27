@@ -2,7 +2,7 @@ package vera.jvm.lowering
 
 import vera.ast.VeraType
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmNoneType
 import vera.shared.model.Identifier
 
 /** The class and user trait names a type annotation may refer to. Built-in traits are not types. */
@@ -10,16 +10,16 @@ internal data class JvmTypeNames(val classes: Set<Identifier>, val traits: Set<I
 
 internal object JvmTypeLowering {
 
-    private val builtinTypeNames = listOf("Int", "String", "Bool", "Unit").map(::Identifier)
+    private val builtinTypeNames = listOf("Int", "String", "Bool", "None").map(::Identifier)
 
     fun lowerReturn(veraType: VeraType, typeNames: JvmTypeNames): JvmType =
-        if (veraType == VeraType.UNKNOWN) JvmUnitType else lower(veraType, typeNames)
+        if (veraType == VeraType.UNKNOWN) JvmNoneType else lower(veraType, typeNames)
 
     fun lower(veraType: VeraType, typeNames: JvmTypeNames): JvmType = when (veraType) {
         VeraType.INT -> JvmType.INT
         VeraType.STRING -> JvmType.STRING
         VeraType.BOOL -> JvmType.BOOL
-        VeraType.UNIT -> JvmUnitType
+        VeraType.NONE -> JvmNoneType
         VeraType.UNKNOWN -> JvmType.VOID
         is VeraType.ClassType -> {
             val name = veraType.name

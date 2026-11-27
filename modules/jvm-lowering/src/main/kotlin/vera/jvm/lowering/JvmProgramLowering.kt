@@ -22,7 +22,7 @@ import vera.jvm.ir.JvmObjectConstruction
 import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmNoneType
 import vera.shared.model.Identifier
 import vera.shared.model.SourceSpan
 import vera.shared.model.at
@@ -73,7 +73,7 @@ object JvmProgramLowering {
 
         // Cases nested in trait blocks are classes too, named `Owner$Case`; only top-level classes
         // take part in the top-level namespace below. A case gets its owner's requirements. A class
-        // without fields has a single value, so like `Unit` it always has `Eq` and `Display`.
+        // without fields has a single value, so like `None` it always has `Eq` and `Display`.
         val allClassDeclarations = (
             classDeclarations + traitDeclarations.flatMap { trait ->
                 trait.cases.map { veraCase ->
@@ -103,8 +103,8 @@ object JvmProgramLowering {
         classDeclarations.firstOrNull { it.name == mainClassName }?.let { conflicting ->
             throw JvmLoweringException.ClassNameConflictsWithProgramClass(mainClassName).at(conflicting.span)
         }
-        if (mainClassName == JvmUnitType.name) {
-            throw JvmLoweringException.ProgramClassConflictsWithUnit(mainClassName)
+        if (mainClassName == JvmNoneType.name) {
+            throw JvmLoweringException.ProgramClassConflictsWithNone(mainClassName)
         }
 
         allClassDeclarations.forEach { veraClass ->
@@ -166,7 +166,7 @@ object JvmProgramLowering {
         val jvmInterfaces = fittedTraits.map { trait ->
             lowerTraitInterface(trait, typeNames, fittedClasses, fittedTraits, fittedRequirements)
         }
-        val jvmClasses = listOf(lowerUnitClass()) + jvmInterfaces + jvmDeclaredClasses +
+        val jvmClasses = listOf(lowerNoneClass()) + jvmInterfaces + jvmDeclaredClasses +
             JvmClass(mainClassName, jvmMethods)
         return JvmProgram(jvmClasses)
     }
@@ -310,8 +310,8 @@ object JvmProgramLowering {
         )
     }
 
-    /** `Unit` is the built-in field-less class: a singleton with `Eq` and a `Display` of `Unit`. */
-    /** Adds `Eq` and `Display` to a class without fields, which has a single value like `Unit`. */
+    /** `None` is the built-in field-less class: a singleton with `Eq` and a `Display` of `None`. */
+    /** Adds `Eq` and `Display` to a class without fields, which has a single value like `None`. */
     private fun withSingletonTraits(veraClass: VeraClassDeclaration): VeraClassDeclaration =
         if (veraClass.fields.isEmpty()) {
             veraClass.copy(traits = veraClass.traits + singletonTraits.filterNot { it in veraClass.traits })
@@ -321,15 +321,15 @@ object JvmProgramLowering {
 
     private val singletonTraits = listOf(JvmBuiltinTraits.eq, JvmBuiltinTraits.display)
 
-    private fun lowerUnitClass(): JvmClass {
-        val unitClassName = JvmUnitType.name
-        val (instanceField, staticInitializer) = singletonMembers(unitClassName)
+    private fun lowerNoneClass(): JvmClass {
+        val noneClassName = JvmNoneType.name
+        val (instanceField, staticInitializer) = singletonMembers(noneClassName)
         return JvmClass(
-            name = unitClassName,
+            name = noneClassName,
             methods = listOf(
                 staticInitializer,
-                JvmObjectMethods.equalsMethod(unitClassName, emptyList()),
-                JvmObjectMethods.toStringMethod(unitClassName, emptyList()),
+                JvmObjectMethods.equalsMethod(noneClassName, emptyList()),
+                JvmObjectMethods.toStringMethod(noneClassName, emptyList()),
             ),
             fields = listOf(instanceField),
             constructors = listOf(JvmConstructor(emptyList(), isPrivate = true)),
@@ -502,7 +502,7 @@ object JvmProgramLowering {
                     traitsByName[fieldType.name]?.kind ?: VeraTraitKind.TRAIT,
                 ).at(veraField.span)
             }
-            if (fieldType !is JvmType.ClassType || fieldType == JvmUnitType) return@forEach
+            if (fieldType !is JvmType.ClassType || fieldType == JvmNoneType) return@forEach
             val fieldClass = classesByName[fieldType.name] ?: return@forEach
             if (trait !in fieldClass.traits) {
                 throw JvmLoweringException.ClassFieldRequiresTrait(

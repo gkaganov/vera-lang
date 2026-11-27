@@ -22,7 +22,7 @@ import vera.jvm.ir.JvmProgram
 import vera.jvm.ir.JvmRebind
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.JvmUnitReturnBlock
+import vera.jvm.ir.JvmNoneReturnBlock
 import vera.jvm.ir.JvmWhile
 import vera.shared.model.Identifier
 import vera.shared.model.VeraException
@@ -99,7 +99,7 @@ class FlatInstructionLoweringTests {
         )
         val jvmLoop = JvmWhile(
             JvmBoolLiteral(true),
-            JvmUnitReturnBlock(
+            JvmNoneReturnBlock(
                 listOf(JvmExpressionStatement(JvmIntBinary(JvmIntBinaryOperator.ADD, JvmIntLiteral(1), jvmIf))),
             ),
         )

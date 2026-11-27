@@ -59,7 +59,7 @@ class HabitTests {
         fun `Kotlin Nothing`() = assertCompilationFails(
             "fn fail(): Nothing {\n}",
             JvmLoweringException.UnknownClassType::class,
-            "Vera has no `Nothing` type; a function that returns no value returns `Unit`",
+            "Vera has no `Nothing` type; a function that returns no value returns `None`",
         )
 
         @Test
@@ -73,7 +73,22 @@ class HabitTests {
         fun `Java void return types`() = assertCompilationFails(
             "fn show(): void {\n}",
             JvmLoweringException.UnknownClassType::class,
-            "type void is not defined; use `Unit`, or leave out the return type",
+            "type void is not defined; a function that returns nothing leaves out its return type, and the value for nothing is `None`",
+        )
+
+        @Test
+        fun `Kotlin Unit return types`() = assertCompilationFails(
+            "fn show(): Unit {\n}",
+            JvmLoweringException.UnknownClassType::class,
+            "type Unit is not defined; Kotlin's `Unit` is `None` in Vera, and a function that returns nothing " +
+                "leaves out its return type",
+        )
+
+        @Test
+        fun `Kotlin Unit values`() = assertCompilationFails(
+            function("print(Unit)"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable Unit is not defined; Kotlin's `Unit` is `None` in Vera",
         )
 
         @Test
@@ -196,7 +211,7 @@ class HabitTests {
         fun `Java null`() = assertCompilationFails(
             function("val value = null"),
             JvmLoweringException.UnknownVariable::class,
-            "variable null is not defined; Vera has no `null`",
+            "variable null is not defined; Vera has no `null`, and its value for nothing is `None`",
         )
     }
 

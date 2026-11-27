@@ -8,7 +8,7 @@ import vera.compiler.test.function
 import vera.jvm.lowering.JvmLoweringException
 import vera.parser.VeraParseException
 
-/** The built-in types `Int`, `Bool`, and `Unit`. */
+/** The built-in types `Int`, `Bool`, and `None`. */
 class TypeTests {
     @Nested
     inner class Int {
@@ -59,46 +59,46 @@ class TypeTests {
     }
 
     @Nested
-    inner class Unit {
+    inner class None {
         @Test
-        fun `Unit values can be stored in objects and read back`() = assertPrints(
+        fun `None values can be stored in objects and read back`() = assertPrints(
             """
             class Signal {
-                val flag: Unit
+                val flag: None
             }
             fn main() {
-                val signal = Signal(Unit)
-                val flag: Unit = signal.flag
+                val signal = Signal(None)
+                val flag: None = signal.flag
                 print(flag)
             }
             """,
-            "Unit",
+            "None",
         )
 
         @Test
-        fun `Unit values can be passed and returned`() = assertPrints(
+        fun `None values can be passed and returned`() = assertPrints(
             """
-            fn identity(unit: Unit) {
-                return unit
+            fn identity(nothing: None) {
+                return nothing
             }
-            fn explicitUnit() {
-                return Unit
+            fn explicitNone() {
+                return None
             }
             fn main() {
-                print(identity(Unit))
-                print(explicitUnit())
+                print(identity(None))
+                print(explicitNone())
             }
             """,
-            "Unit",
-            "Unit",
+            "None",
+            "None",
         )
 
         @Test
-        fun `Unit equality always holds`() = assertPrints(
+        fun `None equality always holds`() = assertPrints(
             """
             fn main() {
-                print(Unit == Unit)
-                print(Unit != Unit)
+                print(None == None)
+                print(None != None)
             }
             """,
             "True",
@@ -106,7 +106,7 @@ class TypeTests {
         )
 
         @Test
-        fun `Unit equality evaluates both operands in order`() = assertPrints(
+        fun `None equality evaluates both operands in order`() = assertPrints(
             """
             fn first() {
                 print("first")
@@ -128,20 +128,20 @@ class TypeTests {
         )
 
         @Test
-        fun `Unit can be printed`() = assertPrints(
+        fun `None can be printed`() = assertPrints(
             """
             fn main() {
-                print(Unit)
+                print(None)
             }
             """,
-            "Unit",
+            "None",
         )
 
         @Test
-        fun `rejects constructing Unit`() = assertCompilationFails(
-            function("val unit = Unit()"),
+        fun `rejects constructing None`() = assertCompilationFails(
+            function("val nothing = None()"),
             JvmLoweringException.SingletonConstructed::class,
-            "Unit has no fields, so it has a single value; write `Unit` instead of `Unit()`",
+            "None has no fields, so it has a single value; write `None` instead of `None()`",
         )
     }
 }

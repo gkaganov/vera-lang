@@ -43,7 +43,7 @@ data class JvmParameter(val name: Identifier, val type: JvmType)
 
 data class JvmLocal(val name: Identifier, val type: JvmType)
 
-/** JVM-level types. Vera `Unit` is represented by [JvmUnitType]. */
+/** JVM-level types. Vera `None` is represented by [JvmNoneType]. */
 sealed interface JvmType {
     data object INT : JvmType
     data object STRING : JvmType
@@ -56,8 +56,8 @@ sealed interface JvmType {
     data class Array(val elementType: JvmType) : JvmType
 }
 
-/** The generated built-in `Unit` class. */
-val JvmUnitType: JvmType.ClassType = JvmType.ClassType(Identifier("Unit"))
+/** The generated built-in `None` class. */
+val JvmNoneType: JvmType.ClassType = JvmType.ClassType(Identifier("None"))
 
 /** Renders the type with Vera's names (`Int`, not `INT`), for user-facing messages. */
 fun JvmType.render(): String = when (this) {
@@ -87,8 +87,8 @@ data class JvmBoolLiteral(val value: Boolean) : JvmExpression {
     override val type = JvmType.BOOL
 }
 
-data object JvmUnitLiteral : JvmExpression {
-    override val type = JvmUnitType
+data object JvmNoneLiteral : JvmExpression {
+    override val type = JvmNoneType
 }
 
 /** The single value of a field-less class, read from its static `INSTANCE` field. */
@@ -207,7 +207,7 @@ data class JvmBuiltinCall(
     val arguments: List<JvmExpression>,
 ) : JvmExpression {
     override val type = when (builtin) {
-        JvmBuiltin.PRINT -> JvmUnitType
+        JvmBuiltin.PRINT -> JvmNoneType
     }
 }
 
@@ -241,9 +241,9 @@ data class JvmImplicitReturnBlock(
     override val type = result.type
 }
 
-/** A branch body with no final expression; its value is `Unit`. */
-data class JvmUnitReturnBlock(override val statements: List<JvmStatement>) : JvmBlock {
-    override val type = JvmUnitType
+/** A branch body with no final expression; its value is `None`. */
+data class JvmNoneReturnBlock(override val statements: List<JvmStatement>) : JvmBlock {
+    override val type = JvmNoneType
 }
 
 data class JvmIfExpression(
@@ -251,7 +251,7 @@ data class JvmIfExpression(
     val thenBlock: JvmBlock,
     val elseBlock: JvmBlock?,
 ) : JvmExpression {
-    override val type = if (elseBlock != null) thenBlock.type else JvmUnitType
+    override val type = if (elseBlock != null) thenBlock.type else JvmNoneType
 }
 
 sealed interface JvmStatement
@@ -272,6 +272,6 @@ data class JvmPutStatic(
     val value: JvmExpression,
 ) : JvmStatement
 
-data class JvmWhile(val condition: JvmExpression, val body: JvmUnitReturnBlock) : JvmStatement
+data class JvmWhile(val condition: JvmExpression, val body: JvmNoneReturnBlock) : JvmStatement
 data object JvmBreak : JvmStatement
 data object JvmContinue : JvmStatement

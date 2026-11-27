@@ -101,7 +101,7 @@ data class VeraReturnStatement(val expression: VeraExpression?, override val spa
 
 data class VeraWhileStatement(
     val condition: VeraPrimaryExpression,
-    val body: VeraUnitReturnBlock,
+    val body: VeraNoneReturnBlock,
     override val span: SourceSpan,
 ) : VeraStatement
 
@@ -170,7 +170,7 @@ sealed interface VeraLiteral : VeraPrimaryExpression
 data class VeraIntLiteral(val value: Int, override val span: SourceSpan) : VeraLiteral
 data class VeraStringLiteral(val value: String, override val span: SourceSpan) : VeraLiteral
 data class VeraBoolLiteral(val value: Boolean, override val span: SourceSpan) : VeraLiteral
-data class VeraUnitLiteral(override val span: SourceSpan) : VeraLiteral
+data class VeraNoneLiteral(override val span: SourceSpan) : VeraLiteral
 
 /** A string with `\{expr}` placeholders, as text and value parts in source order. */
 data class VeraStringTemplate(val parts: List<VeraTemplatePart>, override val span: SourceSpan) :
@@ -196,8 +196,8 @@ data class VeraImplicitReturnBlock(
     val result: VeraPrimaryExpression,
 ) : VeraBlock
 
-/** A block that produces no value and returns implicitly as `Unit`. */
-data class VeraUnitReturnBlock(override val statements: List<VeraStatement>) : VeraBlock
+/** A block that produces no value and returns implicitly as `None`. */
+data class VeraNoneReturnBlock(override val statements: List<VeraStatement>) : VeraBlock
 
 data class VeraIfExpression(
     val condition: VeraPrimaryExpression,
@@ -227,7 +227,7 @@ sealed interface VeraType {
     data object INT : VeraType
     data object STRING : VeraType
     data object BOOL : VeraType
-    data object UNIT : VeraType
+    data object NONE : VeraType
     data object UNKNOWN : VeraType
     data class ClassType(val name: Identifier) : VeraType
 }
@@ -237,7 +237,7 @@ fun VeraType.render(): String = when (this) {
     VeraType.INT -> "Int"
     VeraType.STRING -> "String"
     VeraType.BOOL -> "Bool"
-    VeraType.UNIT -> "Unit"
+    VeraType.NONE -> "None"
     VeraType.UNKNOWN -> "an inferred type"
     is VeraType.ClassType -> name.display
 }

@@ -93,7 +93,7 @@ class ControlFlowTests {
     @Nested
     inner class IfExpressions {
         @Test
-        fun `if expressions evaluate to Unit when returned`() = assertPrints(
+        fun `if expressions evaluate to None when returned`() = assertPrints(
             """
             fn main() {
                 return if False {
@@ -222,7 +222,7 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `if without else produces Unit`() = assertPrints(
+        fun `if without else produces None`() = assertPrints(
             """
             fn main() {
                 val result = if False {
@@ -232,24 +232,24 @@ class ControlFlowTests {
                 print(if True { print("yes") })
             }
             """,
-            "Unit",
+            "None",
             "yes",
-            "Unit",
+            "None",
         )
 
         @Test
-        fun `rejects if without else whose value is used and not Unit`() = assertCompilationFails(
+        fun `rejects if without else whose value is used and not None`() = assertCompilationFails(
             function("val value = if True {", "    1", "}"),
             JvmLoweringException.IfBranchTypeMismatch::class,
-            "if branches must have the same type, got Int and Unit; an `if` without `else` produces `Unit` " +
+            "if branches must have the same type, got Int and None; an `if` without `else` produces `None` " +
                 "when the condition is false, so add an `else`",
         )
 
         @Test
-        fun `rejects returning a non-Unit if without else`() = assertCompilationFails(
+        fun `rejects returning a non-None if without else`() = assertCompilationFails(
             "fn pick(flag: Bool): Int = if flag { 1 }",
             JvmLoweringException.IfBranchTypeMismatch::class,
-            "got Int and Unit",
+            "got Int and None",
         )
 
         @Test

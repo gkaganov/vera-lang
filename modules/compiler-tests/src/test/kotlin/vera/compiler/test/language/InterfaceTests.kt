@@ -217,7 +217,7 @@ class InterfaceTests {
         )
 
         @Test
-        fun `interfaces can have Unit methods`() = assertPrints(
+        fun `interfaces can have None methods`() = assertPrints(
             """
             interface Resettable {
                 fn reset()

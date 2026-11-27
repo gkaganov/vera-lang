@@ -101,8 +101,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `if` that forms a whole statement keeps statement depth for its branches. The flat layer re-checks
   both as defensive invariants (`BreakOutsideLoop`, `LoopJumpStackMismatch`).
 - Return analysis treats an `if` with `else` whose branches all return as returning.
-- A missing `else` is `else { Unit }`: `lowerIfExpression` takes `valueUsed` (false for expression
-  statements and block results) and rejects a non-`Unit` branch with `IfBranchTypeMismatch(missingElse)`
+- A missing `else` is `else { None }`: `lowerIfExpression` takes `valueUsed` (false for expression
+  statements and block results) and rejects a non-`None` branch with `IfBranchTypeMismatch(missingElse)`
   where the value is used.
 - Trait requirements: `VeraTraitDeclaration.requirements` (`requires`). `JvmTraitRequirements` computes
   their transitive closure after `validateRequirements` rejects unknown, repeated, or cyclic ones.
@@ -150,9 +150,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   statement on; it is only allowed for parameters, once, and directly in the function body. `var` is not a
   keyword, and `var x = ...` gets a hint.
 - Function bodies are `VeraBlockBody` (explicit `return`s) or `VeraExpressionBody` (`= expression`,
-  lowered to a single `JvmReturn`). An omitted return type means `Unit`; a non-`Unit` expression body
-  without one is `ExpressionBodyReturnTypeRequired`. The parser rejects an explicit `: Unit` return
-  type (`VeraParseException.ExplicitUnitReturnType`).
+  lowered to a single `JvmReturn`). An omitted return type means `None`; a non-`None` expression body
+  without one is `ExpressionBodyReturnTypeRequired`. The parser rejects an explicit `: None` return
+  type (`VeraParseException.ExplicitNoneReturnType`).
 - Calls carry `VeraArgument(name, expression)`. `JvmFunctionLowering.requireArgumentNames` checks every
   function, method, constructor, and built-in call after its arity check. Only written arguments
   count; the value forwarded by `|>` fills the first parameter unnamed. One written argument is
@@ -172,7 +172,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 
 - **Structured IR** (`vera.jvm.ir`): `JvmProgram`, `JvmClass`, `JvmField`, `JvmConstructor`,
   `JvmMethod`, `JvmExpression`, `JvmStatement`, and block kinds `JvmExplicitReturnBlock`,
-  `JvmImplicitReturnBlock`, `JvmUnitReturnBlock`.
+  `JvmImplicitReturnBlock`, `JvmNoneReturnBlock`.
 - `JvmLet(local, value, body)` evaluates `value` into a compiler-generated local, then `body`.
 - Object construction is `JvmObjectConstruction`; field reads are `JvmGetField`; object method
   calls are `JvmInstanceCall` with an explicit receiver expression. `JvmMethod.receiver` is the
@@ -188,13 +188,15 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `INSTANCE` field, a `<clinit>` that creates it, and a private constructor (`JvmConstructor.isPrivate`,
   `FlatMethod.isPrivate`). A bare class name lowers to `JvmSingletonValue` (`FlatGetStatic`), and
   `Empty()` is `SingletonConstructed`.
-  Like `Unit`, they always have `Eq` and `Display`: `JvmProgramLowering.withSingletonTraits` adds both to
+  Like `None`, they always have `Eq` and `Display`: `JvmProgramLowering.withSingletonTraits` adds both to
   every class and case without fields before validation, so requirements and field checks see them.
-- `Unit` is a real zero-field value, not `VOID`. `JvmUnitType` is the generated `Unit` class, a
-  field-less class built with the same singleton members. The unit value is
-  `JvmUnitLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `Unit`.
-  `Unit` implicitly has `Eq` and `Display`; its generated `equals` always returns `true`
-  and its generated `toString` returns `Unit`, so `Unit` equality and printing use the object path.
+- `None` is a real zero-field value, not `VOID`. `JvmNoneType` is the generated `None` class, a
+  field-less class built with the same singleton members. The value is
+  `JvmNoneLiteral`, lowered to `FlatGetStatic`. Omitted return types and `print` produce `None`.
+  `None` implicitly has `Eq` and `Display`; its generated `equals` always returns `true`
+  and its generated `toString` returns `None`, so `None` equality and printing use the object path.
+  `Unit` is an ordinary name, not a keyword; Kotlin's `Unit`, Java's `void`, and `null` get
+  `JvmNameHints` pointing to `None`.
 - A zero-parameter top-level `main` gets an additional JVM entry point `main(String[])V` that calls
   the Vera `main` and discards its result. `JvmType.Array` represents the `String[]` parameter.
 - **Operators**: `JvmIntUnaryOperator`, `JvmIntBinaryOperator`, and `JvmComparisonOperator` are
@@ -214,7 +216,7 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   value to an interface on the simulated stack and emits no bytecode.
 - `print` lowers to two `PrintStream.print` calls, the value and then `"\n"`, so output ends lines with
   `\n` on every platform (`println` would use the platform separator).
-- `FlatPop` discards non-`VOID` expression results, including `Unit` and `if` values used as
+- `FlatPop` discards non-`VOID` expression results, including `None` and `if` values used as
   statements.
 - `FlatGetStatic` carries both stack type (`fieldType`) and JVM descriptor (`fieldDescriptor`).
 - `FlatPutStatic` stores static fields; static fields carry `isStatic` from `JvmField`/`FlatField`
@@ -364,7 +366,7 @@ uncommitted changes:
   `VeraClassDeclaration.traits`/`interfaces`;
   built-in traits live in `JvmBuiltinTraits` (`eq`, `display`, `names`), and generated trait
   implementations live in `JvmObjectMethods`.
-- `Unit` uses `VeraUnitLiteral`, `JvmUnitLiteral`, `JvmUnitType`/`JvmPutStatic`, and
+- `None` uses `VeraNoneLiteral`, `JvmNoneLiteral`, `JvmNoneType`/`JvmPutStatic`, and
   `FlatGetStatic`/`FlatPutStatic`.
 - The JVM entry-point adapter is built in `JvmProgramLowering` as a `JvmStaticCall` to `main`
   followed by `JvmReturn(null)`.
@@ -412,10 +414,10 @@ uncommitted changes:
 - Operators, lowest to highest: `|>`, `or`, `and`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`, `*`/`/`/`%`.
   Unary `-` and `not` bind tighter than multiplicative operators; `not a == b` is `(not a) == b`,
   which reads like Java's `!a == b`.
-- `==` and `!=` support `Int`, `Bool`, `String`, and `Unit`; `String` equality compares contents.
+- `==` and `!=` support `Int`, `Bool`, `String`, and `None`; `String` equality compares contents.
   Objects compare structurally only when their class has the built-in `Eq` trait. Ordering
   operators are `Int`-only.
-- `print` accepts `Int`, `String`, `Bool`, `Unit`, and objects whose class has the built-in
+- `print` accepts `Int`, `String`, `Bool`, `None`, and objects whose class has the built-in
   `Display` trait. `Bool` prints as `True`/`False` (matching the literals) through
   `JvmObjectMethods.boolToString`, used by both `print` and generated `toString`.
 - `and` and `or` are short-circuiting reserved keywords; `not` is the `Bool`-only negation keyword.

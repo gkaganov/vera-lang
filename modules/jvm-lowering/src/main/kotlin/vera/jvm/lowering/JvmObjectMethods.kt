@@ -23,7 +23,7 @@ import vera.jvm.ir.JvmReturn
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
 import vera.jvm.ir.JvmUpcast
-import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmNoneType
 import vera.jvm.ir.render
 import vera.shared.model.Identifier
 
@@ -171,7 +171,7 @@ internal object JvmObjectMethods {
         )
     }
 
-    /** Builds `toString(): String` returning a fixed value, used for `Unit`. */
+    /** Builds `toString(): String` returning a fixed value, used for `None`. */
     fun constantToStringMethod(className: Identifier, value: String): JvmMethod {
         val receiver = JvmLocal(thisName, JvmType.ClassType(className))
         return JvmMethod(
@@ -222,7 +222,7 @@ internal object JvmObjectMethods {
     ): JvmExpression? {
         val type = field.type
         return when (type) {
-            JvmUnitType -> null
+            JvmNoneType -> null
             JvmType.INT, JvmType.BOOL, JvmType.STRING -> JvmComparison(
                 JvmComparisonOperator.EQ,
                 fieldRead(owner, field, receiver),
@@ -255,7 +255,7 @@ internal object JvmObjectMethods {
     ): JvmExpression {
         val type = field.type
         return when (type) {
-            JvmUnitType -> append(builder, JvmStringLiteral("Unit"))
+            JvmNoneType -> append(builder, JvmStringLiteral("None"))
             JvmType.INT, JvmType.STRING -> append(builder, fieldRead(owner, field, receiver))
             JvmType.BOOL -> append(builder, boolToString(fieldRead(owner, field, receiver)))
             is JvmType.ClassType -> append(

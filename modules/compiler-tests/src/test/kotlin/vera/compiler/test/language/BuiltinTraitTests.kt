@@ -129,15 +129,15 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `Eq compares Unit fields`() = assertPrints(
+        fun `Eq compares None fields`() = assertPrints(
             """
             class Signal has Eq {
-                val flag: Unit
+                val flag: None
                 val level: Int
             }
             fn main() {
-                print(Signal(flag = Unit, level = 1) == Signal(flag = Unit, level = 1))
-                print(Signal(flag = Unit, level = 1) == Signal(flag = Unit, level = 2))
+                print(Signal(flag = None, level = 1) == Signal(flag = None, level = 1))
+                print(Signal(flag = None, level = 1) == Signal(flag = None, level = 2))
             }
             """,
             "True",
@@ -221,22 +221,22 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `Display prints String Bool and Unit fields`() = assertPrints(
+        fun `Display prints String Bool and None fields`() = assertPrints(
             """
             class Message has Display {
                 val text: String
                 val active: Bool
             }
             class Signal has Display {
-                val flag: Unit
+                val flag: None
             }
             fn main() {
                 print(Message(text = "hello", active = True))
-                print(Signal(Unit))
+                print(Signal(None))
             }
             """,
             "Message(text: hello, active: True)",
-            "Signal(flag: Unit)",
+            "Signal(flag: None)",
         )
 
         @Test

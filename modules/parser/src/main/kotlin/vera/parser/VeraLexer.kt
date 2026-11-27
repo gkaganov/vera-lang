@@ -349,7 +349,7 @@ private class VeraLexerState(private val source: String) {
             "Int" to VeraTokenType.INT_TYPE,
             "String" to VeraTokenType.STRING_TYPE,
             "Bool" to VeraTokenType.BOOL_TYPE,
-            "Unit" to VeraTokenType.UNIT_TYPE,
+            "None" to VeraTokenType.NONE,
             "True" to VeraTokenType.BOOL_LITERAL,
             "False" to VeraTokenType.BOOL_LITERAL,
         )

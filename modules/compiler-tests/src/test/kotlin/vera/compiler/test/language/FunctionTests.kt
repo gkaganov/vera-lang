@@ -45,14 +45,14 @@ class FunctionTests {
             fn sum(first: Int, second: Int, third: Int): Int = first + second + third
             fn shout(text: String): String = "\{text}!"
             fn flip(flag: Bool): Bool = not flag
-            fn pass(unit: Unit) = unit
+            fn pass(nothing: None) = nothing
             fn grow(square: Square): Square = Square(square.side + 1)
             fn measure(shape: Shape): Shape = shape
             fn main() {
                 print(sum(first = 99, second = 98, third = 2 * 48 + 1))
                 print(shout("hi"))
                 print(flip(True))
-                print(pass(Unit))
+                print(pass(None))
                 print(grow(Square(2)))
                 print(measure(Square(3)).area())
             }
@@ -60,7 +60,7 @@ class FunctionTests {
             "294",
             "hi!",
             "False",
-            "Unit",
+            "None",
             "Square(side: 3)",
             "9",
         )
@@ -314,7 +314,7 @@ class FunctionTests {
     @Nested
     inner class Returns {
         @Test
-        fun `return without a value ends a Unit function`() = assertPrints(
+        fun `return without a value ends a function that returns nothing`() = assertPrints(
             """
             fn report(ready: Bool) {
                 if not ready {
@@ -361,17 +361,17 @@ class FunctionTests {
         )
 
         @Test
-        fun `rejects explicit Unit return types`() = assertCompilationFails(
-            "fn log(text: String): Unit {\n}",
-            VeraParseException.ExplicitUnitReturnType::class,
-            "leave out the return type for a function that returns `Unit`; remove `: Unit`",
+        fun `rejects explicit None return types`() = assertCompilationFails(
+            "fn log(text: String): None {\n}",
+            VeraParseException.ExplicitNoneReturnType::class,
+            "leave out the return type for a function that returns `None`; remove `: None`",
         )
 
         @Test
-        fun `rejects returns without a value in non-Unit functions`() = assertCompilationFails(
+        fun `rejects returns without a value in functions that return a value`() = assertCompilationFails(
             "fn main(): Int {\n    return\n}",
             JvmLoweringException.MissingReturnValue::class,
-            "return without an expression requires a Unit function",
+            "return without an expression requires a function that returns None, but this function returns Int",
         )
 
         @Test
@@ -382,14 +382,14 @@ class FunctionTests {
         )
 
         @Test
-        fun `rejects Unit functions returning a value`() = assertCompilationFails(
+        fun `rejects None functions returning a value`() = assertCompilationFails(
             "fn main() {\n    return 1\n}",
             JvmLoweringException.ReturnTypeMismatch::class,
-            "return requires Unit, got Int",
+            "return requires None, got Int",
         )
 
         @Test
-        fun `rejects non-Unit functions without a return statement`() = assertCompilationFails(
+        fun `rejects non-None functions without a return statement`() = assertCompilationFails(
             "fn main(): Int {\n}",
             JvmLoweringException.MissingReturnStatement::class,
             "missing return statement for type Int",
@@ -450,7 +450,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `Unit functions can have expression bodies`() = assertPrints(
+        fun `None functions can have expression bodies`() = assertPrints(
             """
             fn log(text: String) = print(text)
             fn main() = log("done")

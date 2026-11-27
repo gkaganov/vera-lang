@@ -117,10 +117,10 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         token,
     )
 
-    /** `: Unit` as a return type; a function returning `Unit` leaves the return type out. */
-    class ExplicitUnitReturnType(
+    /** `: None` as a return type; a function returning `None` leaves the return type out. */
+    class ExplicitNoneReturnType(
         val found: VeraToken,
-    ) : VeraParseException("leave out the return type for a function that returns `Unit`; remove `: Unit`", found)
+    ) : VeraParseException("leave out the return type for a function that returns `None`; remove `: None`", found)
 
     /** `ClassName()` in a pattern; a pattern that binds no fields is written without parentheses. */
     class EmptyPatternParentheses(

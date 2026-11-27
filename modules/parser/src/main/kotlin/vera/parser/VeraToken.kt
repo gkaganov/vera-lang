@@ -26,7 +26,7 @@ enum class VeraTokenType {
     INT_TYPE,
     STRING_TYPE,
     BOOL_TYPE,
-    UNIT_TYPE,
+    NONE,
 
     // Literals & identifiers
     IDENTIFIER,

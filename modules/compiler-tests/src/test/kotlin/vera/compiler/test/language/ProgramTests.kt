@@ -52,7 +52,7 @@ class ProgramTests {
     @Nested
     inner class EntryPoint {
         @Test
-        fun `zero-parameter Unit main gets a void JVM entry point`() = assertJvmMainPrints(
+        fun `zero-parameter None main gets a void JVM entry point`() = assertJvmMainPrints(
             """
             fn main() {
                 print("entry")
@@ -105,11 +105,11 @@ class ProgramTests {
         )
 
         @Test
-        fun `rejects Unit as the program class name`() {
-            assertCompilerError<JvmLoweringException.ProgramClassConflictsWithUnit>(
-                "program class Unit conflicts with the built-in Unit class",
+        fun `rejects None as the program class name`() {
+            assertCompilerError<JvmLoweringException.ProgramClassConflictsWithNone>(
+                "program class None conflicts with the built-in None class",
             ) {
-                VeraCompiler.compile(Identifier("Unit"), "fn main() { }")
+                VeraCompiler.compile(Identifier("None"), "fn main() { }")
             }
         }
     }

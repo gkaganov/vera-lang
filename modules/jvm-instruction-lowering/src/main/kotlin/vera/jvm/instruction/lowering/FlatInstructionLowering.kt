@@ -35,9 +35,9 @@ import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.JvmUnitLiteral
-import vera.jvm.ir.JvmUnitReturnBlock
-import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmNoneLiteral
+import vera.jvm.ir.JvmNoneReturnBlock
+import vera.jvm.ir.JvmNoneType
 import vera.jvm.ir.JvmVarDeclaration
 import vera.jvm.ir.JvmWhile
 import vera.jvm.ir.JvmUpcast
@@ -205,8 +205,8 @@ private class FlatInstructionLoweringState {
                 val jvmReturnType = if (jvmReturnExpression != null) {
                     lowerExpression(jvmReturnExpression)
                 } else {
-                    if (currentReturnType == JvmUnitType) {
-                        emitUnitValue()
+                    if (currentReturnType == JvmNoneType) {
+                        emitNoneValue()
                     }
                     currentReturnType
                 }
@@ -314,9 +314,9 @@ private class FlatInstructionLoweringState {
                 JvmType.BOOL
             }
 
-            is JvmUnitLiteral -> {
-                emitUnitValue()
-                JvmUnitType
+            is JvmNoneLiteral -> {
+                emitNoneValue()
+                JvmNoneType
             }
 
             is JvmSingletonValue -> {
@@ -578,8 +578,8 @@ private class FlatInstructionLoweringState {
                 )
                 append(FlatLoadConstant(JvmType.STRING, "\n"))
                 appendPrintStreamPrint(JvmType.STRING)
-                emitUnitValue()
-                JvmUnitType
+                emitNoneValue()
+                JvmNoneType
             }
         }
     }
@@ -605,7 +605,7 @@ private class FlatInstructionLoweringState {
         if (jvmElseBlock == null) {
             lowerBlock(jvmIfExpression.thenBlock, discardResult = true)
             bindLabel(flatElseLabel)
-            emitUnitValue()
+            emitNoneValue()
             return
         }
 
@@ -649,9 +649,9 @@ private class FlatInstructionLoweringState {
                 }
             }
 
-            is JvmUnitReturnBlock -> {
+            is JvmNoneReturnBlock -> {
                 if (!discardResult) {
-                    emitUnitValue()
+                    emitNoneValue()
                 }
             }
 
@@ -659,13 +659,13 @@ private class FlatInstructionLoweringState {
         }
     }
 
-    private fun emitUnitValue() {
+    private fun emitNoneValue() {
         append(
             FlatGetStatic(
-                JvmUnitType.name,
+                JvmNoneType.name,
                 Identifier("INSTANCE"),
-                JvmUnitType,
-                Identifier("Unit"),
+                JvmNoneType,
+                Identifier("None"),
             ),
         )
     }

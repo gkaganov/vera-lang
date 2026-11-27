@@ -89,10 +89,10 @@ class NameResolutionTests {
         )
 
         @Test
-        fun `suggests Unit and True for misspelled built-in values`() = assertCompilationFails(
-            function("print(Unti)"),
+        fun `suggests None for a misspelled built-in value`() = assertCompilationFails(
+            function("print(Noen)"),
             JvmLoweringException.UnknownVariable::class,
-            "variable Unti is not defined; did you mean `Unit`?",
+            "variable Noen is not defined; did you mean `None`?",
         )
 
         @Test

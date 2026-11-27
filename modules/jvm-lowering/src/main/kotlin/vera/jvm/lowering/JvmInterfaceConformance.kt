@@ -195,9 +195,9 @@ internal class JvmInterfaceConformance(
         parameters.map { parameter -> JvmTypeLowering.lower(parameter.type, typeNames) }
 }
 
-/** [method] as it would be declared in a class: `fn scale(by: Int): Int`, without `: Unit`. */
+/** [method] as it would be declared in a class: `fn scale(by: Int): Int`, without `: None`. */
 internal fun sourceSignature(method: VeraTraitMethod): String {
     val parameters = method.parameters.joinToString(", ") { parameter -> "${parameter.name.display}: ${parameter.type.render()}" }
-    val returnType = method.returnType.takeUnless { type -> type == VeraType.UNKNOWN || type == VeraType.UNIT }
+    val returnType = method.returnType.takeUnless { type -> type == VeraType.UNKNOWN || type == VeraType.NONE }
     return "fn ${method.name.display}($parameters)" + (returnType?.let { type -> ": ${type.render()}" } ?: "")
 }

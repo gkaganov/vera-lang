@@ -136,11 +136,11 @@ class DiagnosticsTests {
 
     @Test
     fun `diagnostics without a source location show only the message`() {
-        val error = Assertions.assertThrows(JvmLoweringException.ProgramClassConflictsWithUnit::class.java) {
-            VeraCompiler.compile(Identifier("Unit"), "fn main() {\n}\n")
+        val error = Assertions.assertThrows(JvmLoweringException.ProgramClassConflictsWithNone::class.java) {
+            VeraCompiler.compile(Identifier("None"), "fn main() {\n}\n")
         }
         Assertions.assertEquals(
-            "error: program class Unit conflicts with the built-in Unit class",
+            "error: program class None conflicts with the built-in None class",
             VeraDiagnostics.render(error, "fn main() {\n}\n", "main.vera"),
         )
     }

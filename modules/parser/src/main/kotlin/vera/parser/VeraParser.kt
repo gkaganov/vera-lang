@@ -46,8 +46,8 @@ import vera.ast.VeraTraitMethod
 import vera.ast.VeraType
 import vera.ast.VeraUnaryOperation
 import vera.ast.VeraUnaryOperator
-import vera.ast.VeraUnitLiteral
-import vera.ast.VeraUnitReturnBlock
+import vera.ast.VeraNoneLiteral
+import vera.ast.VeraNoneReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.ast.render
 import vera.shared.model.Identifier
@@ -255,8 +255,8 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         }
         expect(VeraTokenType.RPAREN)
         val returnType = if (match(VeraTokenType.COLON)) {
-            if (at(VeraTokenType.UNIT_TYPE)) {
-                throw VeraParseException.ExplicitUnitReturnType(current())
+            if (at(VeraTokenType.NONE)) {
+                throw VeraParseException.ExplicitNoneReturnType(current())
             }
             parseTypeRef()
         } else {
@@ -301,9 +301,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 VeraType.BOOL
             }
 
-            VeraTokenType.UNIT_TYPE -> {
+            VeraTokenType.NONE -> {
                 advance()
-                VeraType.UNIT
+                VeraType.NONE
             }
 
             VeraTokenType.IDENTIFIER -> VeraType.ClassType(parseQualifiedName(advance()))
@@ -324,7 +324,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             statements.removeLast()
             VeraImplicitReturnBlock(statements, result)
         } else {
-            VeraUnitReturnBlock(statements)
+            VeraNoneReturnBlock(statements)
         }
     }
 
@@ -408,7 +408,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val keyword = expect(VeraTokenType.WHILE)
         val condition = parseExpression()
         val body = parseBlock()
-        return VeraWhileStatement(condition, VeraUnitReturnBlock(body), spanFrom(keyword))
+        return VeraWhileStatement(condition, VeraNoneReturnBlock(body), spanFrom(keyword))
     }
 
     /** Ends a statement or member at a newline, at the end of input, or before a closing `}`. */
@@ -584,7 +584,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
                 VeraBoolLiteral(token.text == "True", token.span())
             }
 
-            VeraTokenType.UNIT_TYPE -> VeraUnitLiteral(advance().span())
+            VeraTokenType.NONE -> VeraNoneLiteral(advance().span())
 
             VeraTokenType.IDENTIFIER if current().text == "new" && peek().type == VeraTokenType.IDENTIFIER ->
                 throw javaNew()
@@ -914,9 +914,9 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         val body = when {
             at(VeraTokenType.LBRACE) -> parseBranchBlock()
             // `Quit -> return "quit"`: a jump on its own needs no braces.
-            at(VeraTokenType.RETURN) -> VeraUnitReturnBlock(listOf(parseReturnStatement()))
-            at(VeraTokenType.BREAK) -> VeraUnitReturnBlock(listOf(VeraBreakStatement(advance().span())))
-            at(VeraTokenType.CONTINUE) -> VeraUnitReturnBlock(listOf(VeraContinueStatement(advance().span())))
+            at(VeraTokenType.RETURN) -> VeraNoneReturnBlock(listOf(parseReturnStatement()))
+            at(VeraTokenType.BREAK) -> VeraNoneReturnBlock(listOf(VeraBreakStatement(advance().span())))
+            at(VeraTokenType.CONTINUE) -> VeraNoneReturnBlock(listOf(VeraContinueStatement(advance().span())))
             else -> VeraImplicitReturnBlock(emptyList(), parseExpression())
         }
         return VeraMatchArm(pattern, body, SourceSpan(pattern.span.start, tokens[position - 1].span().end))
@@ -1024,7 +1024,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
             VeraTokenType.INT_TYPE,
             VeraTokenType.STRING_TYPE,
             VeraTokenType.BOOL_TYPE,
-            VeraTokenType.UNIT_TYPE,
+            VeraTokenType.NONE,
         )
     }
 

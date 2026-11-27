@@ -15,7 +15,7 @@ Implemented:
 
 - Top-level functions with typed parameters and optional return types.
 - `val` bindings, immutable by default, and `mut val` bindings that can be rebound with `=`.
-- `Int`, `String`, `Bool`, and `Unit`.
+- `Int`, `String`, `Bool`, and `None`.
 - Integer arithmetic and comparisons.
 - `and` / `or` short-circuiting boolean operators.
 - `if` / `else if` / `else` expressions.
@@ -54,7 +54,7 @@ Reserved words cannot be used as identifiers:
 | Declarations | `fn`, `class`, `trait`, `interface`, `has`, `implements`, `requires`, `val`, `mut` |
 | Control flow | `if`, `else`, `match`, `while`, `break`, `continue`, `return` |
 | Operators | `and`, `or`, `not` |
-| Types | `Int`, `String`, `Bool`, `Unit` |
+| Types | `Int`, `String`, `Bool`, `None` |
 | Boolean literals | `True`, `False` |
 
 - `val` is reserved, but immutability is not enforced yet.
@@ -86,7 +86,7 @@ public static void main(String[] args)
 
 This adapter calls the Vera `main` and discards its result, then returns `void`. It lets the generated
 class be launched with `java <ClassName>`, while the Vera `main` keeps its declared Vera return type
-(including `Unit`). A `main` with parameters does not get an adapter.
+(including `None`). A `main` with parameters does not get an adapter.
 
 ## Functions
 
@@ -102,15 +102,15 @@ fn log(text: String) = print(text)
 - Parameters require a name and type.
 - Parameter, argument, and pattern lists may end with a trailing comma (`add(left = 1, right = 2,)`),
   which keeps multi-line lists uniform.
-- Return types are written out, except for `Unit`: a function without a return type returns `Unit`.
-  Writing `: Unit` is a compile error, so there is one way to declare a `Unit` function.
+- Return types are written out, except for `None`: a function without a return type returns `None`.
+  Writing `: None` is a compile error, so there is one way to declare a function that returns nothing.
 - `= expression` is a short form for a function whose body is a single expression; it returns the
-  expression's value. A non-`Unit` expression body needs its return type written:
+  expression's value. A non-`None` expression body needs its return type written:
   `fn double(value: Int) = value * 2` is an error. Block bodies keep explicit `return`.
 - Calls check the argument count and types against the callee's parameters.
 - A return expression must match the declared return type.
-- `return` without an expression returns from a `Unit` function.
-- A function that does not always return gets an implicit final `return`; this requires a `Unit`
+- `return` without an expression returns from a function that returns `None`.
+- A function that does not always return gets an implicit final `return`; this requires a `None`
   return type.
 - A function always returns when a top-level statement is a `return`, or an `if` with an `else`
   whose branches all always return (including `else if` chains). Returns inside `while` do not
@@ -152,19 +152,19 @@ fn main() {
   traits, and built-ins must have distinct names in their scope.
 - Bare names resolve to parameters/locals, fields, sibling methods, then top-level functions and
   built-ins.
-- Methods have typed parameters and an optional return type; an omitted return type means `Unit`.
+- Methods have typed parameters and an optional return type; an omitted return type means `None`.
 - Methods can call top-level functions, built-ins, and other class methods.
 - Method calls check argument count and types; method returns must match the declared return type.
 - Methods are called after `.` and must include an argument list: `point.sum()`.
 - Method overloading is not supported.
 - A class cannot have both a field and a method with the same name.
-- Field types may be `Int`, `String`, `Bool`, `Unit`, a class type, or a trait type.
+- Field types may be `Int`, `String`, `Bool`, `None`, a class type, or a trait type.
 - Objects are immutable; fields are read-only from Vera source.
 - The compiler generates a constructor with one parameter per field, in field declaration order.
   Construction follows the named-argument rules: `Point(x = 1, y = 2)`.
 - A class without fields has exactly one value, so it is a singleton written by its name, with no
   constructor call: `Empty`, `print(Empty)`, `Geometry.square(3)`. Writing `Empty()` is an error with
-  a hint. `Display` prints its name (`Empty`). `Unit` is the built-in example.
+  a hint. `Display` prints its name (`Empty`). `None` is the built-in example.
 - Field access uses `.` and can be chained: `line.start.x`.
 - Class types can be used in parameter, return, and local type annotations.
 - Each class compiles to its own JVM class with final fields, a generated constructor, and public
@@ -235,8 +235,8 @@ class Square has Shape {
     built-in trait.
   - Requirements must not form a cycle. The built-in traits `Eq` and `Display` are not types.
 - Traits cannot declare default method bodies or overloads.
-- Trait method parameter types may be `Int`, `String`, `Bool`, `Unit`, class types, or trait types; return types
-  follow the function rules, so a `Unit` method leaves its return type out.
+- Trait method parameter types may be `Int`, `String`, `Bool`, `None`, class types, or trait types; return types
+  follow the function rules, so a method that returns nothing leaves its return type out.
 - Trait and interface names share the top-level namespace with functions and classes.
 - Traits are closed: only classes in the same module can have them, and a program is one module
   for now. A trait's cases are therefore always known, so a `match` on a `Shape` can check that it
@@ -251,7 +251,7 @@ class Square has Shape {
 - Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
 - A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
   objects stay comparable and printable.
-- Classes without fields, including `Unit` and field-less trait cases, implicitly have `Eq` and
+- Classes without fields, including `None` and field-less trait cases, implicitly have `Eq` and
   `Display`: they have a single value, so `Empty == Empty` holds and `print(Color.Red)` prints
   `Color.Red`. Writing `has Eq` on them is allowed but redundant. A trait value still needs its trait
   to require `Eq` or `Display`.
@@ -402,15 +402,16 @@ fn countdown(from: Int) {
 | `Int`    | 32-bit signed integer         | `0`, `42`, `-2147483648` |
 | `String` | Text                          | `"hello"`              |
 | `Bool`   | Boolean                       | `True`, `False`        |
-| `Unit`   | Exactly one value             | `Unit`                 |
+| `None`   | Nothing; exactly one value    | `None`                 |
 | Class    | User-defined immutable object | `Point`                |
 
-- `Unit` is a real value: it can be stored in fields and variables, passed, and returned. It is the
-  built-in class without fields, so like any such class it is a singleton written by its name.
-  The unit value is written `Unit`. Omitted return types and `print` produce `Unit`.
-- `True` and `False` are the two variants of `Bool`, just as `Unit` is the single variant of `Unit`.
+- `None` is the value for "nothing", like Kotlin's `Unit` and Java's `void`: a function without a
+  return type returns it, and so do `print` and an `if` without `else`. It is a real value: it can be
+  stored in fields and variables, passed, and returned. It is the built-in class without fields, so
+  like any such class it is a singleton written by its name.
+- `True` and `False` are the two variants of `Bool`, just as `None` is the single value of its type.
   They print as written: `print(1 < 2)` outputs `True`.
-- Casing convention: types and variants are uppercase (`Int`, `Point`, `True`, `Unit`); variables,
+- Casing convention: types and variants are uppercase (`Int`, `Point`, `True`, `None`); variables,
   parameters, fields, functions, and methods are lowercase. Vera has no primitive types to treat
   differently.
 - String literals may contain any character except an unescaped `"` and raw newlines.
@@ -452,7 +453,7 @@ True != False
 - `==` and `!=` produce `Bool`.
 - `Int`, `Bool`, and `String` values compare by value; `String` equality compares contents, not
   reference identity.
-- `Unit` values are always equal.
+- `None` values are always equal.
 - Objects of the same class compare structurally, field by field, when the class has the `Eq`
   trait; nested objects compare recursively. Comparing objects of a class without `Eq` is
   rejected, and objects of different classes cannot be compared.
@@ -484,7 +485,7 @@ print("\{user.name} has \{user.count()} items")
 - `\{expr}` inside a string literal inserts the value of `expr`. Any expression is allowed,
   including calls, `if` expressions, and nested strings, but a placeholder must fit on one line.
 - Values render exactly as `print` renders them: `Int` and `String` directly, `Bool` as
-  `True`/`False`, `Unit` as `Unit`, and objects through their `Display` trait. Using an object whose
+  `True`/`False`, `None` as `None`, and objects through their `Display` trait. Using an object whose
   class lacks `Display` is a compile error.
 - Placeholders are evaluated left to right.
 - A plain `{` is ordinary text, so `"{\"key\": \{value}}"` works. Write `\\{` for a literal
@@ -565,9 +566,9 @@ if condition {
 - `if` is an expression when both branches are present.
 - A branch result is its final expression; earlier expressions are discarded.
 - Both branches must have the same type.
-- A branch without a final expression produces `Unit`.
-- `if` without `else` produces `Unit`: a missing `else` is `else { Unit }`. As a statement its branch
-  value is discarded, but where its value is used the branch must be `Unit` too, so
+- A branch without a final expression produces `None`.
+- `if` without `else` produces `None`: a missing `else` is `else { None }`. As a statement its branch
+  value is discarded, but where its value is used the branch must be `None` too, so
   `val x = if c { 1 }` is an error that asks for an `else`.
 
 ```vera
@@ -617,7 +618,7 @@ fn area(shape: Shape): Int = match shape {
 - An arm is `Pattern -> expression`, `Pattern -> { block }`, or `Pattern -> return / break /
   continue`, one arm per line.
 - `match` is an expression. Arms must have the same type or share one user trait. A `match` used as a
-  statement may have `Unit` arms, and one whose arms all return ends the function like an `if`.
+  statement may have `None` arms, and one whose arms all return ends the function like an `if`.
 - The matched expression is evaluated once.
 
 ### `while`
@@ -669,17 +670,17 @@ while True {
 print(42)
 print("hello")
 print(True)
-print(Unit)
+print(None)
 print(Point(x = 1, y = 2))
 ```
 
 - Writes one value followed by a line feed (`\n`) to standard output. The line ending is `\n` on
   every platform, so output is the same on Windows and Linux.
-- Prints `Int` and `String` values directly, `Bool` values as `True` or `False`, and `Unit` as
-  `Unit`.
+- Prints `Int` and `String` values directly, `Bool` values as `True` or `False`, and `None` as
+  `None`.
 - Prints an object as `ClassName(field: value, ...)` only when its class has the `Display`
   trait; nested objects print recursively through their own `Display` implementations.
-- Returns `Unit`.
+- Returns `None`.
 
 ## Comments
 
@@ -741,7 +742,7 @@ program        = { EOL } { declaration { EOL } } EOF
 declaration    = function | class | trait | interface
 
 function       = "fn" IDENT signature ( block | "=" expression )
-signature      = "(" [ parameter { "," parameter } [ "," ] ] ")" [ ":" type ]   (* type is not "Unit" *)
+signature      = "(" [ parameter { "," parameter } [ "," ] ] ")" [ ":" type ]   (* type is not "None" *)
 parameter      = IDENT ":" type
 
 class          = "class" IDENT [ hasList ] [ implementsList ] "{" { EOL } { member statementEnd } "}"
@@ -761,7 +762,7 @@ classBody      = "{" { EOL } { member statementEnd } "}"
 interface      = "interface" IDENT [ requiresList ] "{" { EOL } { interfaceItem } "}"
 interfaceItem  = ( traitMethod | traitField ) statementEnd
 
-type           = "Int" | "String" | "Bool" | "Unit" | typeName
+type           = "Int" | "String" | "Bool" | "None" | typeName
 ```
 
 ### Statements
@@ -798,7 +799,7 @@ unary          = "-" INT                          (* folded into one literal, e.
                | chained
 chained        = primary { "." IDENT | "(" [ argument { "," argument } [ "," ] ] ")" }
 argument       = [ IDENT "=" ] expression      (* names required for 2+ written arguments *)
-primary        = INT | STRING | template | "True" | "False" | "Unit" | IDENT
+primary        = INT | STRING | template | "True" | "False" | "None" | IDENT
                | "(" expression ")"
                | if
                | match
@@ -883,13 +884,14 @@ error: argument 1 of function add must be named: write `left = ...`
 | `;` | end the statement with a newline |
 | `/* ... */` | start each line with `//` |
 | `===`, `!==` | use `==` and `!=`, which compare values |
-| `!!`, `?.`, `?:`, `null` | Vera has no `null` |
+| `!!`, `?.`, `?:`, `null` | Vera has no `null`; the value for nothing is `None` |
 | `c ? a : b` | write `if c { a } else { b }` |
 | `&`, `\|`, `^`, `~`, `<<`, `>>` | no bitwise operators |
 | `0x10`, `1_000`, `10L`, `1.5` | only decimal `Int` literals |
 | `'c'`, `"""..."""` | strings use double quotes and stay on one line |
 | `true`, `false` | write `True`, `False` |
-| `int`, `boolean`, `void`, `Long`, `Any` as types | use `Int`, `Bool`, `Unit`; there is no universal type |
+| `int`, `boolean`, `Long`, `Any` as types | use `Int` and `Bool`; there is no universal type |
+| `void`, `Unit` | leave out the return type; the value for nothing is `None` |
 | `var count = 0`, `int count = 0`, `lateinit var` | declare with `val name: Type = ...` (or `mut val`) |
 | `val x: Int` assigned later | give the `val` its value, or choose it with `if` |
 | top-level `val`, `const val` | use a function: `fn limit(): Int = 1` |

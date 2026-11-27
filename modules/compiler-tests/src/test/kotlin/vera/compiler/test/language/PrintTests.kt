@@ -39,7 +39,7 @@ class PrintTests {
                 print(1 + 2 * 3)
                 print("Hello World!")
                 print(True)
-                print(Unit)
+                print(None)
                 print(doNothing())
                 print(Point(1))
             }
@@ -48,20 +48,20 @@ class PrintTests {
             "7",
             "Hello World!",
             "True",
-            "Unit",
-            "Unit",
+            "None",
+            "None",
             "Point(x: 1)",
         )
 
         @Test
-        fun `print returns Unit`() = assertPrints(
+        fun `print returns None`() = assertPrints(
             """
             fn main() {
                 print(print(1))
             }
             """,
             "1",
-            "Unit",
+            "None",
         )
 
         @Test

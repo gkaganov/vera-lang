@@ -100,14 +100,14 @@ class StringTests {
                 print("Hello, \{name}!")
                 print("\{a} + \{b} = \{a + b}")
                 print("\{42}")
-                print("ok: \{a < b}, unit: \{Unit}")
+                print("ok: \{a < b}, none: \{None}")
                 print("point \{point} sums to \{point.sum()}")
             }
             """,
             "Hello, Vera!",
             "2 + 3 = 5",
             "42",
-            "ok: True, unit: Unit",
+            "ok: True, none: None",
             "point Point(x: 1, y: 2) sums to 3",
         )
 

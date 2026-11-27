@@ -38,8 +38,8 @@ import vera.ast.VeraTemplateValue
 import vera.ast.VeraType
 import vera.ast.VeraUnaryOperation
 import vera.ast.VeraUnaryOperator
-import vera.ast.VeraUnitLiteral
-import vera.ast.VeraUnitReturnBlock
+import vera.ast.VeraNoneLiteral
+import vera.ast.VeraNoneReturnBlock
 import vera.ast.VeraWhileStatement
 import vera.ast.render
 import vera.jvm.ir.JvmComparisonOperator
@@ -78,9 +78,9 @@ import vera.jvm.ir.JvmStaticCall
 import vera.jvm.ir.JvmStatement
 import vera.jvm.ir.JvmStringLiteral
 import vera.jvm.ir.JvmType
-import vera.jvm.ir.JvmUnitLiteral
-import vera.jvm.ir.JvmUnitReturnBlock
-import vera.jvm.ir.JvmUnitType
+import vera.jvm.ir.JvmNoneLiteral
+import vera.jvm.ir.JvmNoneReturnBlock
+import vera.jvm.ir.JvmNoneType
 import vera.jvm.ir.JvmUpcast
 import vera.jvm.ir.JvmSingletonValue
 import vera.jvm.ir.JvmBlockExpression
@@ -227,7 +227,7 @@ private class JvmFunctionLoweringState(
         val loweredStatements = lowerStatementList(veraBody.block.statements)
         val jvmStatements = loweredStatements.mapNotNull { loweredStatement -> loweredStatement.jvmStatement }.toMutableList()
         if (loweredStatements.none { loweredStatement -> loweredStatement.returns }) {
-            if (currentReturnType != JvmUnitType) {
+            if (currentReturnType != JvmNoneType) {
                 throw JvmLoweringException.MissingReturnStatement(currentReturnType, missingReturnHint(veraBody, loweredStatements))
                     .at(veraFunction.span)
             }
@@ -266,7 +266,7 @@ private class JvmFunctionLoweringState(
     }
 
     /**
-     * Lowers `= expression`, which returns the expression's value. An omitted return type means `Unit`,
+     * Lowers `= expression`, which returns the expression's value. An omitted return type means `None`,
      * so an expression of another type needs its return type written out.
      */
     private fun lowerExpressionBody(
@@ -311,7 +311,7 @@ private class JvmFunctionLoweringState(
                 val jvmValue = veraStatement.expression
                     ?.let { veraExpression -> lowerExpression(veraExpression) }
                 val jvmReturnExpression = if (jvmValue == null) {
-                    if (currentReturnType != JvmUnitType) {
+                    if (currentReturnType != JvmNoneType) {
                         throw JvmLoweringException.MissingReturnValue(currentReturnType)
                     }
                     null
@@ -368,7 +368,7 @@ private class JvmFunctionLoweringState(
         } finally {
             loopExpressionDepths.removeLast()
         }
-        return JvmWhile(jvmCondition, JvmUnitReturnBlock(jvmBody))
+        return JvmWhile(jvmCondition, JvmNoneReturnBlock(jvmBody))
     }
 
     /**
@@ -441,7 +441,7 @@ private class JvmFunctionLoweringState(
      * Lowers an expression that forms a whole statement, so it starts on an empty operand stack. Only an
      * `if` keeps that position for its branches; any other expression nests its operands. [valueUsed] is
      * false for an expression statement and a block's final expression, whose `if` may omit `else`
-     * with a non-`Unit` branch (a block's value is still checked where it is used).
+     * with a non-`None` branch (a block's value is still checked where it is used).
      */
     private fun lowerStatementExpression(veraExpression: VeraPrimaryExpression, valueUsed: Boolean = true): LoweredExpression =
         if (veraExpression is VeraIfExpression) {
@@ -453,8 +453,8 @@ private class JvmFunctionLoweringState(
         }
 
     /**
-     * Lowers `if`. A missing `else` is `else { Unit }`: as a statement the branch value is discarded, but
-     * where the value is used ([valueUsed]) the branch must be `Unit` like any other branch pair.
+     * Lowers `if`. A missing `else` is `else { None }`: as a statement the branch value is discarded, but
+     * where the value is used ([valueUsed]) the branch must be `None` like any other branch pair.
      */
     private fun lowerIfExpression(veraIfExpression: VeraIfExpression, valueUsed: Boolean = true): LoweredExpression {
         val jvmCondition = nested { lowerPrimaryExpression(veraIfExpression.condition) }
@@ -465,8 +465,8 @@ private class JvmFunctionLoweringState(
         val loweredElse = veraIfExpression.elseBlock?.let { veraElseBlock -> lowerBlock(veraElseBlock) }
         if (loweredElse == null) {
             val thenType = loweredThen.jvmBlock.type
-            if (valueUsed && !loweredThen.returns && thenType != JvmUnitType) {
-                throw JvmLoweringException.IfBranchTypeMismatch(thenType, JvmUnitType, missingElse = true)
+            if (valueUsed && !loweredThen.returns && thenType != JvmNoneType) {
+                throw JvmLoweringException.IfBranchTypeMismatch(thenType, JvmNoneType, missingElse = true)
             }
             return LoweredExpression(JvmIfExpression(jvmCondition, loweredThen.jvmBlock, null), returns = false)
         }
@@ -600,7 +600,7 @@ private class JvmFunctionLoweringState(
 
     private fun prependStatements(jvmStatements: List<JvmStatement>, jvmBlock: JvmBlock): JvmBlock = when (jvmBlock) {
         is JvmImplicitReturnBlock -> JvmImplicitReturnBlock(jvmStatements + jvmBlock.statements, jvmBlock.result)
-        is JvmUnitReturnBlock -> JvmUnitReturnBlock(jvmStatements + jvmBlock.statements)
+        is JvmNoneReturnBlock -> JvmNoneReturnBlock(jvmStatements + jvmBlock.statements)
         is JvmExplicitReturnBlock -> JvmExplicitReturnBlock(jvmStatements + jvmBlock.statements)
     }
 
@@ -674,9 +674,9 @@ private class JvmFunctionLoweringState(
             "constructed; construct a class that has it"
     }
 
-    /** Singleton values written by name, which are valid wherever a value is: `Unit`, `True`, `Empty`. */
+    /** Singleton values written by name, which are valid wherever a value is: `None`, `True`, `Empty`. */
     private fun singletonValueNames(): List<Identifier> =
-        listOf(JvmUnitType.name, Identifier("True"), Identifier("False")) +
+        listOf(JvmNoneType.name, Identifier("True"), Identifier("False")) +
             visibleClasses.values.filter { veraClass -> veraClass.fields.isEmpty() && veraClass.owner == null }.map { it.name }
 
     /** Why `name = ...` names no local: a field (objects are immutable), a function, or nothing. */
@@ -734,7 +734,7 @@ private class JvmFunctionLoweringState(
                     conformance.fitReason(veraClass, veraInterface)?.let { reason ->
                         "${veraClass.name.display} does not fit ${veraInterface.name.display}: $reason"
                     }
-                } ?: if (actualType == JvmUnitType) builtinFitHint(actualType) else null
+                } ?: if (actualType == JvmNoneType) builtinFitHint(actualType) else null
                 JvmType.INT, JvmType.STRING, JvmType.BOOL -> builtinFitHint(actualType)
                 else -> null
             }
@@ -974,7 +974,7 @@ private class JvmFunctionLoweringState(
     }
 
     private fun hasBuiltinTrait(className: Identifier, trait: Identifier): Boolean =
-        className == JvmUnitType.name || visibleClasses[className]?.traits?.contains(trait) == true
+        className == JvmNoneType.name || visibleClasses[className]?.traits?.contains(trait) == true
 
     private fun validateEqualityOperands(
         veraOperator: VeraOperator,
@@ -1204,8 +1204,8 @@ private class JvmFunctionLoweringState(
                     }
                 }
 
-                is VeraArguments -> throw if (dataIndex == 0 && veraChainedExpression.primaryExpression is VeraUnitLiteral) {
-                    JvmLoweringException.SingletonConstructed(JvmUnitType.name).at(chainedData.span)
+                is VeraArguments -> throw if (dataIndex == 0 && veraChainedExpression.primaryExpression is VeraNoneLiteral) {
+                    JvmLoweringException.SingletonConstructed(JvmNoneType.name).at(chainedData.span)
                 } else {
                     JvmLoweringException.ValueCallNotSupported().at(chainedData.span)
                 }
@@ -1564,7 +1564,7 @@ private class JvmFunctionLoweringState(
                 )
             }
 
-            is VeraUnitReturnBlock -> LoweredBlock(JvmUnitReturnBlock(jvmStatements), statementsReturn)
+            is VeraNoneReturnBlock -> LoweredBlock(JvmNoneReturnBlock(jvmStatements), statementsReturn)
         }
     }
 
@@ -1604,7 +1604,7 @@ private class JvmFunctionLoweringState(
                 JvmBoolLiteral(veraPrimaryExpression.value),
             )
 
-            is VeraUnitLiteral -> PrimaryResolution.Resolved(JvmUnitLiteral)
+            is VeraNoneLiteral -> PrimaryResolution.Resolved(JvmNoneLiteral)
 
             is VeraUnaryOperation -> PrimaryResolution.Resolved(lowerUnaryOperation(veraPrimaryExpression))
 

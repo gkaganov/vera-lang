@@ -96,20 +96,20 @@ class ClassTests {
                 val count: Int
                 val text: String
                 val active: Bool
-                val unit: Unit
+                val nothing: None
             }
             fn main() {
-                val message = Message(count = 1, text = "Hello", active = False, unit = Unit)
+                val message = Message(count = 1, text = "Hello", active = False, nothing = None)
                 print(message.count)
                 print(message.text)
                 print(message.active)
-                print(message.unit)
+                print(message.nothing)
             }
             """,
             "1",
             "Hello",
             "False",
-            "Unit",
+            "None",
         )
 
         @Test

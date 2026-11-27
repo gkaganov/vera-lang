@@ -100,7 +100,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val missingElse: Boolean = false,
     ) : JvmLoweringException(
         "if branches must have the same type, got ${thenType.render()} and ${elseType.render()}" +
-            if (missingElse) "; an `if` without `else` produces `Unit` when the condition is false, so add an `else`" else "",
+            if (missingElse) "; an `if` without `else` produces `None` when the condition is false, so add an `else`" else "",
     )
 
     /** The right side of `|>` names a callable without calling it. */
@@ -201,8 +201,8 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${name.display} conflicts with the generated program class",
     )
 
-    class ProgramClassConflictsWithUnit(val name: Identifier) : JvmLoweringException(
-        "program class ${name.display} conflicts with the built-in Unit class",
+    class ProgramClassConflictsWithNone(val name: Identifier) : JvmLoweringException(
+        "program class ${name.display} conflicts with the built-in None class",
     )
 
     class DuplicateClassField(
@@ -619,14 +619,14 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
             "got ${renderSignature(actualParameters, actualReturn)}",
     )
 
-    /** `fn name() = expression` whose expression is not `Unit` but has no return type written. */
+    /** `fn name() = expression` whose expression is not `None` but has no return type written. */
     class ExpressionBodyReturnTypeRequired(val function: Identifier, val actual: JvmType) : JvmLoweringException(
         "function ${function.display} returns ${actual.render()}, so its return type must be written: " +
             "`fn ${function.display}(...): ${actual.render()} = ...`",
     )
 
     class MissingReturnValue(val actual: JvmType) : JvmLoweringException(
-        "return without an expression requires a Unit function, but this function returns ${actual.render()}",
+        "return without an expression requires a function that returns None, but this function returns ${actual.render()}",
     )
 
     /** `point.x()`: a field followed by a call. */

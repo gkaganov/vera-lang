@@ -37,10 +37,10 @@ class TraitTests {
         )
 
         @Test
-        fun `rejects explicit Unit return types on trait methods`() = assertCompilationFails(
-            traitDeclaration("Resettable", "fn reset(): Unit"),
-            VeraParseException.ExplicitUnitReturnType::class,
-            "leave out the return type for a function that returns `Unit`",
+        fun `rejects explicit None return types on trait methods`() = assertCompilationFails(
+            traitDeclaration("Resettable", "fn reset(): None"),
+            VeraParseException.ExplicitNoneReturnType::class,
+            "leave out the return type for a function that returns `None`",
         )
 
         @Test
@@ -116,7 +116,7 @@ class TraitTests {
         )
 
         @Test
-        fun `trait methods with omitted return types match Unit methods`() = assertPrints(
+        fun `trait methods with omitted return types match None methods`() = assertPrints(
             """
             trait Greeter {
                 fn greet()
