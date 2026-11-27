@@ -278,6 +278,8 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - Tests are organized by language feature (`language/*Tests.kt`, `@Nested` per sub-feature), with
   error tests next to the successful ones; see [`docs/testing.md`](docs/testing.md). Every new compiler
   error needs a test; `ErrorCoverageTests` fails otherwise.
+- Tests run concurrently in JUnit, and Gradle builds modules in parallel with its build cache
+  (`gradle.properties`); tests must not change global state (`docs/testing.md`).
 
 ### Workflow Keywords
 

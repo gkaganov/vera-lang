@@ -52,12 +52,15 @@ fun `classes fit interfaces by their members`() = assertPrints(
 - `assertReturns(source, value)` calls `main` and compares its return value.
 - `assertJvmMainPrints(source, lines...)` runs the JVM entry point `main(String[])`.
 - `compileProgram(source)` returns the compiled classes for tests that inspect them by reflection.
-- Every helper that compiles a program runs the ClassFile API verifier on each generated class, so
-  every successful test also checks that its bytecode is valid.
+- The emitter runs the JVM verifier on every generated class (`BytecodeEmitException.InvalidBytecode`),
+  so every successful test also checks that its bytecode is valid.
 - All programs compile into the class `PROGRAM_CLASS`, also for error tests; tests about the program
   class name refer to the constant.
 - A source that starts with a line break is trimmed with `trimIndent`; any other source is used as
   is, so a test can build exact input such as CRLF line endings.
+- Tests run concurrently (`src/test/resources/junit-platform.properties`). Each program gets its own
+  class loader, and `print` output is captured per thread, so a test must not change other global
+  state such as system properties or `System.setOut`.
 
 Each error test is its own `@Test` calling `assertCompilationFails(source, ExpectedError::class,
 "message part")`. Every error reachable from source must carry a source span

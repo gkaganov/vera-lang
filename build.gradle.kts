@@ -18,3 +18,11 @@ subprojects {
     extensions.configure<KotlinJvmProjectExtension> { jvmToolchain(jvmVersion) }
     extensions.configure<JavaPluginExtension> { toolchain.languageVersion.set(JavaLanguageVersion.of(jvmVersion)) }
 }
+
+// Test JVMs are short-lived: the quick C1 compiler and the serial collector start faster than the
+// defaults and are fast enough for a suite that runs for a few seconds.
+subprojects {
+    tasks.withType<Test>().configureEach {
+        jvmArgs("-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC")
+    }
+}
