@@ -535,6 +535,13 @@ class HabitTests {
             VeraParseException.JavaSyntax::class,
             "patterns bind fields by name, without a type: write `radius`",
         )
+
+        @Test
+        fun `Java and Kotlin lowercase Bool patterns`() = assertCompilationFails(
+            "fn describe(flag: Bool): String = match flag {\n    true -> \"on\"\n    False -> \"off\"\n}",
+            JvmLoweringException.MatchPatternNotACase::class,
+            "true is not a case of Bool; did you mean `True`?",
+        )
     }
 
     @Nested

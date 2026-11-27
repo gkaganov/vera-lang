@@ -108,9 +108,10 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   their transitive closure after `validateRequirements` rejects unknown, repeated, or cyclic ones.
   Cases get their owner's requirements added to `traits`; other classes must list them
   (`MissingRequiredTrait`). A trait's interface extends its required user traits (which permit it in
-  turn) and declares `equals(Object)`/`toString()` when it requires `Eq`/`Display`. Classes with `Eq`
-  also get `JvmObjectMethods.objectEqualsMethod`, an `equals(Object)` that is structural for the
-  same class; trait values compare and print through the interface (`traitEqualsCall`,
+  turn) and declares `equals(Object)` and `hashCode()` when it requires `Eq`, and `toString()` when it
+  requires `Display`. Classes with `Eq` also get `JvmObjectMethods.objectEqualsMethod`, an
+  `equals(Object)` that is structural for the same class, and `hashCodeMethod`, which combines field
+  hashes as Java does (`31 * hash + field`, seeded with the class name's hash so singleton cases differ); trait values compare and print through the interface (`traitEqualsCall`,
   `traitToStringCall`). `coerce` upcasts a trait value to a trait it requires.
 - Required fields: `VeraTraitDeclaration.fields` are requirements, not storage. `validateClassTraits`
   checks that each class with the trait declares the field with the same type (`MissingTraitField`,
@@ -140,7 +141,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   `JvmLet` temporary and lowers to a chain of `JvmIfExpression`s testing `JvmInstanceOf`; the last arm
   is untested (`JvmBlockExpression`) because exhaustiveness rules out every other case. The scrutinee
   must be a trait (cases: the classes that have it, since traits are closed) or a single class. Arms bind fields from a
-  `JvmCheckCast` of the temporary in their own scope. `if` and `match` branch types unify through
+  `JvmCheckCast` of the temporary in their own scope. A `match` on a `Bool` (`lowerBoolMatch`) has the cases
+  `True` and `False` and lowers to one `JvmIfExpression` on the scrutinee, with the `True` arm first;
+  the parser reads `True`/`False` patterns as `VeraPattern`s without fields. `if` and `match` branch types unify through
   `unifyTypes` (equal types, a branch type the others convert to, or the single trait they share) and
   `coerceBlock`.
 - Bindings: `val` is immutable and `mut val` (`VeraBindStatement.mutable`) can be rebound; the lowering

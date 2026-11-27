@@ -12,7 +12,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 
 ### Closed traits, trait cases, and structural interfaces
 
-- Status: implementation steps 1–6 done. Remaining: the items under *Remaining* below.
+- Status: implementation steps 1–6 done, and `match` on `Bool` (decision 9). Remaining: the items
+  under *Remaining* below.
 - Area: parser, AST, lowering, emitter.
 - Model:
   - `trait` is closed: only classes in its module can join it. Traits compile to sealed interfaces
@@ -81,15 +82,12 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   2. Field-less classes as singletons, with `None` as one of them. Done.
   3. Block-form cases: qualified names, nested JVM classes, unqualified patterns, qualified
      `Display`. Done.
-  4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values. Done; a
-     matching `hashCode` for Java collections is still missing.
+  4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values, and a
+     matching `hashCode` for Java collections. Done.
   5. Required fields in traits. Done.
   6. Structural `interface`s with `implements`. Done. Traits whose values fit an interface extend
      it; traits and interfaces cannot require each other.
 - Remaining:
-  - `Bool` as a block-form trait with default-imported cases, so `match` covers `True` and `False`
-    (decision 9).
-  - `hashCode` alongside the generated `equals(Object)`, for Java collections.
   - Branch types from the expected type: `val named: Named = if c { Dog } else { User(...) }` is
     rejected today, because branches of different classes unify only to a shared trait.
   - Generic singletons (decision 7) and sugar against long trait lists.

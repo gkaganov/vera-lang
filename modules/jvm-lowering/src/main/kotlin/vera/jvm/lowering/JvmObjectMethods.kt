@@ -12,6 +12,9 @@ import vera.jvm.ir.JvmIfExpression
 import vera.jvm.ir.JvmImplicitReturnBlock
 import vera.jvm.ir.JvmInstanceOf
 import vera.jvm.ir.JvmInstanceCall
+import vera.jvm.ir.JvmIntBinary
+import vera.jvm.ir.JvmIntBinaryOperator
+import vera.jvm.ir.JvmIntLiteral
 import vera.jvm.ir.JvmLocal
 import vera.jvm.ir.JvmLocalRead
 import vera.jvm.ir.JvmLogicalAnd
@@ -30,13 +33,14 @@ import vera.shared.model.Identifier
 /**
  * Generated implementations of the built-in traits.
  *
- * `Eq` gives a structural `equals`; `Display` gives a `toString`. Methods are only generated for
- * classes that opt in by listing the trait after `has`.
+ * `Eq` gives a structural `equals` and a matching `hashCode`; `Display` gives a `toString`. Methods are
+ * only generated for classes that opt in by listing the trait after `has`.
  */
 internal object JvmObjectMethods {
 
     val equalsName: Identifier = Identifier("equals")
     val toStringName: Identifier = Identifier("toString")
+    val hashCodeName: Identifier = Identifier("hashCode")
 
     /** Member names reserved because they are `java.lang.Object` methods that Vera generates. */
     val reservedNames: Set<String> = setOf("toString", "equals", "hashCode")
@@ -86,6 +90,9 @@ internal object JvmObjectMethods {
     /** `toString(): String`. */
     val toStringSignature: JvmMethodSignature = JvmMethodSignature(emptyList(), JvmType.STRING)
 
+    /** `hashCode(): Int`. */
+    val hashCodeSignature: JvmMethodSignature = JvmMethodSignature(emptyList(), JvmType.INT)
+
     /**
      * Builds `equals(Object): Bool` for a class with `Eq`, overriding `Object.equals`: it is the
      * structural `equals` when the other object has the same class, and `False` otherwise. Values of a
@@ -102,6 +109,28 @@ internal object JvmObjectMethods {
             listOf(JvmParameter(otherName, JvmType.OBJECT)),
             JvmType.BOOL,
             JvmExplicitReturnBlock(listOf(JvmReturn(JvmLogicalAnd(sameClass, structurallyEqual)))),
+            receiver,
+        )
+    }
+
+    /**
+     * Builds `hashCode(): Int` for a class with `Eq`, overriding `Object.hashCode` so that objects equal
+     * by [objectEqualsMethod] have the same hash, as Java collections require. It combines the field
+     * hashes as `31 * hash + field`, starting from the hash of the class name, so field-less cases of
+     * one trait hash differently.
+     */
+    fun hashCodeMethod(className: Identifier, fields: List<JvmField>): JvmMethod {
+        val receiver = JvmLocal(thisName, JvmType.ClassType(className))
+        val seed: JvmExpression = JvmIntLiteral(className.display.hashCode())
+        val result = fields.fold(seed) { hash, field ->
+            val fieldHash = fieldHash(className, field, receiver) ?: return@fold hash
+            JvmIntBinary(JvmIntBinaryOperator.ADD, JvmIntBinary(JvmIntBinaryOperator.MUL, JvmIntLiteral(31), hash), fieldHash)
+        }
+        return JvmMethod(
+            hashCodeName,
+            emptyList(),
+            JvmType.INT,
+            JvmExplicitReturnBlock(listOf(JvmReturn(result))),
             receiver,
         )
     }
@@ -246,6 +275,35 @@ internal object JvmObjectMethods {
             )
         }
     }
+
+    /** The hash of one field, as Java computes it for the same value; `None` fields add nothing. */
+    private fun fieldHash(owner: Identifier, field: JvmField, receiver: JvmLocal): JvmExpression? {
+        val value = fieldRead(owner, field, receiver)
+        return when (val type = field.type) {
+            JvmNoneType -> null
+            JvmType.INT -> value
+            // `Boolean.hashCode` values.
+            JvmType.BOOL -> JvmIfExpression(
+                condition = value,
+                thenBlock = JvmImplicitReturnBlock(emptyList(), JvmIntLiteral(1231)),
+                elseBlock = JvmImplicitReturnBlock(emptyList(), JvmIntLiteral(1237)),
+            )
+            JvmType.STRING -> hashCodeCall(value, Identifier("java.lang.String"), ownerIsInterface = false)
+            is JvmType.ClassType -> hashCodeCall(value, type.name, ownerIsInterface = false)
+            is JvmType.InterfaceType -> hashCodeCall(value, type.name, ownerIsInterface = true)
+            else -> throw JvmLoweringException.InternalInvariant("unsupported class field type ${type.render()}")
+        }
+    }
+
+    private fun hashCodeCall(receiver: JvmExpression, owner: Identifier, ownerIsInterface: Boolean): JvmExpression =
+        JvmInstanceCall(
+            receiver = receiver,
+            ownerClass = owner,
+            methodName = hashCodeName,
+            arguments = emptyList(),
+            signature = hashCodeSignature,
+            ownerIsInterface = ownerIsInterface,
+        )
 
     private fun appendField(
         builder: JvmExpression,

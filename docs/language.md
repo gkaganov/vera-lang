@@ -246,7 +246,8 @@ class Square has Shape {
 - When `if` or `match` branches produce objects of different classes, the result has the one user
   trait they all share: `if big { Circle(5) } else { Empty }` is a `Shape`.
 - Two built-in traits are always available and are implemented by the compiler:
-  - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
+  - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects, and a
+    matching `hashCode`, so objects passed to Java work as keys in its collections.
   - `Display` generates a `toString`, enabling `print` of the class's objects.
 - Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
 - A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
@@ -410,6 +411,8 @@ fn countdown(from: Int) {
   stored in fields and variables, passed, and returned. It is the built-in class without fields, so
   like any such class it is a singleton written by its name.
 - `True` and `False` are the two variants of `Bool`, just as `None` is the single value of its type.
+  `Bool` is a closed trait, `trait Bool { True, False }`, so a `match` on a `Bool` covers `True` and
+  `False`; it stays a JVM `boolean`.
   They print as written: `print(1 < 2)` outputs `True`.
 - Casing convention: types and variants are uppercase (`Int`, `Point`, `True`, `None`); variables,
   parameters, fields, functions, and methods are lowercase. Vera has no primitive types to treat
@@ -607,8 +610,8 @@ fn area(shape: Shape): Int = match shape {
 }
 ```
 
-- `match` selects the arm whose class matches the object. The value matched must be a trait
-  or a single class (which destructures it).
+- `match` selects the arm whose class matches the object. The value matched must be a trait, a
+  single class (which destructures it), or a `Bool`, whose arms are `True ->` and `False ->`.
 - Every case must be covered exactly once. There is no catch-all arm, so adding a class to a
   trait makes every `match` that misses it a compile error that names the missing cases.
 - A pattern names a class and, optionally, fields to bind: `Rect(width, height)` binds the fields to
@@ -808,7 +811,7 @@ template       = TEMPLATE_START expression { TEMPLATE_MIDDLE expression } TEMPLA
 if             = "if" expression block [ { EOL } "else" ( if | block ) ]
 match          = "match" expression "{" { EOL } arm statementEnd { arm statementEnd } "}"
 arm            = pattern "->" ( block | expression | "return" [ expression ] | "break" | "continue" )
-pattern        = typeName [ "(" fieldPattern { "," fieldPattern } [ "," ] ")" ]
+pattern        = "True" | "False" | typeName [ "(" fieldPattern { "," fieldPattern } [ "," ] ")" ]
 typeName       = IDENT [ "." IDENT ]                (* Owner.Case names a trait case *)
 fieldPattern   = IDENT [ "=" IDENT ]
 ```

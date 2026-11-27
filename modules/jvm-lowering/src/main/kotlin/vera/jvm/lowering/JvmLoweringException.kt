@@ -221,7 +221,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     )
 
     class MatchScrutineeNotAnObject(val actual: JvmType) : JvmLoweringException(
-        "match needs an object of a class or trait, got ${actual.render()}",
+        "match needs a Bool or an object of a class or trait, got ${actual.render()}",
     )
 
     /** A pattern class that is not one of the scrutinee type's cases. */

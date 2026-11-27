@@ -180,6 +180,11 @@ private class JvmFunctionLoweringState(
     /** A lowered block and whether executing it always returns from the current function. */
     private data class LoweredBlock(val jvmBlock: JvmBlock, val returns: Boolean)
 
+    /** `Bool` is the closed trait `trait Bool { True, False }`, whose cases are written unqualified. */
+    private val trueCase = Identifier("True")
+    private val falseCase = Identifier("False")
+    private val boolCases = listOf(trueCase, falseCase)
+
     /** A visible local: its IR local, whether it may be rebound (`mut val`), and whether it is a parameter. */
     private data class LocalBinding(val jvmLocal: JvmLocal, val mutable: Boolean, val parameter: Boolean)
 
@@ -491,6 +496,7 @@ private class JvmFunctionLoweringState(
      */
     private fun lowerMatchExpression(veraMatch: VeraMatchExpression): LoweredExpression {
         val jvmScrutinee = nested { lowerPrimaryExpression(veraMatch.scrutinee) }
+        if (jvmScrutinee.type == JvmType.BOOL) return lowerBoolMatch(veraMatch, jvmScrutinee)
         val cases = matchCases(jvmScrutinee.type, veraMatch.scrutinee)
         val scrutineeName = Identifier(jvmScrutinee.type.render())
         val jvmTemporary = JvmLocal(Identifier("<match${temporaryCount++}>"), jvmScrutinee.type)
@@ -539,6 +545,38 @@ private class JvmFunctionLoweringState(
         return LoweredExpression(
             JvmLet(jvmTemporary, jvmScrutinee, jvmChain),
             returns = loweredArms.all { (_, loweredArm) -> loweredArm.returns },
+        )
+    }
+
+    /**
+     * Lowers a `match` on a `Bool`, whose cases are `True` and `False`. It stays a JVM `boolean`, so the
+     * match is an `if` on the scrutinee with the `True` arm first, whatever order the arms are written in.
+     */
+    private fun lowerBoolMatch(veraMatch: VeraMatchExpression, jvmScrutinee: JvmExpression): LoweredExpression {
+        val boolName = Identifier(JvmType.BOOL.render())
+        val loweredArms = linkedMapOf<Identifier, LoweredBlock>()
+        veraMatch.arms.forEach { veraArm ->
+            val case = veraArm.pattern.className
+            if (case !in boolCases) {
+                throw JvmLoweringException.MatchPatternNotACase(case, boolName, JvmNameHints.closest(case, boolCases))
+                    .at(veraArm.pattern.span)
+            }
+            if (case in loweredArms) throw JvmLoweringException.MatchArmRepeated(case).at(veraArm.pattern.span)
+            loweredArms[case] = withScope { lowerBlock(veraArm.body) }
+        }
+        val trueArm = loweredArms[trueCase]
+        val falseArm = loweredArms[falseCase]
+        if (trueArm == null || falseArm == null) {
+            val missing = boolCases.filterNot { case -> case in loweredArms }
+            throw JvmLoweringException.MatchNotExhaustive(boolName, missing).at(veraMatch.span)
+        }
+
+        val armTypes = loweredArms.values.map { loweredArm -> loweredArm.jvmBlock.type }
+        val jvmType = unifyTypes(armTypes)
+            ?: throw JvmLoweringException.MatchArmTypeMismatch(armTypes.distinct()).at(veraMatch.span)
+        return LoweredExpression(
+            JvmIfExpression(jvmScrutinee, coerceBlock(trueArm.jvmBlock, jvmType), coerceBlock(falseArm.jvmBlock, jvmType)),
+            returns = trueArm.returns && falseArm.returns,
         )
     }
 
@@ -676,7 +714,7 @@ private class JvmFunctionLoweringState(
 
     /** Singleton values written by name, which are valid wherever a value is: `None`, `True`, `Empty`. */
     private fun singletonValueNames(): List<Identifier> =
-        listOf(JvmNoneType.name, Identifier("True"), Identifier("False")) +
+        listOf(JvmNoneType.name) + boolCases +
             visibleClasses.values.filter { veraClass -> veraClass.fields.isEmpty() && veraClass.owner == null }.map { it.name }
 
     /** Why `name = ...` names no local: a field (objects are immutable), a function, or nothing. */

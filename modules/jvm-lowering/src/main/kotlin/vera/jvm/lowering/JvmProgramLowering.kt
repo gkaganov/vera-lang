@@ -183,11 +183,15 @@ object JvmProgramLowering {
         traitDeclarations: List<VeraTraitDeclaration>,
         requirements: JvmTraitRequirements,
     ): JvmClass {
-        // A required user trait is a superinterface; requiring `Eq` or `Display` makes `equals(Object)`
-        // or `toString()` part of the interface, so trait-typed values can be compared or printed.
+        // A required user trait is a superinterface; requiring `Eq` makes `equals(Object)` and `hashCode()`
+        // part of the interface, and requiring `Display` makes `toString()` part of it, so trait-typed values
+        // can be compared, hashed, or printed.
         val requiredBuiltins = requirements.of(trait.name).filter { it in JvmBuiltinTraits.names }
         val objectMethods = buildList {
-            if (JvmBuiltinTraits.eq in requiredBuiltins) add(JvmAbstractMethod(JvmObjectMethods.equalsName, JvmObjectMethods.objectEqualsSignature))
+            if (JvmBuiltinTraits.eq in requiredBuiltins) {
+                add(JvmAbstractMethod(JvmObjectMethods.equalsName, JvmObjectMethods.objectEqualsSignature))
+                add(JvmAbstractMethod(JvmObjectMethods.hashCodeName, JvmObjectMethods.hashCodeSignature))
+            }
             if (JvmBuiltinTraits.display in requiredBuiltins) add(JvmAbstractMethod(JvmObjectMethods.toStringName, JvmObjectMethods.toStringSignature))
         }
         return JvmClass(
@@ -580,6 +584,7 @@ object JvmProgramLowering {
             if (hasEq) {
                 add(JvmObjectMethods.equalsMethod(veraClass.name, jvmFields))
                 add(JvmObjectMethods.objectEqualsMethod(veraClass.name))
+                add(JvmObjectMethods.hashCodeMethod(veraClass.name, jvmFields))
             }
             if (hasDisplay) add(JvmObjectMethods.toStringMethod(veraClass.name, jvmFields))
             // Fields required by the class's traits get accessors that implement the interfaces.

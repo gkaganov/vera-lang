@@ -1,11 +1,13 @@
 package vera.compiler.test.language
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertPrints
 import vera.compiler.test.assertReturns
 import vera.compiler.test.classDeclaration
+import vera.compiler.test.compileProgram
 import vera.compiler.test.function
 import vera.compiler.test.traitDeclaration
 import vera.jvm.lowering.JvmLoweringException
@@ -14,6 +16,38 @@ import vera.jvm.lowering.JvmLoweringException
 class BuiltinTraitTests {
     @Nested
     inner class Eq {
+        @Test
+        fun `objects with Eq hash consistently with equals for Java collections`() {
+            val program = compileProgram(
+                """
+                trait Shape requires Eq { Circle { val radius: Int }, Square }
+                class Label has Eq {
+                    val text: String
+                }
+                class Point has Eq {
+                    val x: Int
+                    val visible: Bool
+                    val label: Label
+                    val shape: Shape
+                    val nothing: None
+                }
+                fn first(): Point = Point(x = 1, visible = True, label = Label("a"), shape = Shape.Circle(2), nothing = None)
+                fn same(): Point = Point(x = 1, visible = True, label = Label("a"), shape = Shape.Circle(2), nothing = None)
+                fn other(): Point = Point(x = 1, visible = True, label = Label("a"), shape = Shape.Circle(3), nothing = None)
+                fn square(): Shape = Shape.Square
+                fn circle(): Shape = Shape.Circle(0)
+                """,
+            ).loadProgramClass()
+            fun call(name: String): Any = program.getMethod(name).invoke(null)
+
+            Assertions.assertEquals(call("first"), call("same"))
+            Assertions.assertEquals(call("first").hashCode(), call("same").hashCode())
+            Assertions.assertNotEquals(call("first"), call("other"))
+            Assertions.assertEquals(2, hashSetOf(call("first"), call("same"), call("other")).size)
+            Assertions.assertEquals(call("square").hashCode(), call("square").hashCode())
+            Assertions.assertNotEquals(call("square").hashCode(), call("circle").hashCode())
+        }
+
         @Test
         fun `objects with Eq compare structurally`() = assertPrints(
             """

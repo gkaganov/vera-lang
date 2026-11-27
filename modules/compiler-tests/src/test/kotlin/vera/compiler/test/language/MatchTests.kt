@@ -39,7 +39,7 @@ class MatchTests {
         fun `rejects match on values that are not objects`() = assertCompilationFails(
             function("print(match 1 {", "    Point -> 1", "})"),
             JvmLoweringException.MatchScrutineeNotAnObject::class,
-            "match needs an object of a class or trait, got Int",
+            "match needs a Bool or an object of a class or trait, got Int",
         )
     }
 
@@ -230,6 +230,117 @@ class MatchTests {
             function("match value {", "    Empty 0", "}"),
             VeraParseException.ExpectedToken::class,
             "expected `->` after the pattern, found `0`",
+        )
+    }
+
+    @Nested
+    inner class Bool {
+        @Test
+        fun `match on a Bool selects the True or False arm in any order`() = assertPrints(
+            """
+            fn check(label: String, value: Bool): Bool {
+                print(label)
+                return value
+            }
+            fn describe(flag: Bool): String = match flag {
+                False -> "off"
+                True -> "on"
+            }
+            fn main() {
+                print(describe(True))
+                print(describe(False))
+                val size = match check(label = "evaluated once", value = 1 < 2) {
+                    True -> 10
+                    False -> 20
+                }
+                print(size)
+                match size > 15 {
+                    True -> print("large")
+                    False -> {
+                        print("small")
+                    }
+                }
+            }
+            """,
+            "on",
+            "off",
+            "evaluated once",
+            "10",
+            "small",
+        )
+
+        @Test
+        fun `match arms on a Bool can return, break, and continue`() = assertPrints(
+            """
+            fn sign(value: Int): String {
+                match value < 0 {
+                    True -> return "negative"
+                    False -> return "not negative"
+                }
+            }
+            fn main() {
+                print(sign(-1))
+                print(sign(1))
+                mut val count = 0
+                while True {
+                    count = count + 1
+                    match count % 2 == 0 {
+                        True -> continue
+                        False -> print(count)
+                    }
+                    match count > 4 {
+                        True -> break
+                        False -> None
+                    }
+                }
+            }
+            """,
+            "negative",
+            "not negative",
+            "1",
+            "3",
+            "5",
+        )
+
+        @Test
+        fun `rejects a match on a Bool that misses a case`() = assertCompilationFails(
+            "fn describe(flag: Bool): String = match flag {\n    True -> \"on\"\n}",
+            JvmLoweringException.MatchNotExhaustive::class,
+            "match on Bool does not cover False",
+            line = 1,
+            column = 35,
+        )
+
+        @Test
+        fun `rejects a Bool case matched twice`() = assertCompilationFails(
+            "fn describe(flag: Bool): String = match flag {\n    True -> \"on\"\n    False -> \"off\"\n    True -> \"again\"\n}",
+            JvmLoweringException.MatchArmRepeated::class,
+            "True is matched more than once",
+            line = 4,
+            column = 5,
+        )
+
+        @Test
+        fun `rejects patterns that are not Bool cases`() = assertCompilationFails(
+            "fn describe(flag: Bool): String = match flag {\n    True -> \"on\"\n    Off -> \"off\"\n}",
+            JvmLoweringException.MatchPatternNotACase::class,
+            "Off is not a case of Bool",
+            line = 3,
+            column = 5,
+        )
+
+        @Test
+        fun `rejects Bool cases in a match on a trait`() = assertCompilationFails(
+            "trait Light { On, Off }\nfn describe(light: Light): String = match light {\n    True -> \"on\"\n    Off -> \"off\"\n}",
+            JvmLoweringException.MatchPatternNotACase::class,
+            "True is not a case of Light",
+        )
+
+        @Test
+        fun `rejects Bool match arms of different types`() = assertCompilationFails(
+            function("val value = match True {", "    True -> 1", "    False -> \"one\"", "}"),
+            JvmLoweringException.MatchArmTypeMismatch::class,
+            "match arms must have the same type or share one trait, got Int and String",
         )
     }
 

@@ -922,9 +922,13 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         return VeraMatchArm(pattern, body, SourceSpan(pattern.span.start, tokens[position - 1].span().end))
     }
 
-    /** Parses `ClassName` or `ClassName(field, field = binding)`. */
+    /** Parses `ClassName`, `ClassName(field, field = binding)`, or `True` / `False`, the cases of `Bool`. */
     private fun parsePattern(): VeraPattern {
         rejectPatternHabit()
+        if (at(VeraTokenType.BOOL_LITERAL)) {
+            val case = advance()
+            return VeraPattern(Identifier(case.text), emptyList(), case.span())
+        }
         val className = expect(VeraTokenType.IDENTIFIER, "a class name in the pattern")
         val patternName = parseQualifiedName(className)
         val fields = mutableListOf<VeraFieldPattern>()
