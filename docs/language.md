@@ -64,7 +64,7 @@ Reserved words cannot be used as identifiers:
 
 ## Program structure
 
-A program is a sequence of top-level function, class, and trait declarations.
+A program is a sequence of top-level function, class, trait, and interface declarations.
 
 ```vera
 fn add(a: Int, b: Int): Int {

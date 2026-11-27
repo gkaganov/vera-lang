@@ -817,7 +817,7 @@ private class VeraParserState(private val tokens: List<VeraToken>) {
         if (token.type == VeraTokenType.IDENTIFIER && token.text == "extends") {
             throw VeraParseException.JavaSyntax(
                 token,
-                "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
+                "Vera has no inheritance; share behaviour through traits with `has` and interfaces with `implements`, or compose classes",
             )
         }
         if (token.type == VeraTokenType.HAS) {

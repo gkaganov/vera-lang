@@ -570,7 +570,7 @@ class HabitTests {
         fun `Java inheritance with extends`() = assertCompilationFails(
             "class Square extends Shape {\n}",
             VeraParseException.JavaSyntax::class,
-            "Vera has no inheritance; share behaviour through traits with `has`, or compose classes",
+            "Vera has no inheritance; share behaviour through traits with `has` and interfaces with `implements`, or compose classes",
         )
 
         @Test
