@@ -22,9 +22,9 @@ class ProgramTests {
     inner class Syntax {
         @Test
         fun `rejects non-function declarations`() = assertCompilationFails(
-            "val value = 1",
+            "print(1)",
             VeraParseException.ExpectedDeclaration::class,
-            "expected a function, class, or trait declaration",
+            "expected a function, class, trait, or interface declaration, found 'print'",
         )
 
         @Test

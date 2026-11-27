@@ -31,8 +31,11 @@ private class VeraLexerState(private val source: String) {
                 '\r' -> lexCarriageReturn()
                 '}' if templatePlaceholders.lastOrNull()?.bracketDepth == openBrackets.size ->
                     lexPlaceholderEnd(templatePlaceholders.last())
+                '"' if source.startsWith("\"\"\"", index) -> throw VeraLexException.TextBlock(SourceLocation(line, column))
                 '"' -> lexString()
                 '/' if source.startsWith("//", index) -> skipComment()
+                '/' if source.startsWith("/*", index) -> throw VeraLexException.BlockComment(SourceLocation(line, column))
+                '\'' -> throw VeraLexException.CharLiteral(SourceLocation(line, column))
                 else -> when {
                     char in '0'..'9' -> lexInt()
                     char.isIdentifierStart() -> lexIdentifierOrKeyword()
@@ -204,6 +207,11 @@ private class VeraLexerState(private val source: String) {
         while (index < source.length && source[index] in '0'..'9') {
             advance()
         }
+        val next = source.getOrNull(index)
+        val fractionFollows = next == '.' && source.getOrNull(index + 1)?.let { it in '0'..'9' } == true
+        if (next != null && (next.isIdentifierPart() || fractionFollows)) {
+            throw VeraLexException.UnsupportedNumberLiteral(SourceLocation(startLine, startColumn))
+        }
         tokens += VeraToken(VeraTokenType.INT_LITERAL, source.substring(start, index), startLine, startColumn, column)
     }
 
@@ -225,9 +233,23 @@ private class VeraLexerState(private val source: String) {
         val next = source.getOrNull(index + 1)
 
         val (type, length) = when (char) {
+            '!' if next == '!' -> throw javaOperator("!!", "Vera has no `null`, so there is nothing to assert")
+            '!' if next == '=' && source.getOrNull(index + 2) == '=' ->
+                throw javaOperator("!==", "write `!=`; Vera has no reference identity, so `!=` compares values")
+            '=' if next == '=' && source.getOrNull(index + 2) == '=' ->
+                throw javaOperator("===", "write `==`; Vera has no reference identity, so `==` compares values")
             '!' if next != '=' -> throw javaOperator("!", "write `not` instead, for example `not done`")
             '&' if next == '&' -> throw javaOperator("&&", "write `and` instead")
             '|' if next == '|' -> throw javaOperator("||", "write `or` instead")
+            '&' -> throw javaOperator("&", "Vera has no bitwise operators; for logic write `and`")
+            '^' -> throw javaOperator("^", "Vera has no bitwise operators")
+            '~' -> throw javaOperator("~", "Vera has no bitwise operators")
+            '<' if next == '<' -> throw javaOperator("<<", "Vera has no bitwise operators")
+            '>' if next == '>' -> throw javaOperator(">>", "Vera has no bitwise operators")
+            '?' if next == '.' -> throw javaOperator("?.", "Vera has no `null`, so every value is present")
+            '?' if next == ':' -> throw javaOperator("?:", "Vera has no `null`, so every value is present")
+            '?' -> throw javaOperator("?", "Vera has no `? :`; write `if condition { a } else { b }`")
+            '@' -> throw javaOperator("@", "Vera has no annotations or labels; `break` and `continue` target the innermost `while`")
             '+' if next == '+' -> throw javaOperator("++", "write `x = x + 1` instead")
             '-' if next == '-' -> throw javaOperator("--", "write `x = x - 1` instead")
             '+' if next == '=' -> throw compoundAssignment(char)
@@ -256,6 +278,7 @@ private class VeraLexerState(private val source: String) {
             '<' -> VeraTokenType.LT to 1
             '>' -> VeraTokenType.GT to 1
             '|' if next == '>' -> VeraTokenType.FORWARD_APPLICATION to 2
+            '|' -> throw javaOperator("|", "Vera has no bitwise operators; for logic write `or`, and for forward application `|>`")
             ';' -> throw VeraLexException.UnexpectedSemicolon(SourceLocation(startLine, startColumn))
             else -> throw VeraLexException.UnexpectedCharacter(char, SourceLocation(startLine, startColumn))
         }

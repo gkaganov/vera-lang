@@ -27,10 +27,17 @@ class TypeTests {
         )
 
         @Test
-        fun `rejects out-of-range Int literals`() = assertCompilationFails(
-            function("print(999999999999999999999)"),
+        fun `rejects the first Int literal above the range`() = assertCompilationFails(
+            function("print(2147483648)"),
             VeraParseException.InvalidIntLiteral::class,
-            "invalid Int literal",
+            "Int literal 2147483648 is out of range; `Int` is 32-bit (-2147483648 to 2147483647)",
+        )
+
+        @Test
+        fun `rejects the first Int literal below the range`() = assertCompilationFails(
+            function("print(-2147483649)"),
+            VeraParseException.InvalidIntLiteral::class,
+            "Int literal -2147483649 is out of range",
         )
     }
 

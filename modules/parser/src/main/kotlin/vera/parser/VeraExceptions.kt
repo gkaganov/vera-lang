@@ -18,11 +18,35 @@ sealed class VeraLexException(message: String, val location: SourceLocation) : V
     class InvalidStringEscape(
         val escape: Char,
         location: SourceLocation,
-    ) : VeraLexException("invalid string escape '\\$escape'", location)
+    ) : VeraLexException(
+        "invalid string escape '\\$escape'; the escapes are `\\\"`, `\\\\`, `\\n`, `\\t`, `\\r`, `\\uXXXX`, and `\\{` " +
+            "to start a placeholder",
+        location,
+    )
 
     class InvalidUnicodeEscape(
         location: SourceLocation,
     ) : VeraLexException("`\\u` needs exactly four hex digits, as in `\\u00E9`", location)
+
+    /** The start of a Java or Kotlin block comment; Vera has only line comments. */
+    class BlockComment(
+        location: SourceLocation,
+    ) : VeraLexException("Vera has no block comments; start each line with `//`", location)
+
+    /** A Java or Kotlin `'c'` character literal. */
+    class CharLiteral(
+        location: SourceLocation,
+    ) : VeraLexException("Vera strings use double quotes, and there is no `Char` type: write `\"c\"`", location)
+
+    /** A Java or Kotlin triple-quoted text block. */
+    class TextBlock(
+        location: SourceLocation,
+    ) : VeraLexException("Vera has no multi-line strings; write `\\n` for a line break", location)
+
+    /** A number other than a decimal `Int`, such as `0x10`, `1_000`, `10L`, or `1.5`. */
+    class UnsupportedNumberLiteral(
+        location: SourceLocation,
+    ) : VeraLexException("Vera supports only decimal `Int` literals such as `1000`", location)
 
     class UnexpectedSemicolon(
         location: SourceLocation,
@@ -52,7 +76,10 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
 
     class ExpectedDeclaration(
         val found: VeraToken,
-    ) : VeraParseException("expected a function, class, or trait declaration, found ${found.describe()}", found)
+    ) : VeraParseException(
+        "expected a function, class, trait, or interface declaration, found ${found.describe()}",
+        found,
+    )
 
     class ExpectedToken(
         val expected: String,
@@ -71,9 +98,24 @@ sealed class VeraParseException(message: String, val location: SourceLocation, s
         val found: VeraToken,
     ) : VeraParseException("expected end of line, found ${found.describe()}", found)
 
+    /** `fn` inside a function body. */
+    class NestedFunction(
+        val token: VeraToken,
+    ) : VeraParseException("functions can only be declared at top level", token)
+
+    /** `\\{}` with nothing inside. */
+    class EmptyTemplatePlaceholder(
+        val token: VeraToken,
+    ) : VeraParseException("empty template placeholder; write an expression inside `\\{...}`", token)
+
     class InvalidIntLiteral(
         val token: VeraToken,
-    ) : VeraParseException("invalid Int literal '${token.text}'", token)
+        val negative: Boolean = false,
+    ) : VeraParseException(
+        "Int literal ${if (negative) "-" else ""}${token.text} is out of range; `Int` is 32-bit " +
+            "(-2147483648 to 2147483647)",
+        token,
+    )
 
     /** `: Unit` as a return type; a function returning `Unit` leaves the return type out. */
     class ExplicitUnitReturnType(

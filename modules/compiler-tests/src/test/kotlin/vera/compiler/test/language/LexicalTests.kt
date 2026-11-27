@@ -15,16 +15,9 @@ class LexicalTests {
     inner class Tokens {
         @Test
         fun `rejects unexpected characters`() = assertCompilationFails(
-            "fn main() { @ }",
+            "fn main() { # }",
             VeraLexException.UnexpectedCharacter::class,
-            "unexpected character '@'",
-        )
-
-        @Test
-        fun `rejects a single pipe`() = assertCompilationFails(
-            function("print(1 | 2)"),
-            VeraLexException.UnexpectedCharacter::class,
-            "unexpected character '|'",
+            "unexpected character '#'",
         )
     }
 

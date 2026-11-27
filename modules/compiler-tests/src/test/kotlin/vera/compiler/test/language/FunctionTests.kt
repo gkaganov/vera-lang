@@ -60,6 +60,13 @@ class FunctionTests {
         )
 
         @Test
+        fun `rejects functions declared inside functions`() = assertCompilationFails(
+            function("fn inner() {", "}"),
+            VeraParseException.NestedFunction::class,
+            "functions can only be declared at top level",
+        )
+
+        @Test
         fun `rejects calls to unknown functions`() = assertCompilationFails(
             function("missing()"),
             JvmLoweringException.UnknownFunction::class,

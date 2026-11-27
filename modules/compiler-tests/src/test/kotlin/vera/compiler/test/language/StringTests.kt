@@ -180,8 +180,8 @@ class StringTests {
         @Test
         fun `rejects empty template placeholders`() = assertCompilationFails(
             function("print(\"value: \\{}\")"),
-            VeraParseException.ExpectedExpression::class,
-            "expected an expression",
+            VeraParseException.EmptyTemplatePlaceholder::class,
+            "empty template placeholder; write an expression inside `\\{...}`",
         )
 
         @Test
