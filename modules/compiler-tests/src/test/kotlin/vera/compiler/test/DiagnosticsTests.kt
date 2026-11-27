@@ -6,14 +6,13 @@ import vera.compiler.VeraCompiler
 import vera.compiler.VeraDiagnostics
 import vera.jvm.lowering.JvmLoweringException
 import vera.shared.model.Identifier
-import vera.shared.model.VeraException
 
 /** Rendering of compiler errors with their source location. */
 class DiagnosticsTests {
     @Test
     fun `diagnostics underline the expression that caused a lowering error`() {
         assertRendersAs(
-            "fn testMain() {\n    print(1 + True)\n}\n",
+            "fn main() {\n    print(1 + True)\n}\n",
             """
             error: operator '+' requires both operands to have the same type, got Int and Bool
              --> main.vera:2:11
@@ -28,7 +27,7 @@ class DiagnosticsTests {
     fun `diagnostics underline the offending argument`() {
         assertRendersAs(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
-                "fn testMain() {\n    print(add(1, right = 2))\n}\n",
+                "fn main() {\n    print(add(1, right = 2))\n}\n",
             """
             error: argument 1 of function add must be named: write `left = ...`
              --> main.vera:5:15
@@ -42,7 +41,7 @@ class DiagnosticsTests {
     @Test
     fun `diagnostics point at the unexpected token of a parse error`() {
         assertRendersAs(
-            "fn testMain() {\n    val value =\n}\n",
+            "fn main() {\n    val value =\n}\n",
             """
             error: expected an expression, found '}'
              --> main.vera:3:1
@@ -56,7 +55,7 @@ class DiagnosticsTests {
     @Test
     fun `diagnostics point at the character of a lexer error`() {
         assertRendersAs(
-            "fn testMain() {\n    print(1);\n}\n",
+            "fn main() {\n    print(1);\n}\n",
             """
             error: Vera does not use semicolons; end the statement with a newline
              --> main.vera:2:13
@@ -84,7 +83,7 @@ class DiagnosticsTests {
     @Test
     fun `diagnostics underline a multi-line span to the end of its first line`() {
         assertRendersAs(
-            "fn testMain() {\n    val value = if True {\n        1\n    } else {\n        \"a\"\n    }\n}\n",
+            "fn main() {\n    val value = if True {\n        1\n    } else {\n        \"a\"\n    }\n}\n",
             """
             error: if branches must have the same type, got Int and String
              --> main.vera:2:17
@@ -98,7 +97,7 @@ class DiagnosticsTests {
     @Test
     fun `diagnostics widen the gutter for multi-digit line numbers`() {
         assertRendersAs(
-            "fn testMain() {\n" + "    print(1)\n".repeat(8) + "    print(missing)\n}\n",
+            "fn main() {\n" + "    print(1)\n".repeat(8) + "    print(missing)\n}\n",
             """
             error: variable missing is not defined
               --> main.vera:10:11
@@ -121,12 +120,7 @@ class DiagnosticsTests {
     }
 
     private fun assertRendersAs(source: String, expected: String) {
-        val error = try {
-            VeraCompiler.compile(Identifier("ErrorTest"), source)
-            throw AssertionError("Expected compilation to fail, but it succeeded")
-        } catch (exception: VeraException) {
-            exception
-        }
+        val error = compilationError(source)
         Assertions.assertEquals(expected.trimIndent(), VeraDiagnostics.render(error, source, "main.vera"))
     }
 }

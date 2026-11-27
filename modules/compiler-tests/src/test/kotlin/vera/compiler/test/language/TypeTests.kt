@@ -27,7 +27,7 @@ class TypeTests {
         )
 
         @Test
-        fun `out-of-range Int literals`() = assertCompilationFails(
+        fun `rejects out-of-range Int literals`() = assertCompilationFails(
             function("print(999999999999999999999)"),
             VeraParseException.InvalidIntLiteral::class,
             "invalid Int literal",

@@ -33,21 +33,21 @@ class StringTests {
         )
 
         @Test
-        fun `invalid string escapes`() = assertCompilationFails(
+        fun `rejects invalid string escapes`() = assertCompilationFails(
             function("print(\"bad \\q\")"),
             VeraLexException.InvalidStringEscape::class,
             "invalid string escape '\\q'",
         )
 
         @Test
-        fun `newlines in strings`() = assertCompilationFails(
+        fun `rejects newlines in strings`() = assertCompilationFails(
             "fn main() { print(\"a\nb\") }",
             VeraLexException.UnterminatedString::class,
             "unterminated string literal",
         )
 
         @Test
-        fun `unterminated strings`() = assertCompilationFails(
+        fun `rejects unterminated strings`() = assertCompilationFails(
             "fn main() { print(\"abc",
             VeraLexException.UnterminatedString::class,
             "unterminated string literal",
@@ -138,28 +138,30 @@ class StringTests {
         )
 
         @Test
-        fun `line breaks inside template placeholders`() = assertCompilationFails(
+        fun `rejects line breaks inside template placeholders`() = assertCompilationFails(
             function("print(\"sum: \\{1 +", "    2}\")"),
             VeraLexException.UnterminatedString::class,
-            "unterminated string literal at line 2, column 11",
+            "unterminated string literal",
+            line = 2,
+            column = 11,
         )
 
         @Test
-        fun `unclosed template placeholders`() = assertCompilationFails(
+        fun `rejects unclosed template placeholders`() = assertCompilationFails(
             function("print(\"value: \\{1\")"),
             VeraLexException.UnterminatedString::class,
             "unterminated string literal",
         )
 
         @Test
-        fun `empty template placeholders`() = assertCompilationFails(
+        fun `rejects empty template placeholders`() = assertCompilationFails(
             function("print(\"value: \\{}\")"),
             VeraParseException.ExpectedExpression::class,
             "expected an expression",
         )
 
         @Test
-        fun `template placeholders with two expressions`() = assertCompilationFails(
+        fun `rejects template placeholders with two expressions`() = assertCompilationFails(
             function("val a = 1", "val b = 2", "print(\"\\{a b}\")"),
             VeraParseException.ExpectedToken::class,
             "expected `}` to close the template placeholder",

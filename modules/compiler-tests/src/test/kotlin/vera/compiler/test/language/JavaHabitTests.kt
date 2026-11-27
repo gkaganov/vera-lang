@@ -49,7 +49,7 @@ class JavaHabitTests {
         )
 
         @Test
-        fun `String concatenation with plus`() = assertCompilationFails(
+        fun `rejects String concatenation with plus`() = assertCompilationFails(
             function("val name = \"Vera\"", "print(\"Hello \" + name)"),
             JvmLoweringException.StringConcatenationNotSupported::class,
             "Vera builds strings with templates, not `+`; write \"text \\{value}\"",

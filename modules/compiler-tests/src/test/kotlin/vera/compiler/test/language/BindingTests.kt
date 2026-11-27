@@ -40,7 +40,7 @@ class BindingTests {
         )
 
         @Test
-        fun `bindings that contradict their declared type`() = assertCompilationFails(
+        fun `rejects bindings that contradict their declared type`() = assertCompilationFails(
             function("val value: Int = \"text\""),
             JvmLoweringException.BindTypeMismatch::class,
             "variable value is declared as Int but bound to a value of type String",
@@ -130,70 +130,72 @@ class BindingTests {
         )
 
         @Test
-        fun `mut without val`() = assertCompilationFails(
+        fun `rejects mut without val`() = assertCompilationFails(
             function("mut count = 0"),
             VeraParseException.ExpectedToken::class,
             "expected `val` after `mut`, found 'count'",
         )
 
         @Test
-        fun `rebind update blocks`() = assertCompilationFails(
+        fun `rejects rebind update blocks`() = assertCompilationFails(
             function("value = {", "    1", "}"),
             VeraParseException.UnsupportedRebindUpdateBlock::class,
             "rebind update blocks are not supported",
         )
 
         @Test
-        fun `rebinding val bindings`() = assertCompilationFails(
+        fun `rejects rebinding val bindings`() = assertCompilationFails(
             function("val count = 0", "count = 1"),
             JvmLoweringException.ImmutableBindingRebound::class,
             "count is immutable; declare it with `mut val` to rebind it",
         )
 
         @Test
-        fun `rebinding parameters`() = assertCompilationFails(
+        fun `rejects rebinding parameters`() = assertCompilationFails(
             "fn next(value: Int): Int {\n    value = value + 1\n    return value\n}",
             JvmLoweringException.ParameterRebound::class,
             "parameter value cannot be rebound; write `mut val value` first to make it rebindable",
         )
 
         @Test
-        fun `mut val without a value for a local`() = assertCompilationFails(
+        fun `rejects mut val without a value for a local`() = assertCompilationFails(
             function("val count = 0", "mut val count"),
             JvmLoweringException.MutableParameterRequiresParameter::class,
             "`mut val count` without a value makes a parameter rebindable, but count is not a parameter",
         )
 
         @Test
-        fun `rebinding a parameter before it is made rebindable`() = assertCompilationFails(
+        fun `rejects rebinding a parameter before it is made rebindable`() = assertCompilationFails(
             "fn next(value: Int): Int {\n    value = value + 1\n    mut val value\n    return value\n}",
             JvmLoweringException.ParameterRebound::class,
-            "parameter value cannot be rebound; write `mut val value` first to make it rebindable at line 2, column 5",
+            "parameter value cannot be rebound; write `mut val value` first to make it rebindable",
+            line = 2,
+            column = 5,
         )
 
         @Test
-        fun `mut val without a value repeated`() = assertCompilationFails(
+        fun `rejects mut val without a value repeated`() = assertCompilationFails(
             "fn next(value: Int): Int {\n    mut val value\n    mut val value\n    return value\n}",
             JvmLoweringException.MutableParameterRepeated::class,
             "parameter value is already rebindable",
         )
 
         @Test
-        fun `mut val without a value inside a block`() = assertCompilationFails(
+        fun `rejects mut val without a value inside a block`() = assertCompilationFails(
             "fn next(value: Int) {\n    if True {\n        mut val value\n    }\n}",
             JvmLoweringException.MutableParameterOutsideFunctionBody::class,
             "`mut val value` must be written directly in the function body, not inside a block",
         )
 
         @Test
-        fun `rebinding unknown variables`() = assertCompilationFails(
+        fun `rejects rebinding unknown variables`() = assertCompilationFails(
             function("missing = 1"),
             JvmLoweringException.UnknownVariable::class,
             "variable missing is not defined",
         )
 
         @Test
-        fun `rebinding to a different type`() = assertCompilationFails(
+        fun `rejects rebinding to a different type`() = assertCompilationFails(
             function("mut val value = 1", "value = \"text\""),
             JvmLoweringException.RebindTypeMismatch::class,
             "cannot rebind variable value",
@@ -232,14 +234,14 @@ class BindingTests {
         )
 
         @Test
-        fun `locals used after the if branch that declares them`() = assertCompilationFails(
+        fun `rejects locals used after the if branch that declares them`() = assertCompilationFails(
             function("if True {", "    val inner = 1", "}", "print(inner)"),
             JvmLoweringException.UnknownVariable::class,
             "variable inner is not defined",
         )
 
         @Test
-        fun `locals used after the loop body that declares them`() = assertCompilationFails(
+        fun `rejects locals used after the loop body that declares them`() = assertCompilationFails(
             function("while False {", "    val inner = 1", "}", "print(inner)"),
             JvmLoweringException.UnknownVariable::class,
             "variable inner is not defined",

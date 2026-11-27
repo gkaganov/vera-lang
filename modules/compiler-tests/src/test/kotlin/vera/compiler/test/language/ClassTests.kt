@@ -17,49 +17,49 @@ class ClassTests {
     @Nested
     inner class Declarations {
         @Test
-        fun `fields without val`() = assertCompilationFails(
+        fun `rejects fields without val`() = assertCompilationFails(
             "class Point {\n    x: Int\n}",
             VeraParseException.FieldWithoutVal::class,
             "declare fields with `val`: write `val x: ...`",
         )
 
         @Test
-        fun `mutable fields`() = assertCompilationFails(
+        fun `rejects mutable fields`() = assertCompilationFails(
             "class Account {\n    mut val balance: Int\n}",
             VeraParseException.MutableFieldNotSupported::class,
             "mutable fields need `mut fn` methods, which are not implemented yet; use `val`",
         )
 
         @Test
-        fun `statements in class bodies`() = assertCompilationFails(
+        fun `rejects statements in class bodies`() = assertCompilationFails(
             "class Point {\n    print(1)\n}",
             VeraParseException.ExpectedToken::class,
             "expected a field (`val`) or method (`fn`), found 'print'",
         )
 
         @Test
-        fun `duplicate class fields`() = assertCompilationFails(
+        fun `rejects duplicate class fields`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int", "val x: String"),
             JvmLoweringException.DuplicateClassField::class,
             "class Point has duplicate field x",
         )
 
         @Test
-        fun `unknown class field types`() = assertCompilationFails(
+        fun `rejects unknown class field types`() = assertCompilationFails(
             classDeclaration("Point", "val x: Missing"),
             JvmLoweringException.UnknownClassType::class,
             "class type Missing is not defined",
         )
 
         @Test
-        fun `duplicate class types`() = assertCompilationFails(
+        fun `rejects duplicate class types`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + classDeclaration("Point", "val y: Int"),
             JvmLoweringException.DuplicateClassType::class,
             "class Point is declared more than once",
         )
 
         @Test
-        fun `duplicate class methods`() = assertCompilationFails(
+        fun `rejects duplicate class methods`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "fn value(): Int {",
@@ -74,7 +74,7 @@ class ClassTests {
         )
 
         @Test
-        fun `class methods conflicting with fields`() = assertCompilationFails(
+        fun `rejects class methods conflicting with fields`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val value: Int",
@@ -191,42 +191,42 @@ class ClassTests {
         )
 
         @Test
-        fun `member access on non-object values`() = assertCompilationFails(
+        fun `rejects member access on non-object values`() = assertCompilationFails(
             function("val x = 1", "print(x.foo)"),
             JvmLoweringException.MemberAccessRequiresObject::class,
             "member access requires an object",
         )
 
         @Test
-        fun `class constructors with the wrong arity`() = assertCompilationFails(
+        fun `rejects class constructors with the wrong arity`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("val point = Point()"),
             JvmLoweringException.ClassConstructorArityMismatch::class,
             "class Point constructor requires 1 argument, got 0",
         )
 
         @Test
-        fun `class constructor arguments with the wrong type`() = assertCompilationFails(
+        fun `rejects class constructor arguments with the wrong type`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("val point = Point(\"wrong\")"),
             JvmLoweringException.ClassConstructorArgumentTypeMismatch::class,
             "class Point field x requires Int, got String",
         )
 
         @Test
-        fun `unknown class fields`() = assertCompilationFails(
+        fun `rejects unknown class fields`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1).y)"),
             JvmLoweringException.UnknownClassField::class,
             "class Point has no field y",
         )
 
         @Test
-        fun `class types used as values`() = assertCompilationFails(
+        fun `rejects class types used as values`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("val point = Point"),
             JvmLoweringException.ClassTypeUsedAsValue::class,
             "class type Point cannot be used as a value",
         )
 
         @Test
-        fun `calling class fields`() = assertCompilationFails(
+        fun `rejects calling class fields`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1).x())"),
             JvmLoweringException.ValueCallNotSupported::class,
             "calling a value is not supported yet",
@@ -492,14 +492,14 @@ class ClassTests {
         )
 
         @Test
-        fun `unknown class methods`() = assertCompilationFails(
+        fun `rejects unknown class methods`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1).missing())"),
             JvmLoweringException.UnknownClassMethod::class,
             "class Point has no method missing",
         )
 
         @Test
-        fun `class methods called with the wrong arity`() = assertCompilationFails(
+        fun `rejects class methods called with the wrong arity`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val x: Int",
@@ -512,7 +512,7 @@ class ClassTests {
         )
 
         @Test
-        fun `class method arguments with the wrong type`() = assertCompilationFails(
+        fun `rejects class method arguments with the wrong type`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val x: Int",
@@ -525,7 +525,7 @@ class ClassTests {
         )
 
         @Test
-        fun `class method return values with the wrong type`() = assertCompilationFails(
+        fun `rejects class method return values with the wrong type`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val x: Int",
@@ -538,7 +538,7 @@ class ClassTests {
         )
 
         @Test
-        fun `class methods used as values through member access`() = assertCompilationFails(
+        fun `rejects class methods used as values through member access`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val x: Int",
@@ -551,7 +551,7 @@ class ClassTests {
         )
 
         @Test
-        fun `class methods used as bare values`() = assertCompilationFails(
+        fun `rejects class methods used as bare values`() = assertCompilationFails(
             classDeclaration(
                 "Point",
                 "val x: Int",
@@ -603,13 +603,14 @@ class ClassTests {
 
         @Test
         fun `singletons have one instance and a private constructor`() {
-            val source = """
-                        class Empty {}
-                        fn first(): Empty = Empty
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                class Empty {}
+                fn first(): Empty = Empty
+                fn main() {
+                }
+                """,
+            )
             val empty = program.loadClass("Empty")
             val first = program.loadProgramClass().getMethod("first")
             Assertions.assertSame(first.invoke(null), first.invoke(null))
@@ -618,14 +619,14 @@ class ClassTests {
         }
 
         @Test
-        fun `constructing classes without fields`() = assertCompilationFails(
+        fun `rejects constructing classes without fields`() = assertCompilationFails(
             classDeclaration("Empty") + function("val empty = Empty()"),
             JvmLoweringException.SingletonConstructed::class,
             "Empty has no fields, so it has a single value; write `Empty` instead of `Empty()`",
         )
 
         @Test
-        fun `forwarding values into classes without fields`() = assertCompilationFails(
+        fun `rejects forwarding values into classes without fields`() = assertCompilationFails(
             classDeclaration("Empty") + function("val empty = 1 |> Empty"),
             JvmLoweringException.SingletonConstructed::class,
             "Empty has no fields, so it has a single value",

@@ -15,21 +15,21 @@ class InterfaceTests {
     @Nested
     inner class Declarations {
         @Test
-        fun `cases in interfaces`() = assertCompilationFails(
+        fun `rejects cases in interfaces`() = assertCompilationFails(
             "interface Named { Red }",
             VeraParseException.InterfaceCase::class,
             "interfaces are open and cannot list cases; declare a `trait` for a closed set of cases",
         )
 
         @Test
-        fun `sealed interfaces`() = assertCompilationFails(
+        fun `rejects sealed interfaces`() = assertCompilationFails(
             "sealed interface Named {}",
             VeraParseException.JavaSyntax::class,
             "interfaces are open; declare a `trait` for a closed set of classes",
         )
 
         @Test
-        fun `duplicate interfaces`() = assertCompilationFails(
+        fun `rejects duplicate interfaces`() = assertCompilationFails(
             "interface Named {}\ninterface Named {}",
             JvmLoweringException.DuplicateTrait::class,
             "interface Named is declared more than once",
@@ -135,20 +135,20 @@ class InterfaceTests {
         @Test
         fun `parameter names are part of an interface's methods`() {
             val source = """
-                        interface Scaled {
-                            fn scale(by: Int): Int
-                        }
-                        class Doubler {
-                            fn scale(by: Int): Int = by * 2
-                        }
-                        class Counter {
-                            fn scale(factor: Int): Int = factor
-                        }
-                        fn main() {
-                            val scaled: Scaled = Doubler
-                            print(scaled.scale(4))
-                        }
-                    """.trimIndent()
+                interface Scaled {
+                    fn scale(by: Int): Int
+                }
+                class Doubler {
+                    fn scale(by: Int): Int = by * 2
+                }
+                class Counter {
+                    fn scale(factor: Int): Int = factor
+                }
+                fn main() {
+                    val scaled: Scaled = Doubler
+                    print(scaled.scale(4))
+                }
+                """
             assertPrints(source, "8")
             val program = compileProgram(source)
             val scaled = program.loadClass("Scaled")
@@ -157,7 +157,7 @@ class InterfaceTests {
         }
 
         @Test
-        fun `classes passed where an interface they do not fit is expected`() = assertCompilationFails(
+        fun `rejects classes passed where an interface they do not fit is expected`() = assertCompilationFails(
             "interface Named {\n    fn name(): String\n}\nclass Dog {}\n" +
                 "fn greet(named: Named) = print(named.name())\n" + function("greet(Dog)"),
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
@@ -197,70 +197,70 @@ class InterfaceTests {
         )
 
         @Test
-        fun `has written after implements`() = assertCompilationFails(
+        fun `rejects has written after implements`() = assertCompilationFails(
             "class Square implements Named has Shape {\n}",
             VeraParseException.JavaSyntax::class,
             "write `has` before `implements`: `has Trait implements Interface`",
         )
 
         @Test
-        fun `trait cases with interfaces but no body`() = assertCompilationFails(
+        fun `rejects trait cases with interfaces but no body`() = assertCompilationFails(
             "interface Named {}\ntrait Color { Red implements Named, Green }",
             VeraParseException.CaseTraitsWithoutBody::class,
             "a case with `implements` needs a body to end its list: write `Red implements ... { }`, found '}'",
         )
 
         @Test
-        fun `interfaces joined with has`() = assertCompilationFails(
+        fun `rejects interfaces joined with has`() = assertCompilationFails(
             "interface Named {}\nclass Dog has Named {}",
             JvmLoweringException.InterfaceJoinedWithHas::class,
             "Named is an interface, which Dog fits by having its members; write `implements Named` to check that, not `has`",
         )
 
         @Test
-        fun `traits named with implements`() = assertCompilationFails(
+        fun `rejects traits named with implements`() = assertCompilationFails(
             "trait Shape {}\nclass Square implements Shape {}",
             JvmLoweringException.TraitImplemented::class,
             "Shape is a trait, not an interface; write `Square has Shape`",
         )
 
         @Test
-        fun `built-in traits named with implements`() = assertCompilationFails(
+        fun `rejects built-in traits named with implements`() = assertCompilationFails(
             "class Square implements Eq {}",
             JvmLoweringException.TraitImplemented::class,
             "Eq is a trait, not an interface; write `Square has Eq`",
         )
 
         @Test
-        fun `unknown stated interfaces`() = assertCompilationFails(
+        fun `rejects unknown stated interfaces`() = assertCompilationFails(
             "interface Named {}\nclass Dog implements Nmaed {}",
             JvmLoweringException.UnknownInterface::class,
             "interface Nmaed is not defined; did you mean `Named`?",
         )
 
         @Test
-        fun `interfaces stated twice`() = assertCompilationFails(
+        fun `rejects interfaces stated twice`() = assertCompilationFails(
             "interface Named {}\nclass Dog implements Named, Named {}",
             JvmLoweringException.DuplicateTraitImplementation::class,
             "class Dog implements interface Named more than once",
         )
 
         @Test
-        fun `stated interfaces without a required method`() = assertCompilationFails(
+        fun `rejects stated interfaces without a required method`() = assertCompilationFails(
             "interface Named {\n    fn name(): String\n}\nclass Dog implements Named {}",
             JvmLoweringException.MissingTraitMethod::class,
             "class Dog implements interface Named but has no method name",
         )
 
         @Test
-        fun `stated interfaces without a required field`() = assertCompilationFails(
+        fun `rejects stated interfaces without a required field`() = assertCompilationFails(
             "interface Timed {\n    val timestamp: Int\n}\nclass Tick implements Timed {\n    val time: Int\n}",
             JvmLoweringException.MissingTraitField::class,
             "class Tick implements interface Timed but has no field timestamp; declare `val timestamp: Int`",
         )
 
         @Test
-        fun `stated interfaces with renamed parameters`() = assertCompilationFails(
+        fun `rejects stated interfaces with renamed parameters`() = assertCompilationFails(
             "interface Scaled {\n    fn scale(by: Int): Int\n}\n" +
                 "class Counter implements Scaled {\n    fn scale(factor: Int): Int = factor\n}",
             JvmLoweringException.TraitMethodParameterNameMismatch::class,
@@ -269,7 +269,7 @@ class InterfaceTests {
         )
 
         @Test
-        fun `stated interfaces whose required built-in trait is missing`() = assertCompilationFails(
+        fun `rejects stated interfaces whose required built-in trait is missing`() = assertCompilationFails(
             "interface Named requires Display {}\nclass Dog implements Named {}",
             JvmLoweringException.MissingRequiredTrait::class,
             "Dog implements Named, which requires Display; add `has Display`",
@@ -306,7 +306,7 @@ class InterfaceTests {
         )
 
         @Test
-        fun `interfaces requiring traits`() = assertCompilationFails(
+        fun `rejects interfaces requiring traits`() = assertCompilationFails(
             "trait Shape {}\ninterface Named requires Shape {}",
             JvmLoweringException.InterfaceRequiresTrait::class,
             "interface Named cannot require trait Shape, because any class can fit an interface but only " +
@@ -314,21 +314,21 @@ class InterfaceTests {
         )
 
         @Test
-        fun `traits requiring interfaces`() = assertCompilationFails(
+        fun `rejects traits requiring interfaces`() = assertCompilationFails(
             "interface Named {}\ntrait Shape requires Named {}",
             JvmLoweringException.TraitRequiresInterface::class,
             "trait Shape cannot require interface Named; Shape values fit Named automatically when Shape has its members",
         )
 
         @Test
-        fun `unknown required interfaces`() = assertCompilationFails(
+        fun `rejects unknown required interfaces`() = assertCompilationFails(
             "interface Named {}\ninterface Pet requires Nmaed {}",
             JvmLoweringException.UnknownInterface::class,
             "interface Nmaed is not defined; did you mean `Named`?",
         )
 
         @Test
-        fun `interface requirement cycles`() = assertCompilationFails(
+        fun `rejects interface requirement cycles`() = assertCompilationFails(
             "interface First requires Second {}\ninterface Second requires First {}",
             JvmLoweringException.RequirementCycle::class,
             "interface requirements form a cycle: First requires Second requires First",
@@ -338,21 +338,21 @@ class InterfaceTests {
     @Nested
     inner class Values {
         @Test
-        fun `match on interface values`() = assertCompilationFails(
+        fun `rejects match on interface values`() = assertCompilationFails(
             "interface Named {}\nclass Dog {}\nfn kind(named: Named): Int = match named {\n    Dog -> 1\n}",
             JvmLoweringException.MatchOnInterface::class,
             "interface Named cannot be matched, because any class with its members fits it; use its members, or match on a trait",
         )
 
         @Test
-        fun `printing interface values whose interface does not require Display`() = assertCompilationFails(
+        fun `rejects printing interface values whose interface does not require Display`() = assertCompilationFails(
             "interface Named {}\nfn show(named: Named) = print(named)\n",
             JvmLoweringException.TraitRequirementMissing::class,
             "interface Named does not require Display, so its values cannot be printed; add `requires Display`",
         )
 
         @Test
-        fun `unknown methods on interface values`() = assertCompilationFails(
+        fun `rejects unknown methods on interface values`() = assertCompilationFails(
             "interface Named {\n    fn name(): String\n}\nfn read(named: Named): String = named.nmae()\n",
             JvmLoweringException.UnknownTraitMethod::class,
             "interface Named has no method nmae; did you mean `name`?",
@@ -363,20 +363,21 @@ class InterfaceTests {
     inner class Jvm {
         @Test
         fun `interfaces compile to open JVM interfaces implemented by every fitting class`() {
-            val source = """
-                        interface Named {
-                            fn name(): String
-                        }
-                        trait Pet {
-                            fn name(): String
-                        }
-                        class Dog has Pet {
-                            fn name(): String = "Rex"
-                        }
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                interface Named {
+                    fn name(): String
+                }
+                trait Pet {
+                    fn name(): String
+                }
+                class Dog has Pet {
+                    fn name(): String = "Rex"
+                }
+                fn main() {
+                }
+                """,
+            )
             val named = program.loadClass("Named")
             val pet = program.loadClass("Pet")
             val dog = program.loadClass("Dog")

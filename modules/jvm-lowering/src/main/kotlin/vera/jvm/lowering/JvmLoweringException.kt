@@ -82,10 +82,6 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "operator '$operator' is only defined for Int operands, got ${actual.render()}",
     )
 
-    class EqualityOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
-        "operator '$operator' is only defined for Int, Bool, and String operands, got ${actual.render()}",
-    )
-
     class IfBranchTypeMismatch(
         val thenType: JvmType,
         val elseType: JvmType,
@@ -150,10 +146,6 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "${builtin.name.lowercase()} requires exactly $expected argument",
     )
 
-    class PrintArgumentTypeNotSupported(val actual: JvmType) : JvmLoweringException(
-        "print does not support values of type ${actual.render()}",
-    )
-
     class DuplicateFunction(val name: Identifier) : JvmLoweringException(
         "function ${name.display} is declared more than once",
     )
@@ -187,14 +179,6 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val field: Identifier,
     ) : JvmLoweringException(
         "class ${className.display} has duplicate field ${field.display}",
-    )
-
-    class ClassFieldTypeNotAllowed(
-        val className: Identifier,
-        val field: Identifier,
-        val type: String,
-    ) : JvmLoweringException(
-        "class field ${className.display}.${field.display} cannot have type $type",
     )
 
     class UnknownClassType(
@@ -502,10 +486,6 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
 
     class TemplateValueRequiresDisplayTrait(val className: Identifier) : JvmLoweringException(
         "class ${className.display} does not have the Display trait, so its objects cannot be used in a string template",
-    )
-
-    class TemplateValueTypeNotSupported(val actual: JvmType) : JvmLoweringException(
-        "string templates do not support values of type ${actual.render()}",
     )
 
     class ClassFieldRequiresTrait(

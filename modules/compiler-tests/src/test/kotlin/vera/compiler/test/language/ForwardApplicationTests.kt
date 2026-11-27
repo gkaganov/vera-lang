@@ -156,7 +156,7 @@ class ForwardApplicationTests {
         )
 
         @Test
-        fun `forward application groups an or-expression on the right`() = assertCompilationFails(
+        fun `rejects an or-expression on the right of forward application`() = assertCompilationFails(
             function("print(1 |> f or True)"),
             JvmLoweringException.InvalidForwardApplication::class,
             "right-hand side of '|>' must be a callable name or member call",
@@ -212,21 +212,21 @@ class ForwardApplicationTests {
         )
 
         @Test
-        fun `forward application to a non-callable value`() = assertCompilationFails(
+        fun `rejects forward application to a non-callable value`() = assertCompilationFails(
             function("print(1 |> 2)"),
             JvmLoweringException.InvalidForwardApplication::class,
             "right-hand side of '|>' must be a callable name or member call",
         )
 
         @Test
-        fun `forward application to a member access without a call`() = assertCompilationFails(
+        fun `rejects forward application to a member access without a call`() = assertCompilationFails(
             function("print(1 |> value.name)"),
             JvmLoweringException.InvalidForwardApplication::class,
             "right-hand side of '|>' must be a callable name or member call",
         )
 
         @Test
-        fun `forward application calling a call result`() = assertCompilationFails(
+        fun `rejects forward application calling a call result`() = assertCompilationFails(
             function("print(1 |> f()())"),
             JvmLoweringException.InvalidForwardApplication::class,
             "right-hand side of '|>' cannot call the result of another call",

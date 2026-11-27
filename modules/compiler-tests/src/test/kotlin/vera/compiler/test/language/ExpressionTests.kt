@@ -86,21 +86,21 @@ class ExpressionTests {
         )
 
         @Test
-        fun `binary operands with different types`() = assertCompilationFails(
+        fun `rejects binary operands with different types`() = assertCompilationFails(
             function("val value = 1 * \"x\""),
             JvmLoweringException.OperandTypesDiffer::class,
             "operator '*' requires both operands to have the same type",
         )
 
         @Test
-        fun `non-Int binary operands`() = assertCompilationFails(
+        fun `rejects non-Int binary operands`() = assertCompilationFails(
             function("val value = \"x\" * \"y\""),
             JvmLoweringException.IntOperandsRequired::class,
             "operator '*' is only defined for Int operands",
         )
 
         @Test
-        fun `non-Int unary operands`() = assertCompilationFails(
+        fun `rejects non-Int unary operands`() = assertCompilationFails(
             function("print(-\"text\")"),
             JvmLoweringException.IntOperandsRequired::class,
             "operator '-' is only defined for Int operands",
@@ -158,7 +158,7 @@ class ExpressionTests {
         )
 
         @Test
-        fun `ordering Bool operands`() = assertCompilationFails(
+        fun `rejects ordering Bool operands`() = assertCompilationFails(
             function("print(True < False)"),
             JvmLoweringException.IntOperandsRequired::class,
             "operator '<' is only defined for Int operands, got Bool",
@@ -224,7 +224,7 @@ class ExpressionTests {
         )
 
         @Test
-        fun `equality operands with different types`() = assertCompilationFails(
+        fun `rejects equality operands with different types`() = assertCompilationFails(
             function("print(1 == True)"),
             JvmLoweringException.OperandTypesDiffer::class,
             "operator '==' requires both operands to have the same type",
@@ -318,14 +318,14 @@ class ExpressionTests {
         )
 
         @Test
-        fun `non-Bool logical operands`() = assertCompilationFails(
+        fun `rejects non-Bool logical operands`() = assertCompilationFails(
             function("val value = 1 and True"),
             JvmLoweringException.BoolOperandsRequired::class,
             "operator 'and' is only defined for Bool operands",
         )
 
         @Test
-        fun `non-Bool not operands`() = assertCompilationFails(
+        fun `rejects non-Bool not operands`() = assertCompilationFails(
             function("val value = not 1"),
             JvmLoweringException.BoolOperandsRequired::class,
             "operator 'not' is only defined for Bool operands",
@@ -405,7 +405,7 @@ class ExpressionTests {
         )
 
         @Test
-        fun `not applied to an Int comparison operand`() = assertCompilationFails(
+        fun `rejects not applied to an Int comparison operand`() = assertCompilationFails(
             function("val value = not 1 == 2"),
             JvmLoweringException.BoolOperandsRequired::class,
             "operator 'not' is only defined for Bool operands",

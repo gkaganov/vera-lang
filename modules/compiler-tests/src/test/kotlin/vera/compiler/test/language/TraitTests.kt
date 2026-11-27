@@ -37,7 +37,7 @@ class TraitTests {
         )
 
         @Test
-        fun `explicit Unit return types on trait methods`() = assertCompilationFails(
+        fun `rejects explicit Unit return types on trait methods`() = assertCompilationFails(
             traitDeclaration("Resettable", "fn reset(): Unit"),
             VeraParseException.ExplicitUnitReturnType::class,
             "leave out the return type for a function that returns `Unit`",
@@ -51,42 +51,42 @@ class TraitTests {
         )
 
         @Test
-        fun `trait methods sharing a line`() = assertCompilationFails(
+        fun `rejects trait methods sharing a line`() = assertCompilationFails(
             "trait Shape { fn area(): Int fn perimeter(): Int }",
             VeraParseException.ExpectedEndOfLine::class,
             "expected end of line",
         )
 
         @Test
-        fun `duplicate trait declarations`() = assertCompilationFails(
+        fun `rejects duplicate trait declarations`() = assertCompilationFails(
             traitDeclaration("Shape") + traitDeclaration("Shape"),
             JvmLoweringException.DuplicateTrait::class,
             "trait Shape is declared more than once",
         )
 
         @Test
-        fun `traits conflicting with builtin traits`() = assertCompilationFails(
+        fun `rejects traits conflicting with builtin traits`() = assertCompilationFails(
             traitDeclaration("Eq"),
             JvmLoweringException.NameConflictsWithBuiltinTrait::class,
             "name Eq is reserved for a built-in trait",
         )
 
         @Test
-        fun `duplicate trait method parameters`() = assertCompilationFails(
+        fun `rejects duplicate trait method parameters`() = assertCompilationFails(
             traitDeclaration("Shape", "fn scale(by: Int, by: Int): Int"),
             JvmLoweringException.ShadowingNotAllowed::class,
             "name by is already in scope",
         )
 
         @Test
-        fun `duplicate trait methods`() = assertCompilationFails(
+        fun `rejects duplicate trait methods`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int", "fn area(): Bool"),
             JvmLoweringException.DuplicateTraitMethod::class,
             "trait Shape has duplicate method area",
         )
 
         @Test
-        fun `unknown trait method parameter types`() = assertCompilationFails(
+        fun `rejects unknown trait method parameter types`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(value: Missing): Int"),
             JvmLoweringException.UnknownClassType::class,
             "class type Missing is not defined",
@@ -185,7 +185,7 @@ class TraitTests {
         )
 
         @Test
-        fun `trait methods with renamed parameters`() = assertCompilationFails(
+        fun `rejects trait methods with renamed parameters`() = assertCompilationFails(
             traitDeclaration("Scaled", "fn scale(by: Int): Int") +
                 "\nclass Counter has Scaled {\n    val value: Int\n" +
                 "    fn scale(amount: Int): Int {\n        return value * amount\n    }\n}",
@@ -194,14 +194,14 @@ class TraitTests {
         )
 
         @Test
-        fun `unknown traits`() = assertCompilationFails(
+        fun `rejects unknown traits`() = assertCompilationFails(
             "class Point has Missing {\n    val x: Int\n}",
             JvmLoweringException.UnknownTrait::class,
             "trait Missing is not defined",
         )
 
         @Test
-        fun `trait methods that are not implemented`() = assertCompilationFails(
+        fun `rejects trait methods that are not implemented`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") +
                 "\nclass Square has Shape {\n    val side: Int\n}",
             JvmLoweringException.MissingTraitMethod::class,
@@ -209,7 +209,7 @@ class TraitTests {
         )
 
         @Test
-        fun `trait methods with the wrong signature`() = assertCompilationFails(
+        fun `rejects trait methods with the wrong signature`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") +
                 "\nclass Square has Shape {\n    val side: Int\n" +
                 "    fn area(): String {\n        return \"x\"\n    }\n}",
@@ -218,21 +218,21 @@ class TraitTests {
         )
 
         @Test
-        fun `traits listed more than once`() = assertCompilationFails(
+        fun `rejects traits listed more than once`() = assertCompilationFails(
             "class Point has Eq, Eq {\n    val x: Int\n}",
             JvmLoweringException.DuplicateTraitImplementation::class,
             "class Point has trait Eq more than once",
         )
 
         @Test
-        fun `trailing commas in has clauses`() = assertCompilationFails(
+        fun `rejects trailing commas in has clauses`() = assertCompilationFails(
             "class Point has Eq, {\n    val x: Int\n}",
             VeraParseException.ExpectedToken::class,
             "expected trait name",
         )
 
         @Test
-        fun `empty has clauses`() = assertCompilationFails(
+        fun `rejects empty has clauses`() = assertCompilationFails(
             "class Point has {\n    val x: Int\n}",
             VeraParseException.ExpectedToken::class,
             "expected trait name",
@@ -328,7 +328,7 @@ class TraitTests {
         )
 
         @Test
-        fun `classes without the trait passed as a trait type`() = assertCompilationFails(
+        fun `rejects classes without the trait passed as a trait type`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") + classDeclaration("Point", "val x: Int") +
                 "fn describe(shape: Shape): Int = shape.area()\n" + function("print(describe(Point(1)))"),
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
@@ -336,7 +336,7 @@ class TraitTests {
         )
 
         @Test
-        fun `members that the trait does not declare`() = assertCompilationFails(
+        fun `rejects members that the trait does not declare`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") +
                 "fn describe(shape: Shape): Int = shape.aera()\n",
             JvmLoweringException.UnknownTraitMethod::class,
@@ -344,7 +344,7 @@ class TraitTests {
         )
 
         @Test
-        fun `built-in traits used as types`() = assertCompilationFails(
+        fun `rejects built-in traits used as types`() = assertCompilationFails(
             "fn show(value: Display) {\n}",
             JvmLoweringException.BuiltinTraitUsedAsType::class,
             "built-in trait Display cannot be used as a type",
@@ -451,56 +451,56 @@ class TraitTests {
         )
 
         @Test
-        fun `trait-typed fields in Eq classes`() = assertCompilationFails(
+        fun `rejects trait-typed fields in Eq classes`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") + "class Holder has Eq {\n    val shape: Shape\n}",
             JvmLoweringException.ClassFieldTraitTypeNotSupported::class,
             "class Holder has Eq, but field shape has trait type Shape, which does not require Eq",
         )
 
         @Test
-        fun `printing trait-typed values`() = assertCompilationFails(
+        fun `rejects printing trait-typed values`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(): Int") + "fn show(shape: Shape) = print(shape)\n",
             JvmLoweringException.TraitRequirementMissing::class,
             "trait Shape does not require Display, so its values cannot be printed; add `requires Display`",
         )
 
         @Test
-        fun `classes missing a required trait`() = assertCompilationFails(
+        fun `rejects classes missing a required trait`() = assertCompilationFails(
             "trait Shape requires Display {}\nclass Square has Shape {\n    val side: Int\n}",
             JvmLoweringException.MissingRequiredTrait::class,
             "Square has Shape, which requires Display; add `has Display`",
         )
 
         @Test
-        fun `repeated requirements`() = assertCompilationFails(
+        fun `rejects repeated requirements`() = assertCompilationFails(
             "trait Shape requires Display, Display {}",
             JvmLoweringException.DuplicateRequirement::class,
             "trait Shape requires Display more than once",
         )
 
         @Test
-        fun `requirement cycles`() = assertCompilationFails(
+        fun `rejects requirement cycles`() = assertCompilationFails(
             "trait First requires Second {}\ntrait Second requires First {}",
             JvmLoweringException.RequirementCycle::class,
             "trait requirements form a cycle: First requires Second requires First",
         )
 
         @Test
-        fun `unknown required traits`() = assertCompilationFails(
+        fun `rejects unknown required traits`() = assertCompilationFails(
             "trait Shape requires Displya {}",
             JvmLoweringException.UnknownTrait::class,
             "trait Displya is not defined; did you mean `Display`?",
         )
 
         @Test
-        fun `comparing trait values whose trait does not require Eq`() = assertCompilationFails(
+        fun `rejects comparing trait values whose trait does not require Eq`() = assertCompilationFails(
             traitDeclaration("Shape") + "fn same(first: Shape, second: Shape): Bool = first == second\n",
             JvmLoweringException.TraitRequirementMissing::class,
             "trait Shape does not require Eq, so its values cannot be compared; add `requires Eq`",
         )
 
         @Test
-        fun `interpolating trait values whose trait does not require Display`() = assertCompilationFails(
+        fun `rejects interpolating trait values whose trait does not require Display`() = assertCompilationFails(
             traitDeclaration("Shape") + "fn label(shape: Shape): String = \"\\{shape}\"\n",
             JvmLoweringException.TraitRequirementMissing::class,
             "trait Shape does not require Display, so its values cannot be used in string templates",
@@ -588,63 +588,63 @@ class TraitTests {
         )
 
         @Test
-        fun `trait fields without val`() = assertCompilationFails(
+        fun `rejects trait fields without val`() = assertCompilationFails(
             "trait Event {\n    timestamp: Int\n}",
             VeraParseException.FieldWithoutVal::class,
             "declare fields with `val`: write `val timestamp: ...`",
         )
 
         @Test
-        fun `mutable trait fields`() = assertCompilationFails(
+        fun `rejects mutable trait fields`() = assertCompilationFails(
             "trait Account {\n    mut val balance: Int\n}",
             VeraParseException.MutableFieldNotSupported::class,
             "mutable fields need `mut fn` methods, which are not implemented yet; use `val`",
         )
 
         @Test
-        fun `classes missing a field their trait requires`() = assertCompilationFails(
+        fun `rejects classes missing a field their trait requires`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n}\nclass Login has Event {\n    val user: String\n}",
             JvmLoweringException.MissingTraitField::class,
             "class Login has trait Event but no field timestamp; declare `val timestamp: Int`",
         )
 
         @Test
-        fun `trait cases without a field their trait requires`() = assertCompilationFails(
+        fun `rejects trait cases without a field their trait requires`() = assertCompilationFails(
             "trait Shape {\n    val name: String\n    Empty\n}",
             JvmLoweringException.MissingTraitField::class,
             "class Shape.Empty has trait Shape but no field name; declare `val name: String`",
         )
 
         @Test
-        fun `required fields declared with another type`() = assertCompilationFails(
+        fun `rejects required fields declared with another type`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n}\nclass Login has Event {\n    val timestamp: String\n}",
             JvmLoweringException.TraitFieldTypeMismatch::class,
             "class Login field timestamp has type String, but trait Event requires Int",
         )
 
         @Test
-        fun `duplicate trait fields`() = assertCompilationFails(
+        fun `rejects duplicate trait fields`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n    val timestamp: Int\n}",
             JvmLoweringException.DuplicateTraitField::class,
             "trait Event has duplicate field timestamp",
         )
 
         @Test
-        fun `trait fields named like trait methods`() = assertCompilationFails(
+        fun `rejects trait fields named like trait methods`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n    fn timestamp(): Int\n}",
             JvmLoweringException.TraitFieldConflictsWithMethod::class,
             "trait Event has both a field and a method named timestamp",
         )
 
         @Test
-        fun `unknown fields on trait values`() = assertCompilationFails(
+        fun `rejects unknown fields on trait values`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n}\n" + "fn read(event: Event): Int = event.timestmap\n",
             JvmLoweringException.UnknownTraitField::class,
             "trait Event has no field timestmap; did you mean `timestamp`?",
         )
 
         @Test
-        fun `required fields called like methods`() = assertCompilationFails(
+        fun `rejects required fields called like methods`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n}\n" + "fn read(event: Event): Int = event.timestamp()\n",
             JvmLoweringException.ValueCallNotSupported::class,
             "calling a value is not supported yet",
@@ -655,18 +655,19 @@ class TraitTests {
     inner class Jvm {
         @Test
         fun `traits compile to JVM interfaces implemented by their classes`() {
-            val source = """
-                        trait Shape {
-                            fn area(): Int
-                        }
-                        class Square has Shape, Eq {
-                            val side: Int
-                            fn area(): Int = side * side
-                        }
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                trait Shape {
+                    fn area(): Int
+                }
+                class Square has Shape, Eq {
+                    val side: Int
+                    fn area(): Int = side * side
+                }
+                fn main() {
+                }
+                """,
+            )
             val shape = program.loadClass("Shape")
             val square = program.loadClass("Square")
             Assertions.assertTrue(shape.isInterface)
@@ -676,16 +677,17 @@ class TraitTests {
 
         @Test
         fun `traits compile to sealed JVM interfaces`() {
-            val source = """
-                        trait Shape {}
-                        class Circle has Shape {
-                            val radius: Int
-                        }
-                        class Empty has Shape {}
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                trait Shape {}
+                class Circle has Shape {
+                    val radius: Int
+                }
+                class Empty has Shape {}
+                fn main() {
+                }
+                """,
+            )
             val shape = program.loadClass("Shape")
             Assertions.assertTrue(shape.isSealed)
             Assertions.assertEquals(setOf("Circle", "Empty"), shape.permittedSubclasses.map { it.name }.toSet())
@@ -694,18 +696,19 @@ class TraitTests {
 
         @Test
         fun `required traits become superinterfaces on the JVM`() {
-            val source = """
-                        trait Named {
-                            fn name(): String
-                        }
-                        trait Pet requires Named, Display {}
-                        class Dog has Pet, Named, Display {
-                            fn name(): String = "Rex"
-                        }
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                trait Named {
+                    fn name(): String
+                }
+                trait Pet requires Named, Display {}
+                class Dog has Pet, Named, Display {
+                    fn name(): String = "Rex"
+                }
+                fn main() {
+                }
+                """,
+            )
             val named = program.loadClass("Named")
             val pet = program.loadClass("Pet")
             Assertions.assertEquals(listOf(named), pet.interfaces.toList())
@@ -715,17 +718,18 @@ class TraitTests {
 
         @Test
         fun `required fields compile to accessor methods on the JVM`() {
-            val source = """
-                        trait Event {
-                            val timestamp: Int
-                        }
-                        class Login has Event {
-                            val timestamp: Int
-                        }
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                trait Event {
+                    val timestamp: Int
+                }
+                class Login has Event {
+                    val timestamp: Int
+                }
+                fn main() {
+                }
+                """,
+            )
             val event = program.loadClass("Event")
             val login = program.loadClass("Login")
             Assertions.assertEquals(Int::class.javaPrimitiveType, event.getMethod("timestamp").returnType)

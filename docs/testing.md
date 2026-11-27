@@ -20,7 +20,8 @@ Vera source cannot reach them: `FlatInstructionLoweringTests` in `jvm-instructio
 
 - Put a test in the file of the feature it exercises, in the nested class of its sub-feature, next
   to that feature's other tests. Error tests sit beside the successful ones.
-- Name tests as descriptive backticked sentences.
+- Name tests as descriptive backticked sentences. Error tests start with `rejects` (`rejects duplicate
+  class fields`).
 - When a feature gets its own section in `language.md`, give it its own file or nested class.
 
 ## How tests work
@@ -48,13 +49,19 @@ fun `classes fit interfaces by their members`() = assertPrints(
 - `assertReturns(source, value)` calls `main` and compares its return value.
 - `assertJvmMainPrints(source, lines...)` runs the JVM entry point `main(String[])`.
 - `compileProgram(source)` returns the compiled classes for tests that inspect them by reflection.
+- Every helper that compiles a program runs the ClassFile API verifier on each generated class, so
+  every successful test also checks that its bytecode is valid.
+- All programs compile into the class `PROGRAM_CLASS`, also for error tests; tests about the program
+  class name refer to the constant.
 - A source that starts with a line break is trimmed with `trimIndent`; any other source is used as
   is, so a test can build exact input such as CRLF line endings.
 
 Each error test is its own `@Test` calling `assertCompilationFails(source, ExpectedError::class,
 "message part")`. Every error reachable from source must carry a source span
-(`assertCompilationFails` checks it), and the diagnostics tests compare the full rendered output
-of `VeraDiagnostics.render`.
+(`assertCompilationFails` checks it). Messages never embed positions; a test that cares where an
+error is passes `line = L, column = C`. `compilationError(source)` returns the error for tests that
+compare a whole message. The diagnostics tests compare the full rendered output of
+`VeraDiagnostics.render`.
 
 Run the suite with:
 
@@ -69,8 +76,9 @@ Run the suite with:
 
 `ErrorCoverageTests` lists every class of each stage's exception hierarchy (`VeraLexException`,
 `VeraParseException`, `JvmLoweringException`, `FlatInstructionException`, `BytecodeEmitException`)
-and fails unless each is named, as `Stage.Error`, in some test source. An error that no input can
-reach goes into its `untestable` map with the reason, so the list of known gaps stays visible.
+and fails unless a test references each one as `Stage.Error::class` or `<Stage.Error>`. An error
+that no input can reach goes into its `untestable` map with the reason, so the list of known gaps
+stays visible.
 
 ## Why inline source
 

@@ -508,11 +508,7 @@ object JvmProgramLowering {
                 throw JvmLoweringException.ShadowingNotAllowed(field.name).at(field.span)
             }
             if (field.type == VeraType.UNKNOWN) {
-                throw JvmLoweringException.ClassFieldTypeNotAllowed(
-                    veraClass.name,
-                    field.name,
-                    field.type.render(),
-                ).at(field.span)
+                throw JvmLoweringException.InternalInvariant("class field ${field.name.display} has no type").at(field.span)
             }
             JvmField(field.name, located(field.span) { JvmTypeLowering.lower(field.type, typeNames) })
         }

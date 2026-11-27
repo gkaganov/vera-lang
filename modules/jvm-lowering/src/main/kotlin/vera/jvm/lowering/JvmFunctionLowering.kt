@@ -876,7 +876,7 @@ private class JvmFunctionLoweringState(
         when (jvmLeftType) {
             JvmType.INT, JvmType.BOOL, JvmType.STRING -> {}
             is JvmType.ClassType, is JvmType.InterfaceType -> {}
-            else -> throw JvmLoweringException.EqualityOperandsRequired(veraOperator.symbol, jvmLeftType)
+            else -> throw JvmLoweringException.InternalInvariant("equality on values of type ${jvmLeftType.render()}")
         }
     }
 
@@ -1376,7 +1376,7 @@ private class JvmFunctionLoweringState(
                     )
                 }
                 if (argumentType != JvmType.INT && argumentType != JvmType.STRING && argumentType != JvmType.BOOL) {
-                    throw JvmLoweringException.PrintArgumentTypeNotSupported(argumentType)
+                    throw JvmLoweringException.InternalInvariant("print of a value of type ${argumentType.render()}")
                 }
                 if (argumentType == JvmType.BOOL) {
                     return JvmBuiltinCall(JvmBuiltin.PRINT, listOf(JvmObjectMethods.boolToString(argument)))
@@ -1495,7 +1495,7 @@ private class JvmFunctionLoweringState(
                 }
                 JvmObjectMethods.toStringCall(jvmValue, jvmType.name)
             }
-            else -> throw JvmLoweringException.TemplateValueTypeNotSupported(jvmType)
+            else -> throw JvmLoweringException.InternalInvariant("template value of type ${jvmType.render()}")
         }
     }
 

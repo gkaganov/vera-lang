@@ -45,7 +45,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match on values that are not objects`() = assertCompilationFails(
+        fun `rejects match on values that are not objects`() = assertCompilationFails(
             function("print(match 1 {", "    Point -> 1", "})"),
             JvmLoweringException.MatchScrutineeNotAnObject::class,
             "match needs an object of a class or trait, got Int",
@@ -83,14 +83,14 @@ class MatchTests {
         )
 
         @Test
-        fun `empty parentheses in match patterns`() = assertCompilationFails(
+        fun `rejects empty parentheses in match patterns`() = assertCompilationFails(
             function("match value {", "    Empty() -> 0", "}"),
             VeraParseException.EmptyPatternParentheses::class,
             "a pattern that binds no fields has no parentheses: write `Empty`",
         )
 
         @Test
-        fun `match patterns that are not cases`() = assertCompilationFails(
+        fun `rejects match patterns that are not cases`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 classDeclaration("Point", "val x: Int") +
                 "fn area(shape: Shape): Int = match shape {\n    Point(x) -> x\n}",
@@ -99,7 +99,7 @@ class MatchTests {
         )
 
         @Test
-        fun `misspelled match patterns`() = assertCompilationFails(
+        fun `rejects misspelled match patterns`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 "fn area(shape: Shape): Int = match shape {\n    Circel(radius) -> radius\n}",
             JvmLoweringException.MatchPatternNotACase::class,
@@ -107,7 +107,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match patterns with unknown fields`() = assertCompilationFails(
+        fun `rejects match patterns with unknown fields`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 "fn area(shape: Shape): Int = match shape {\n    Circle(radus) -> radus\n}",
             JvmLoweringException.UnknownClassField::class,
@@ -115,7 +115,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match bindings that shadow locals`() = assertCompilationFails(
+        fun `rejects match bindings that shadow locals`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 "fn area(shape: Shape, radius: Int): Int = match shape {\n    Circle(radius) -> radius\n}",
             JvmLoweringException.ShadowingNotAllowed::class,
@@ -152,7 +152,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match arms without an arrow`() = assertCompilationFails(
+        fun `rejects match arms without an arrow`() = assertCompilationFails(
             function("match value {", "    Empty 0", "}"),
             VeraParseException.ExpectedToken::class,
             "expected `->` after the pattern, found '0'",
@@ -162,7 +162,7 @@ class MatchTests {
     @Nested
     inner class Exhaustiveness {
         @Test
-        fun `match arms that miss cases`() = assertCompilationFails(
+        fun `rejects match arms that miss cases`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 classDeclaration("Rect has Shape", "val width: Int") + classDeclaration("Empty has Shape") +
                 "fn area(shape: Shape): Int = match shape {\n    Circle(radius) -> radius\n}",
@@ -171,7 +171,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match arms repeated`() = assertCompilationFails(
+        fun `rejects match arms repeated`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 "fn area(shape: Shape): Int = match shape {\n    Circle -> 1\n    Circle(radius) -> radius\n}",
             JvmLoweringException.MatchArmRepeated::class,
@@ -213,7 +213,7 @@ class MatchTests {
         )
 
         @Test
-        fun `match arms of unrelated types`() = assertCompilationFails(
+        fun `rejects match arms of unrelated types`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 classDeclaration("Empty has Shape") +
                 "fn label(shape: Shape) = print(match shape {\n    Circle(radius) -> radius\n    Empty -> \"empty\"\n})",

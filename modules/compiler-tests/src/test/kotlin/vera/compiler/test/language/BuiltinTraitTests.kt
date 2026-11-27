@@ -107,21 +107,21 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `object equality without the Eq trait`() = assertCompilationFails(
+        fun `rejects object equality without the Eq trait`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1) == Point(1))"),
             JvmLoweringException.ObjectEqualityRequiresTrait::class,
             "class Point does not have the Eq trait",
         )
 
         @Test
-        fun `Eq fields whose types lack Eq`() = assertCompilationFails(
+        fun `rejects Eq fields whose types lack Eq`() = assertCompilationFails(
             "class Point {\n    val x: Int\n}\nclass Line has Eq {\n    val start: Point\n}",
             JvmLoweringException.ClassFieldRequiresTrait::class,
             "class Line field start has type Point, which does not have the Eq trait",
         )
 
         @Test
-        fun `class methods conflicting with generated trait methods`() = assertCompilationFails(
+        fun `rejects class methods conflicting with generated trait methods`() = assertCompilationFails(
             "class Point has Eq {\n    val x: Int\n" +
                 "    fn equals(other: Point): Bool {\n        return True\n    }\n}",
             JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
@@ -217,28 +217,28 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `objects without the Display trait in string templates`() = assertCompilationFails(
+        fun `rejects objects without the Display trait in string templates`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(\"at \\{Point(1)}\")"),
             JvmLoweringException.TemplateValueRequiresDisplayTrait::class,
             "class Point does not have the Display trait, so its objects cannot be used in a string template",
         )
 
         @Test
-        fun `printing objects without the Display trait`() = assertCompilationFails(
+        fun `rejects printing objects without the Display trait`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1))"),
             JvmLoweringException.PrintRequiresDisplayTrait::class,
             "class Point does not have the Display trait",
         )
 
         @Test
-        fun `Display fields whose types lack Display`() = assertCompilationFails(
+        fun `rejects Display fields whose types lack Display`() = assertCompilationFails(
             "class Point {\n    val x: Int\n}\nclass Line has Display {\n    val start: Point\n}",
             JvmLoweringException.ClassFieldRequiresTrait::class,
             "class Line field start has type Point, which does not have the Display trait",
         )
 
         @Test
-        fun `class methods conflicting with generated Display methods`() = assertCompilationFails(
+        fun `rejects class methods conflicting with generated Display methods`() = assertCompilationFails(
             "class Point has Display {\n    val x: Int\n" +
                 "    fn toString(): String {\n        return \"point\"\n    }\n}",
             JvmLoweringException.ClassMethodConflictsWithGeneratedMethod::class,
@@ -246,7 +246,7 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `forwarding objects without the Display trait to print`() = assertCompilationFails(
+        fun `rejects forwarding objects without the Display trait to print`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("Point(1) |> print"),
             JvmLoweringException.PrintRequiresDisplayTrait::class,
             "class Point does not have the Display trait",

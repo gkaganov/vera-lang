@@ -14,8 +14,9 @@ import kotlin.io.path.readText
 import kotlin.io.path.walk
 
 /**
- * Every compiler error has a test: each class in a stage's exception hierarchy must be named, as
- * `Stage.Error`, in some test source. Errors that no test can reach are listed in [untestable] with
+ * Every compiler error has a test: each class in a stage's exception hierarchy must be referenced by some
+ * test as `Stage.Error::class` (as `assertCompilationFails` takes it) or `<Stage.Error>` (as
+ * `assertCompilerError` takes it); a mention in a comment or string does not count. Errors that no test can reach are listed in [untestable] with
  * the reason.
  */
 class ErrorCoverageTests {
@@ -31,13 +32,6 @@ class ErrorCoverageTests {
     /** Errors that cannot be triggered, by `Stage.Error`, with the reason. */
     private val untestable: Map<String, String> = mapOf(
         "JvmLoweringException.InternalInvariant" to "a compiler bug by definition; no valid input reaches it",
-        "JvmLoweringException.ClassFieldTypeNotAllowed" to "the parser always gives a field a type",
-        "JvmLoweringException.EqualityOperandsRequired" to
-            "only JVM-internal types (void, Object, arrays) reach it; no Vera expression has one",
-        "JvmLoweringException.PrintArgumentTypeNotSupported" to
-            "only JVM-internal types (void, Object, arrays) reach it; no Vera expression has one",
-        "JvmLoweringException.TemplateValueTypeNotSupported" to
-            "only JVM-internal types (void, Object, arrays) reach it; no Vera expression has one",
     )
 
     /** The test sources of every module, relative to this module's directory, where Gradle runs tests. */
@@ -59,10 +53,16 @@ class ErrorCoverageTests {
                 .filter { error -> hierarchy.isAssignableFrom(error) }
                 .map { error -> "${hierarchy.simpleName}.${error.simpleName}" }
         }
-        val untested = errors.filter { error -> error !in untestable && !testSources.contains(Regex("\\b${Regex.escape(error)}\\b")) }
+        val untested = errors.filter { error -> error !in untestable && !testSources.contains(reference(error)) }
         Assertions.assertEquals(emptyList<String>(), untested, "compiler errors without a test")
 
         val stale = untestable.keys - errors.toSet()
         Assertions.assertEquals(emptySet<String>(), stale, "untestable entries that are no longer errors")
+    }
+
+    /** Matches `Stage.Error::class` or `<Stage.Error>`, the two forms the test helpers take. */
+    private fun reference(error: String): Regex {
+        val name = Regex.escape(error)
+        return Regex("\\b$name::class\\b|<$name>")
     }
 }

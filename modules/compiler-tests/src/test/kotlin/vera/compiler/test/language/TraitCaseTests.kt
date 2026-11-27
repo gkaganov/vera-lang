@@ -97,56 +97,56 @@ class TraitCaseTests {
         )
 
         @Test
-        fun `trait cases with traits but no body`() = assertCompilationFails(
+        fun `rejects trait cases with traits but no body`() = assertCompilationFails(
             "trait Printable {\n    fn label(): String\n}\ntrait Color { Red has Printable, Green }",
             VeraParseException.CaseTraitsWithoutBody::class,
             "a case with `has` needs a body to end its list: write `Red has ... { }`, found '}'",
         )
 
         @Test
-        fun `classes joining a trait that lists its cases`() = assertCompilationFails(
+        fun `rejects classes joining a trait that lists its cases`() = assertCompilationFails(
             "trait Color { Red }\nclass Teal has Color {}",
             JvmLoweringException.BlockTraitJoined::class,
             "Color lists its cases inside it; add Teal there instead of joining with `has`",
         )
 
         @Test
-        fun `unknown trait cases`() = assertCompilationFails(
+        fun `rejects unknown trait cases`() = assertCompilationFails(
             "trait Color { Red, Green }\n" + function("val color = Color.Rde"),
             JvmLoweringException.UnknownTraitCase::class,
             "trait Color has no case Rde; did you mean `Red`?",
         )
 
         @Test
-        fun `unqualified trait cases`() = assertCompilationFails(
+        fun `rejects unqualified trait cases`() = assertCompilationFails(
             "trait Color { Red, Green }\n" + function("val color = Red"),
             JvmLoweringException.UnknownVariable::class,
             "variable Red is not defined; a case is written with its trait: `Color.Red`",
         )
 
         @Test
-        fun `unqualified trait case construction`() = assertCompilationFails(
+        fun `rejects unqualified trait case construction`() = assertCompilationFails(
             "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" + function("val shape = Circle(1)"),
             JvmLoweringException.UnknownFunction::class,
             "function Circle is not defined; a case is written with its trait: `Shape.Circle`",
         )
 
         @Test
-        fun `trait cases missing a trait method`() = assertCompilationFails(
+        fun `rejects trait cases missing a trait method`() = assertCompilationFails(
             "trait Shape {\n    fn area(): Int\n    Empty\n}",
             JvmLoweringException.MissingTraitMethod::class,
             "class Shape.Empty has trait Shape but no method area",
         )
 
         @Test
-        fun `duplicate trait cases`() = assertCompilationFails(
+        fun `rejects duplicate trait cases`() = assertCompilationFails(
             "trait Color { Red, Red }",
             JvmLoweringException.DuplicateClassType::class,
             "Color.Red is declared more than once",
         )
 
         @Test
-        fun `trait cases with fields used as values`() = assertCompilationFails(
+        fun `rejects trait cases with fields used as values`() = assertCompilationFails(
             "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" + function("val shape = Shape.Circle"),
             JvmLoweringException.ClassTypeUsedAsValue::class,
             "class type Shape.Circle cannot be used as a value",
@@ -188,7 +188,7 @@ class TraitCaseTests {
         )
 
         @Test
-        fun `match on a trait's cases that misses one`() = assertCompilationFails(
+        fun `rejects match on a trait's cases that misses one`() = assertCompilationFails(
             "trait Color { Red, Blue }\n" + "fn name(color: Color): Int = match color {\n    Red -> 1\n}",
             JvmLoweringException.MatchNotExhaustive::class,
             "match on Color does not cover Color.Blue",
@@ -199,17 +199,18 @@ class TraitCaseTests {
     inner class Jvm {
         @Test
         fun `trait cases compile to nested JVM classes`() {
-            val source = """
-                        trait Shape {
-                            Circle {
-                                val radius: Int
-                            }
-                            Empty
-                        }
-                        fn main() {
-                        }
-                    """.trimIndent()
-            val program = compileProgram(source)
+            val program = compileProgram(
+                """
+                trait Shape {
+                    Circle {
+                        val radius: Int
+                    }
+                    Empty
+                }
+                fn main() {
+                }
+                """,
+            )
             val shape = program.loadClass("Shape")
             val circle = program.loadClass("Shape\$Circle")
             Assertions.assertEquals("Circle", circle.simpleName)

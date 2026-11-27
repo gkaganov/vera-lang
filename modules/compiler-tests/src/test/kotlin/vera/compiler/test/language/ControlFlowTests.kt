@@ -140,7 +140,7 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `non-Bool conditions`() = assertCompilationFails(
+        fun `rejects non-Bool conditions`() = assertCompilationFails(
             function("if 1 {", "}"),
             JvmLoweringException.ConditionNotBool::class,
             "conditions must result in a bool",
@@ -305,7 +305,7 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `if branches with different types`() = assertCompilationFails(
+        fun `rejects if branches with different types`() = assertCompilationFails(
             function("val value = if True {", "    1", "} else {", "    \"no\"", "}"),
             JvmLoweringException.IfBranchTypeMismatch::class,
             "if branches must have the same type",
@@ -468,21 +468,21 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `break outside loops`() = assertCompilationFails(
+        fun `rejects break outside loops`() = assertCompilationFails(
             function("break"),
             JvmLoweringException.BreakOutsideLoop::class,
             "break is only allowed inside a loop",
         )
 
         @Test
-        fun `continue outside loops`() = assertCompilationFails(
+        fun `rejects continue outside loops`() = assertCompilationFails(
             function("continue"),
             JvmLoweringException.ContinueOutsideLoop::class,
             "continue is only allowed inside a loop",
         )
 
         @Test
-        fun `break inside call arguments`() = assertCompilationFails(
+        fun `rejects break inside call arguments`() = assertCompilationFails(
             "fn add(a: Int, b: Int): Int {\n    return a + b\n}\n" + function(
                 "while True {",
                 "    print(add(1, if True {",
@@ -498,7 +498,7 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `continue inside operands`() = assertCompilationFails(
+        fun `rejects continue inside operands`() = assertCompilationFails(
             function(
                 "while True {",
                 "    val value = 1 + if True {",
@@ -517,35 +517,35 @@ class ControlFlowTests {
     @Nested
     inner class Unreachable {
         @Test
-        fun `statements after return`() = assertCompilationFails(
+        fun `rejects statements after return`() = assertCompilationFails(
             function("return", "print(1)"),
             JvmLoweringException.UnreachableStatement::class,
             "unreachable statement after return",
         )
 
         @Test
-        fun `statements after break`() = assertCompilationFails(
+        fun `rejects statements after break`() = assertCompilationFails(
             function("while True {", "    break", "    print(1)", "}"),
             JvmLoweringException.UnreachableStatement::class,
             "unreachable statement after break",
         )
 
         @Test
-        fun `statements after continue`() = assertCompilationFails(
+        fun `rejects statements after continue`() = assertCompilationFails(
             function("while True {", "    continue", "    print(1)", "}"),
             JvmLoweringException.UnreachableStatement::class,
             "unreachable statement after continue",
         )
 
         @Test
-        fun `block results after break`() = assertCompilationFails(
+        fun `rejects block results after break`() = assertCompilationFails(
             function("while True {", "    val value = if True {", "        break", "        0", "    } else {", "        1", "    }", "}"),
             JvmLoweringException.UnreachableStatement::class,
             "unreachable statement after break",
         )
 
         @Test
-        fun `statements after an if that returns from every branch`() = assertCompilationFails(
+        fun `rejects statements after an if that returns from every branch`() = assertCompilationFails(
             "fn pick(flag: Bool): Int {\n    if flag {\n        return 1\n    } else {\n        return 2\n    }\n" +
                 "    return 3\n}",
             JvmLoweringException.UnreachableStatement::class,
@@ -553,7 +553,7 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `statements after a match whose arms all return`() = assertCompilationFails(
+        fun `rejects statements after a match whose arms all return`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Empty has Shape") +
                 "fn area(shape: Shape): Int {\n    match shape {\n        Empty -> return 0\n    }\n    return 1\n}",
             JvmLoweringException.UnreachableStatement::class,

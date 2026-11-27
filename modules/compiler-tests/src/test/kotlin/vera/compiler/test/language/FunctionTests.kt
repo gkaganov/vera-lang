@@ -60,14 +60,14 @@ class FunctionTests {
         )
 
         @Test
-        fun `calls to unknown functions`() = assertCompilationFails(
+        fun `rejects calls to unknown functions`() = assertCompilationFails(
             function("missing()"),
             JvmLoweringException.UnknownFunction::class,
             "function missing is not defined",
         )
 
         @Test
-        fun `function calls with the wrong arity`() = assertCompilationFails(
+        fun `rejects function calls with the wrong arity`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 "fn main(): Int {\n    return add(1)\n}",
             JvmLoweringException.FunctionArityMismatch::class,
@@ -75,7 +75,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `function arguments with the wrong type`() = assertCompilationFails(
+        fun `rejects function arguments with the wrong type`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 "fn main(): Int {\n    return add(left = 1, right = \"wrong\")\n}",
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
@@ -150,7 +150,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `unnamed arguments in multi-argument calls`() = assertCompilationFails(
+        fun `rejects unnamed arguments in multi-argument calls`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("print(add(1, 2))"),
             JvmLoweringException.ArgumentNameRequired::class,
@@ -158,7 +158,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `named arguments out of parameter order`() = assertCompilationFails(
+        fun `rejects named arguments out of parameter order`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("print(add(right = 2, left = 1))"),
             JvmLoweringException.ArgumentNameMismatch::class,
@@ -167,7 +167,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `shorthand arguments out of parameter order`() = assertCompilationFails(
+        fun `rejects shorthand arguments out of parameter order`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("val left = 1", "val right = 2", "print(add(right, left))"),
             JvmLoweringException.ArgumentNameMismatch::class,
@@ -175,7 +175,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `shorthand arguments that match no parameter`() = assertCompilationFails(
+        fun `rejects shorthand arguments that match no parameter`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("val first = 1", "print(add(first, right = 2))"),
             JvmLoweringException.ArgumentNameRequired::class,
@@ -183,14 +183,14 @@ class FunctionTests {
         )
 
         @Test
-        fun `unnamed constructor arguments`() = assertCompilationFails(
+        fun `rejects unnamed constructor arguments`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int", "val y: Int") + function("print(Point(1, 2).x)"),
             JvmLoweringException.ArgumentNameRequired::class,
             "argument 1 of class Point must be named: write `x = ...`",
         )
 
         @Test
-        fun `unnamed method arguments`() = assertCompilationFails(
+        fun `rejects unnamed method arguments`() = assertCompilationFails(
             classDeclaration("Box", "val base: Int", "fn plus(a: Int, b: Int): Int {", "    return a + b", "}") +
                 function("print(Box(1).plus(a = 1, 2))"),
             JvmLoweringException.ArgumentNameRequired::class,
@@ -198,7 +198,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `a named single written argument after a forwarded value`() = assertCompilationFails(
+        fun `rejects a named single written argument after a forwarded value`() = assertCompilationFails(
             "fn add(left: Int, right: Int): Int {\n    return left + right\n}\n" +
                 function("print(1 |> add(right = 2))"),
             JvmLoweringException.SingleArgumentNamed::class,
@@ -206,7 +206,7 @@ class FunctionTests {
         )
 
         @Test
-        fun `unnamed written arguments after a forwarded value`() = assertCompilationFails(
+        fun `rejects unnamed written arguments after a forwarded value`() = assertCompilationFails(
             "fn clamp(value: Int, low: Int, high: Int): Int {\n    return value\n}\n" +
                 function("print(42 |> clamp(0, high = 10))"),
             JvmLoweringException.ArgumentNameRequired::class,
@@ -214,14 +214,14 @@ class FunctionTests {
         )
 
         @Test
-        fun `named single arguments`() = assertCompilationFails(
+        fun `rejects named single arguments`() = assertCompilationFails(
             "fn double(value: Int): Int {\n    return value * 2\n}\n" + function("print(double(value = 2))"),
             JvmLoweringException.SingleArgumentNamed::class,
             "a call to function double with one written argument passes it without a name; remove `value =`",
         )
 
         @Test
-        fun `named print arguments`() = assertCompilationFails(
+        fun `rejects named print arguments`() = assertCompilationFails(
             function("print(value = 1)"),
             JvmLoweringException.SingleArgumentNamed::class,
             "a call to print with one written argument passes it without a name",
@@ -268,35 +268,35 @@ class FunctionTests {
         )
 
         @Test
-        fun `explicit Unit return types`() = assertCompilationFails(
+        fun `rejects explicit Unit return types`() = assertCompilationFails(
             "fn log(text: String): Unit {\n}",
             VeraParseException.ExplicitUnitReturnType::class,
             "leave out the return type for a function that returns `Unit`; remove `: Unit`",
         )
 
         @Test
-        fun `returns without a value in non-Unit functions`() = assertCompilationFails(
+        fun `rejects returns without a value in non-Unit functions`() = assertCompilationFails(
             "fn main(): Int {\n    return\n}",
             JvmLoweringException.MissingReturnValue::class,
             "return without an expression requires a Unit function",
         )
 
         @Test
-        fun `function return values with the wrong type`() = assertCompilationFails(
+        fun `rejects function return values with the wrong type`() = assertCompilationFails(
             "fn main(): Int {\n    return \"wrong\"\n}",
             JvmLoweringException.ReturnTypeMismatch::class,
             "return requires Int, got String",
         )
 
         @Test
-        fun `Unit functions returning a value`() = assertCompilationFails(
+        fun `rejects Unit functions returning a value`() = assertCompilationFails(
             "fn main() {\n    return 1\n}",
             JvmLoweringException.ReturnTypeMismatch::class,
             "return requires Unit, got Int",
         )
 
         @Test
-        fun `non-Unit functions without a return statement`() = assertCompilationFails(
+        fun `rejects non-Unit functions without a return statement`() = assertCompilationFails(
             "fn main(): Int {\n}",
             JvmLoweringException.MissingReturnStatement::class,
             "missing return statement for type Int",
@@ -339,14 +339,14 @@ class FunctionTests {
         )
 
         @Test
-        fun `expression bodies without a return type`() = assertCompilationFails(
+        fun `rejects expression bodies without a return type`() = assertCompilationFails(
             "fn double(value: Int) = value * 2",
             JvmLoweringException.ExpressionBodyReturnTypeRequired::class,
             "function double returns Int, so its return type must be written: `fn double(...): Int = ...`",
         )
 
         @Test
-        fun `expression bodies of the wrong type`() = assertCompilationFails(
+        fun `rejects expression bodies of the wrong type`() = assertCompilationFails(
             "fn double(value: Int): String = value * 2",
             JvmLoweringException.ReturnTypeMismatch::class,
             "return requires String, got Int",

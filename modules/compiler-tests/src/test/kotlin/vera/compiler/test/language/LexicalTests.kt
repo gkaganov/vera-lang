@@ -14,14 +14,14 @@ class LexicalTests {
     @Nested
     inner class Tokens {
         @Test
-        fun `unexpected characters`() = assertCompilationFails(
+        fun `rejects unexpected characters`() = assertCompilationFails(
             "fn main() { @ }",
             VeraLexException.UnexpectedCharacter::class,
             "unexpected character '@'",
         )
 
         @Test
-        fun `a single pipe is not forward application`() = assertCompilationFails(
+        fun `rejects a single pipe`() = assertCompilationFails(
             function("print(1 | 2)"),
             VeraLexException.UnexpectedCharacter::class,
             "unexpected character '|'",
@@ -188,14 +188,16 @@ class LexicalTests {
         )
 
         @Test
-        fun `semicolons`() = assertCompilationFails(
+        fun `rejects semicolons`() = assertCompilationFails(
             function("print(1);"),
             VeraLexException.UnexpectedSemicolon::class,
-            "Vera does not use semicolons; end the statement with a newline at line 2, column 13",
+            "Vera does not use semicolons; end the statement with a newline",
+            line = 2,
+            column = 13,
         )
 
         @Test
-        fun `missing statement terminators`() = assertCompilationFails(
+        fun `rejects missing statement terminators`() = assertCompilationFails(
             function("print(1) print(2)"),
             VeraParseException.ExpectedEndOfLine::class,
             "expected end of line",
