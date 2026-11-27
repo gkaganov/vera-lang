@@ -129,6 +129,7 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 }
             }
 
+            verify(classFile, clazz.name, bytes)
             bytecode[clazz.name] = bytes
         }
 
@@ -150,6 +151,17 @@ private class BytecodeEmitterState(private val flatProgram: FlatProgram) {
                 Optional.of(nested.name.value.substringAfter('$')),
                 ACC_PUBLIC or ACC_STATIC or ACC_FINAL,
             )
+        }
+    }
+
+    /**
+     * Runs the JVM verifier on a generated class. Invalid bytecode is a compiler bug, so it is reported
+     * here, naming the class and method, instead of as a `VerifyError` when the program runs.
+     */
+    private fun verify(classFile: ClassFile, className: Identifier, bytes: ByteArray) {
+        val problems = classFile.verify(bytes)
+        if (problems.isNotEmpty()) {
+            throw BytecodeEmitException.InvalidBytecode(className, problems.mapNotNull { problem -> problem.message })
         }
     }
 

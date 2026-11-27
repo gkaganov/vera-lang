@@ -118,16 +118,6 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Acceptance: range-carrying `Int` types, the proof and assertion rules, and division/modulo by zero
   are designed, documented, and tested.
 
-### Bytecode verification in the compiler
-
-- Status: to discuss.
-- Area: emitter, compiler.
-- Idea: verify every generated class during compilation (for example with the ClassFile API's
-  `verify`, or by loading it through a verifying class loader), so invalid bytecode is reported as a
-  compiler bug at compile time instead of a `VerifyError` when the program runs.
-- Acceptance: decide whether to verify, where (emitter or `VeraCompiler`), whether it is always on or
-  test-only, and how failures are reported; then implement and test the result.
-
 ### Open language decisions
 
 - Overloading: decide whether top-level functions and object methods support overloading, then

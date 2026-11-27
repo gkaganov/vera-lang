@@ -9,6 +9,8 @@ import vera.jvm.instruction.FlatLoadConstant
 import vera.jvm.instruction.FlatMethod
 import vera.jvm.instruction.FlatMethodBuilder
 import vera.jvm.instruction.FlatProgram
+import vera.jvm.instruction.FlatReturn
+import vera.jvm.ir.JvmMethodSignature
 import vera.jvm.ir.JvmType
 import vera.shared.model.Identifier
 import vera.shared.model.VeraException
@@ -39,6 +41,17 @@ class BytecodeEmitterTests {
         builder.addInstruction(FlatLoadConstant(JvmType.INT, "not an Int"))
         assertCompilerError<BytecodeEmitException.InvalidConstant>("invalid constant for type INT") {
             emit(builder.build())
+        }
+    }
+
+    @Test
+    fun `bytecode emission rejects classes that fail verification`() {
+        val builder = methodBuilder()
+        builder.addInstruction(FlatReturn())
+        // A void return in a method declared to return an Int passes the flat layer but not the JVM verifier.
+        val method = builder.build().copy(signature = JvmMethodSignature(emptyList(), JvmType.INT))
+        assertCompilerError<BytecodeEmitException.InvalidBytecode>("generated class ErrorTest failed bytecode verification") {
+            emit(method)
         }
     }
 

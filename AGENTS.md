@@ -164,6 +164,9 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
   receiver chain, keeping left-to-right evaluation order.
 - The flat instruction layer verifies stack discipline and resolves labels/jumps.
 - The emitter must not interpret structured expressions or control flow.
+- The emitter runs the ClassFile API verifier on every class it generates, with the same class
+  hierarchy resolver it builds stack maps with; a failure is `BytecodeEmitException.InvalidBytecode`, a
+  compiler bug reported at compile time instead of a `VerifyError` at run time.
 
 ### IR Design
 
