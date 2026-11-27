@@ -367,6 +367,13 @@ object JvmProgramLowering {
         return instanceField to staticInitializer
     }
 
+    /** What a top-level [name] is, for shadowing errors: a function, a built-in, or a class. */
+    private fun topLevelKind(name: Identifier, functionNames: Set<Identifier>): String = when {
+        name in functionNames -> "function ${name.display}"
+        name in JvmFunctionLowering.builtinNames() -> "built-in function ${name.display}"
+        else -> "class ${name.display}"
+    }
+
     /**
      * `toString`, `equals`, and `hashCode` would override (or silently fail to override) the JVM's
      * `Object` methods, so no class, trait, or interface member may use them; `Eq` and `Display`
@@ -387,7 +394,7 @@ object JvmProgramLowering {
             val seenParameters = mutableSetOf<Identifier>()
             method.parameters.forEach { parameter ->
                 if (!seenParameters.add(parameter.name)) {
-                    throw JvmLoweringException.ShadowingNotAllowed(parameter.name).at(parameter.span)
+                    throw JvmLoweringException.ShadowingNotAllowed(parameter.name, "parameter ${parameter.name.display}").at(parameter.span)
                 }
                 located(parameter.span) { JvmTypeLowering.lower(parameter.type, typeNames) }
             }
@@ -532,7 +539,7 @@ object JvmProgramLowering {
                 throw JvmLoweringException.DuplicateClassField(veraClass.name, field.name).at(field.span)
             }
             if (field.name in outerNames) {
-                throw JvmLoweringException.ShadowingNotAllowed(field.name).at(field.span)
+                throw JvmLoweringException.ShadowingNotAllowed(field.name, topLevelKind(field.name, functionDeclarations.keys)).at(field.span)
             }
             if (field.type == VeraType.UNKNOWN) {
                 throw JvmLoweringException.InternalInvariant("class field ${field.name.display} has no type").at(field.span)
@@ -554,7 +561,7 @@ object JvmProgramLowering {
                 throw JvmLoweringException.ClassMethodConflictsWithField(veraClass.name, method.name).at(method.span)
             }
             if (method.name in outerNames) {
-                throw JvmLoweringException.ShadowingNotAllowed(method.name).at(method.span)
+                throw JvmLoweringException.ShadowingNotAllowed(method.name, topLevelKind(method.name, functionDeclarations.keys)).at(method.span)
             }
             requireUnreservedMemberName(method.name, method.span)
         }

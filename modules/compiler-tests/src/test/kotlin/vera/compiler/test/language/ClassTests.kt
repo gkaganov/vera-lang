@@ -48,7 +48,7 @@ class ClassTests {
         fun `rejects unknown class field types`() = assertCompilationFails(
             classDeclaration("Point", "val x: Missing"),
             JvmLoweringException.UnknownClassType::class,
-            "class type Missing is not defined",
+            "type Missing is not defined",
         )
 
         @Test
@@ -194,7 +194,7 @@ class ClassTests {
         fun `rejects member access on non-object values`() = assertCompilationFails(
             function("val x = 1", "print(x.foo)"),
             JvmLoweringException.MemberAccessRequiresObject::class,
-            "member access requires an object",
+            "Int has no fields or methods yet",
         )
 
         @Test
@@ -228,6 +228,13 @@ class ClassTests {
         @Test
         fun `rejects calling class fields`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1).x())"),
+            JvmLoweringException.FieldCalled::class,
+            "x is a field, not a method; remove `()`",
+        )
+
+        @Test
+        fun `rejects calling the result of a call`() = assertCompilationFails(
+            "fn one(): Int = 1\n" + function("print(one()())"),
             JvmLoweringException.ValueCallNotSupported::class,
             "calling a value is not supported yet",
         )

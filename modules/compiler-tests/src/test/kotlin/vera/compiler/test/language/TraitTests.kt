@@ -75,7 +75,7 @@ class TraitTests {
         fun `rejects duplicate trait method parameters`() = assertCompilationFails(
             traitDeclaration("Shape", "fn scale(by: Int, by: Int): Int"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name by is already in scope",
+            "name by is already used by parameter by",
         )
 
         @Test
@@ -89,7 +89,7 @@ class TraitTests {
         fun `rejects unknown trait method parameter types`() = assertCompilationFails(
             traitDeclaration("Shape", "fn area(value: Missing): Int"),
             JvmLoweringException.UnknownClassType::class,
-            "class type Missing is not defined",
+            "type Missing is not defined",
         )
     }
 
@@ -205,7 +205,7 @@ class TraitTests {
             traitDeclaration("Shape", "fn area(): Int") +
                 "\nclass Square has Shape {\n    val side: Int\n}",
             JvmLoweringException.MissingTraitMethod::class,
-            "class Square has trait Shape but no method area",
+            "class Square has trait Shape but no method area; declare `fn area(): Int`",
         )
 
         @Test
@@ -333,6 +333,15 @@ class TraitTests {
                 "fn describe(shape: Shape): Int = shape.area()\n" + function("print(describe(Point(1)))"),
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
             "function describe parameter shape requires Shape, got Point",
+        )
+
+        @Test
+        fun `rejects trait values where one of their classes is expected`() = assertCompilationFails(
+            "trait Shape {}\n" + classDeclaration("Square has Shape", "val side: Int") +
+                function("val shape: Shape = Square(2)", "val square: Square = shape"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "variable square is declared as Square but bound to a value of type Shape; use `match` to get a Square " +
+                "out of a Shape",
         )
 
         @Test
@@ -646,8 +655,8 @@ class TraitTests {
         @Test
         fun `rejects required fields called like methods`() = assertCompilationFails(
             "trait Event {\n    val timestamp: Int\n}\n" + "fn read(event: Event): Int = event.timestamp()\n",
-            JvmLoweringException.ValueCallNotSupported::class,
-            "calling a value is not supported yet",
+            JvmLoweringException.FieldCalled::class,
+            "timestamp is a field, not a method; remove `()`",
         )
     }
 

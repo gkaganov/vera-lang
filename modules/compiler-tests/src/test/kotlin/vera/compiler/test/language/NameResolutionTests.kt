@@ -55,7 +55,28 @@ class NameResolutionTests {
         fun `rejects misspelled types`() = assertCompilationFails(
             "fn show(value: Strng) {\n}",
             JvmLoweringException.UnknownClassType::class,
-            "class type Strng is not defined; did you mean `String`?",
+            "type Strng is not defined; did you mean `String`?",
+        )
+
+        @Test
+        fun `suggests singleton values for misspelled values`() = assertCompilationFails(
+            "class Empty {}\n" + function("print(Emtpy)"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable Emtpy is not defined; did you mean `Empty`?",
+        )
+
+        @Test
+        fun `suggests Unit and True for misspelled built-in values`() = assertCompilationFails(
+            function("print(Unti)"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable Unti is not defined; did you mean `Unit`?",
+        )
+
+        @Test
+        fun `names the built-in traits for unknown traits without a close match`() = assertCompilationFails(
+            "class Point has Comparable {\n    val x: Int\n}",
+            JvmLoweringException.UnknownTrait::class,
+            "trait Comparable is not defined; the built-in traits are `Eq` and `Display`",
         )
 
         @Test
@@ -76,7 +97,7 @@ class NameResolutionTests {
         fun `rejects unknown type names`() = assertCompilationFails(
             "fn main(): Nope { }",
             JvmLoweringException.UnknownClassType::class,
-            "class type Nope is not defined",
+            "type Nope is not defined",
         )
 
         @Test
@@ -93,14 +114,14 @@ class NameResolutionTests {
         fun `rejects locals in nested blocks shadowing outer locals`() = assertCompilationFails(
             function("val value = 1", "if True {", "    val value = 2", "}"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name value is already in scope; shadowing is not allowed",
+            "name value is already used by local value; Vera does not allow shadowing, so rename it",
         )
 
         @Test
         fun `rejects duplicate parameters`() = assertCompilationFails(
             "fn main(value: Int, value: Int) { }",
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name value is already in scope; shadowing is not allowed",
+            "name value is already used by parameter value",
         )
 
         @Test
@@ -113,7 +134,7 @@ class NameResolutionTests {
                 "}",
             ),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name x is already in scope; shadowing is not allowed",
+            "name x is already used by field x of class Point; Vera does not allow shadowing, so rename it",
         )
 
         @Test
@@ -127,7 +148,7 @@ class NameResolutionTests {
                 "}",
             ),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name x is already in scope; shadowing is not allowed",
+            "name x is already used by field x of class Point; Vera does not allow shadowing, so rename it",
         )
 
         @Test
@@ -143,49 +164,49 @@ class NameResolutionTests {
                 "}",
             ),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name x is already in scope; shadowing is not allowed",
+            "name x is already used by field x of class Point; Vera does not allow shadowing, so rename it",
         )
 
         @Test
         fun `rejects locals shadowing parameters`() = assertCompilationFails(
             "fn main(value: Int) {\n    val value = 1\n}",
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name value is already in scope; shadowing is not allowed",
+            "name value is already used by parameter value",
         )
 
         @Test
         fun `rejects locals shadowing locals`() = assertCompilationFails(
             function("val value = 1", "val value = 2"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name value is already in scope; shadowing is not allowed",
+            "name value is already used by local value",
         )
 
         @Test
         fun `rejects parameters shadowing top-level functions`() = assertCompilationFails(
             "fn helper() { }\nfn main(helper: Int) { }",
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name helper is already in scope; shadowing is not allowed",
+            "name helper is already used by function helper; Vera does not allow shadowing, so rename it",
         )
 
         @Test
         fun `rejects class fields shadowing builtins`() = assertCompilationFails(
             classDeclaration("Point", "val print: Int"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name print is already in scope; shadowing is not allowed",
+            "name print is already used by built-in function print; Vera does not allow shadowing, so rename it",
         )
 
         @Test
         fun `rejects class methods shadowing top-level functions`() = assertCompilationFails(
             "fn helper() { }\n" + classDeclaration("Point", "fn helper() { }"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name helper is already in scope; shadowing is not allowed",
+            "name helper is already used by function helper; Vera does not allow shadowing, so rename it",
         )
 
         @Test
         fun `rejects class methods shadowing class names`() = assertCompilationFails(
             classDeclaration("Point", "fn Point() { }"),
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name Point is already in scope; shadowing is not allowed",
+            "name Point is already used by class Point; Vera does not allow shadowing, so rename it",
         )
     }
 

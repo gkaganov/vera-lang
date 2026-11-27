@@ -19,6 +19,9 @@ internal object JvmNameHints {
     fun forJavaValue(name: Identifier): String? = when (name.value) {
         "null" -> "Vera has no `null`"
         "this" -> "Vera has no `this`; refer to fields and methods by their names"
+        "super" -> "Vera has no inheritance, so there is no `super`"
+        "true", "false" -> "Vera's Bool values are `True` and `False`"
+        "System" -> "Vera's `print` writes a line: write `print(value)`"
         else -> null
     }
 
@@ -28,8 +31,16 @@ internal object JvmNameHints {
         "boolean", "Boolean" -> "Vera's boolean type is `Bool`"
         "string" -> "Vera's string type is `String`"
         "void", "Void" -> "use `Unit`, or leave out the return type"
-        "long", "short", "byte", "double", "float", "char" -> "Vera does not support `${name.value}` yet; use `Int`"
-        "Object" -> "Vera has no universal `Object` type"
+        "long", "short", "byte", "double", "float", "char",
+        "Long", "Short", "Byte", "Double", "Float", "Char" -> "Vera does not support `${name.value}` yet; use `Int`"
+        "Object", "Any" -> "Vera has no universal `${name.value}` type"
+        "Nothing" -> "Vera has no `Nothing` type; a function that returns no value returns `Unit`"
+        else -> null
+    }
+
+    /** Advice for function names that only exist in Java or Kotlin, used where a function is called. */
+    fun forJavaFunction(name: Identifier): String? = when (name.value) {
+        "println" -> "Vera's `print` already ends the line; write `print(...)`"
         else -> null
     }
 

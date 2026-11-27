@@ -14,7 +14,7 @@ class DiagnosticsTests {
         assertRendersAs(
             "fn main() {\n    print(1 + True)\n}\n",
             """
-            error: operator '+' requires both operands to have the same type, got Int and Bool
+            error: operator '+' is only defined for Int operands, got Bool
              --> main.vera:2:11
               |
             2 |     print(1 + True)
@@ -71,7 +71,7 @@ class DiagnosticsTests {
         assertRendersAs(
             "fn helper() {\n}\nfn helper() {\n}\n",
             """
-            error: function helper is declared more than once
+            error: function helper is declared more than once; Vera has no overloading, so give each function its own name
              --> main.vera:3:1
               |
             3 | fn helper() {

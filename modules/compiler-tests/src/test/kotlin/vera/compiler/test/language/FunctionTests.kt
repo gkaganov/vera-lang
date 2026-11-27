@@ -353,6 +353,21 @@ class FunctionTests {
             JvmLoweringException.MissingReturnStatement::class,
             "missing return statement for type Int",
         )
+
+        @Test
+        fun `rejects block bodies that end in a value without return`() = assertCompilationFails(
+            "fn add(a: Int): Int {\n    a\n}",
+            JvmLoweringException.MissingReturnStatement::class,
+            "missing return statement for type Int; a block body needs `return`: write `return ...`, or use an " +
+                "expression body `= ...`",
+        )
+
+        @Test
+        fun `rejects functions that return only inside while`() = assertCompilationFails(
+            "fn first(): Int {\n    while True {\n        return 1\n    }\n}",
+            JvmLoweringException.MissingReturnStatement::class,
+            "a `return` inside `while` does not count; add a `return` after the loop",
+        )
     }
 
     @Nested

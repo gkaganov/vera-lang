@@ -86,10 +86,18 @@ class ExpressionTests {
         )
 
         @Test
-        fun `rejects binary operands with different types`() = assertCompilationFails(
+        fun `rejects arithmetic with a non-Int operand`() = assertCompilationFails(
             function("val value = 1 * \"x\""),
-            JvmLoweringException.OperandTypesDiffer::class,
-            "operator '*' requires both operands to have the same type",
+            JvmLoweringException.IntOperandsRequired::class,
+            "operator '*' is only defined for Int operands, got String",
+        )
+
+        @Test
+        fun `rejects chained comparisons`() = assertCompilationFails(
+            function("print(1 < 2 < 3)"),
+            JvmLoweringException.IntOperandsRequired::class,
+            "operator '<' is only defined for Int operands, got Bool; comparisons cannot be chained; " +
+                "write `a < b and b < c`",
         )
 
         @Test

@@ -28,17 +28,52 @@ class HabitTests {
     @Nested
     inner class Types {
         @Test
+        fun `Java and Kotlin lowercase true and false`() = assertCompilationFails(
+            function("val done = true"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable true is not defined; Vera's Bool values are `True` and `False`",
+        )
+
+        @Test
+        fun `Kotlin Boolean`() = assertCompilationFails(
+            "fn show(value: Boolean) {\n}",
+            JvmLoweringException.UnknownClassType::class,
+            "type Boolean is not defined; Vera's boolean type is `Bool`",
+        )
+
+        @Test
+        fun `Kotlin Long`() = assertCompilationFails(
+            "fn show(value: Long) {\n}",
+            JvmLoweringException.UnknownClassType::class,
+            "type Long is not defined; Vera does not support `Long` yet; use `Int`",
+        )
+
+        @Test
+        fun `Kotlin Any`() = assertCompilationFails(
+            "fn show(value: Any) {\n}",
+            JvmLoweringException.UnknownClassType::class,
+            "type Any is not defined; Vera has no universal `Any` type",
+        )
+
+        @Test
+        fun `Kotlin Nothing`() = assertCompilationFails(
+            "fn fail(): Nothing {\n}",
+            JvmLoweringException.UnknownClassType::class,
+            "Vera has no `Nothing` type; a function that returns no value returns `Unit`",
+        )
+
+        @Test
         fun `Java primitive type names`() = assertCompilationFails(
             "fn show(value: int) {\n}",
             JvmLoweringException.UnknownClassType::class,
-            "class type int is not defined; Vera's integer type is `Int`",
+            "type int is not defined; Vera's integer type is `Int`",
         )
 
         @Test
         fun `Java void return types`() = assertCompilationFails(
             "fn show(): void {\n}",
             JvmLoweringException.UnknownClassType::class,
-            "class type void is not defined; use `Unit`, or leave out the return type",
+            "type void is not defined; use `Unit`, or leave out the return type",
         )
 
         @Test
@@ -490,6 +525,41 @@ class HabitTests {
     @Nested
     inner class Classes {
         @Test
+        fun `Java super`() = assertCompilationFails(
+            classDeclaration("Point", "val x: Int", "fn getX(): Int = super.x"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable super is not defined; Vera has no inheritance, so there is no `super`",
+        )
+
+        @Test
+        fun `Java equals calls on built-in values`() = assertCompilationFails(
+            function("print(\"a\".equals(\"b\"))"),
+            JvmLoweringException.MemberAccessRequiresObject::class,
+            "String has no fields or methods yet; compare values with `==`",
+        )
+
+        @Test
+        fun `Java and Kotlin string length`() = assertCompilationFails(
+            function("print(\"abc\".length)"),
+            JvmLoweringException.MemberAccessRequiresObject::class,
+            "String has no fields or methods yet",
+        )
+
+        @Test
+        fun `Java and Kotlin constructing a trait`() = assertCompilationFails(
+            "trait Shape {}\n" + function("val shape = Shape()"),
+            JvmLoweringException.UnknownFunction::class,
+            "function Shape is not defined; Shape is a trait and cannot be constructed; construct a class that has it",
+        )
+
+        @Test
+        fun `Java and Kotlin constructing an interface`() = assertCompilationFails(
+            "interface Named {}\n" + function("val named = Named()"),
+            JvmLoweringException.UnknownFunction::class,
+            "Named is an interface and cannot be constructed",
+        )
+
+        @Test
         fun `Java object creation with new`() = assertCompilationFails(
             function("val point = new Point()"),
             VeraParseException.JavaSyntax::class,
@@ -674,6 +744,23 @@ class HabitTests {
             "trait Box<T> {}",
             VeraParseException.JavaSyntax::class,
             "Vera has no generic types yet",
+        )
+    }
+
+    @Nested
+    inner class Print {
+        @Test
+        fun `Java and Kotlin println`() = assertCompilationFails(
+            function("println(1)"),
+            JvmLoweringException.UnknownFunction::class,
+            "function println is not defined; Vera's `print` already ends the line; write `print(...)`",
+        )
+
+        @Test
+        fun `Java System out println`() = assertCompilationFails(
+            function("System.out.println(1)"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable System is not defined; Vera's `print` writes a line: write `print(value)`",
         )
     }
 }

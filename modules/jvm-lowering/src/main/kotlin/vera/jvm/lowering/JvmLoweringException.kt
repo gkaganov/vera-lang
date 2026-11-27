@@ -17,7 +17,7 @@ enum class JvmForwardApplicationIssue {
 
 sealed class JvmLoweringException(message: String) : VeraException(message) {
     class ConditionNotBool(val actual: JvmType) : JvmLoweringException(
-        "conditions must result in a bool, got ${actual.render()}",
+        "a condition must be `Bool`, got ${actual.render()}",
     )
 
     class UnknownVariable(
@@ -46,6 +46,16 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     )
 
     /** Rebinding a parameter; parameters are immutable. */
+    /** `x = 1` in a method, where `x` is a field of the receiver. */
+    class FieldRebound(val field: Identifier) : JvmLoweringException(
+        "field ${field.display} cannot be rebound; objects are immutable, so create a new object with the new value",
+    )
+
+    /** `helper = 1`, where `helper` is a function. */
+    class FunctionRebound(val name: Identifier) : JvmLoweringException(
+        "${name.display} is a function, not a variable, so it cannot be rebound",
+    )
+
     class ParameterRebound(val name: Identifier) : JvmLoweringException(
         "parameter ${name.display} cannot be rebound; write `mut val ${name.display}` first to make it rebindable",
     )
@@ -54,16 +64,18 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val name: Identifier,
         val declared: JvmType,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "cannot rebind variable ${name.display} of type ${declared.render()} to ${actual.render()}",
+        "cannot rebind variable ${name.display} of type ${declared.render()} to ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class BindTypeMismatch(
         val name: Identifier,
         val declared: String,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "variable ${name.display} is declared as $declared but bound to a value of type ${actual.render()}",
+        "variable ${name.display} is declared as $declared but bound to a value of type ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class BoolOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
@@ -78,8 +90,8 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "operator '$operator' requires both operands to have the same type, got ${left.render()} and ${right.render()}",
     )
 
-    class IntOperandsRequired(val operator: String, val actual: JvmType) : JvmLoweringException(
-        "operator '$operator' is only defined for Int operands, got ${actual.render()}",
+    class IntOperandsRequired(val operator: String, val actual: JvmType, val hint: String? = null) : JvmLoweringException(
+        "operator '$operator' is only defined for Int operands, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class IfBranchTypeMismatch(
@@ -94,6 +106,12 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     /** The right side of `|>` names a callable without calling it. */
     class ForwardApplicationNeedsCall(val callee: String) : JvmLoweringException(
         "the right side of `|>` must be a call: write `$callee()`",
+    )
+
+    /** `x |> f() + 1`: `|>` binds loosest, so its right side is the whole operation. */
+    class ForwardApplicationIntoOperation(val operator: String) : JvmLoweringException(
+        "the right side of `|>` must be a call, not an operation with `$operator`; `|>` binds loosest, so group " +
+            "the forwarding: `(value |> f()) $operator other`",
     )
 
     class InvalidForwardApplication(val issue: JvmForwardApplicationIssue) : JvmLoweringException(
@@ -121,28 +139,29 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val function: Identifier,
         val expected: Int,
         val actual: Int,
-    ) : JvmLoweringException(
-        "function ${function.display} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
-    )
+        val forwarded: Boolean = false,
+    ) : JvmLoweringException(arityMessage("function ${function.display}", expected, actual, forwarded))
 
     class FunctionArgumentTypeMismatch(
         val function: Identifier,
         val parameter: Identifier,
         val expected: JvmType,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "function ${function.display} parameter ${parameter.display} requires ${expected.render()}, got ${actual.render()}",
+        "function ${function.display} parameter ${parameter.display} requires ${expected.render()}, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class ReturnTypeMismatch(
         val expected: JvmType,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "return requires ${expected.render()}, got ${actual.render()}",
+        "return requires ${expected.render()}, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
-    class MissingReturnStatement(val expected: JvmType) : JvmLoweringException(
-        "missing return statement for type ${expected.render()}",
+    class MissingReturnStatement(val expected: JvmType, val hint: String? = null) : JvmLoweringException(
+        "missing return statement for type ${expected.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class BuiltinArityMismatch(
@@ -150,11 +169,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val expected: Int,
         val actual: Int,
     ) : JvmLoweringException(
-        "${builtin.name.lowercase()} requires exactly $expected argument",
+        "${builtin.name.lowercase()} requires exactly $expected argument, got $actual",
     )
 
     class DuplicateFunction(val name: Identifier) : JvmLoweringException(
-        "function ${name.display} is declared more than once",
+        "function ${name.display} is declared more than once; Vera has no overloading, so give each function its own name",
     )
 
     class TopLevelNameConflict(val name: Identifier) : JvmLoweringException(
@@ -165,8 +184,13 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         "class ${name.display} conflicts with the built-in function ${name.display}",
     )
 
-    class ShadowingNotAllowed(val name: Identifier) : JvmLoweringException(
-        "name ${name.display} is already in scope; shadowing is not allowed",
+    /** A binding that reuses a name already in scope; [existing] says what the name names, when known. */
+    class ShadowingNotAllowed(val name: Identifier, val existing: String? = null) : JvmLoweringException(
+        if (existing == null) {
+            "name ${name.display} is already in scope; shadowing is not allowed"
+        } else {
+            "name ${name.display} is already used by $existing; Vera does not allow shadowing, so rename it"
+        },
     )
 
     class DuplicateClassType(val name: Identifier) : JvmLoweringException(
@@ -193,7 +217,7 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val suggestion: Identifier? = null,
         val hint: String? = null,
     ) : JvmLoweringException(
-        JvmNameHints.withHelp("class type ${name.display} is not defined", hint, suggestion),
+        JvmNameHints.withHelp("type ${name.display} is not defined", hint, suggestion),
     )
 
     class MatchScrutineeNotAnObject(val actual: JvmType) : JvmLoweringException(
@@ -405,29 +429,36 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val className: Identifier,
         val field: Identifier,
         val suggestion: Identifier? = null,
+        val renameHint: String? = null,
     ) : JvmLoweringException(
-        JvmNameHints.withHelp("class ${className.display} has no field ${field.display}", null, suggestion),
+        JvmNameHints.withHelp(
+            "class ${className.display} has no field ${field.display}",
+            renameHint.takeIf { suggestion == null },
+            suggestion,
+        ),
     )
 
-    class MemberAccessRequiresObject(val actual: JvmType) : JvmLoweringException(
-        "member access requires an object, got ${actual.render()}",
+    /** `.member` on a value of a built-in type, which has no fields or methods yet. */
+    class MemberAccessRequiresObject(val actual: JvmType, val member: Identifier) : JvmLoweringException(
+        "${actual.render()} has no fields or methods yet" +
+            if (member.value == "equals") "; compare values with `==`" else "",
     )
 
     class ClassConstructorArityMismatch(
         val className: Identifier,
         val expected: Int,
         val actual: Int,
-    ) : JvmLoweringException(
-        "class ${className.display} constructor requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
-    )
+        val forwarded: Boolean = false,
+    ) : JvmLoweringException(arityMessage("class ${className.display} constructor", expected, actual, forwarded))
 
     class ClassConstructorArgumentTypeMismatch(
         val className: Identifier,
         val field: Identifier,
         val expected: JvmType,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "class ${className.display} field ${field.display} requires ${expected.render()}, got ${actual.render()}",
+        "class ${className.display} field ${field.display} requires ${expected.render()}, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class DuplicateClassMethod(
@@ -457,9 +488,8 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val method: Identifier,
         val expected: Int,
         val actual: Int,
-    ) : JvmLoweringException(
-        "class ${className.display} method ${method.display} requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual",
-    )
+        val forwarded: Boolean = false,
+    ) : JvmLoweringException(arityMessage("class ${className.display} method ${method.display}", expected, actual, forwarded))
 
     class MethodArgumentTypeMismatch(
         val className: Identifier,
@@ -467,8 +497,9 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val parameter: Identifier,
         val expected: JvmType,
         val actual: JvmType,
+        val hint: String? = null,
     ) : JvmLoweringException(
-        "class ${className.display} method ${method.display} parameter ${parameter.display} requires ${expected.render()}, got ${actual.render()}",
+        "class ${className.display} method ${method.display} parameter ${parameter.display} requires ${expected.render()}, got ${actual.render()}" + (hint?.let { "; $it" } ?: ""),
     )
 
     class ClassMethodUsedAsValue(
@@ -484,19 +515,22 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
     )
 
     class ClassTypeUsedAsValue(val name: Identifier) : JvmLoweringException(
-        "class type ${name.display} cannot be used as a value",
+        "class type ${name.display} cannot be used as a value; construct an object: `${name.display}(...)`",
     )
 
     class ObjectEqualityRequiresTrait(val className: Identifier) : JvmLoweringException(
-        "class ${className.display} does not have the Eq trait, so its objects cannot be compared",
+        "class ${className.display} does not have the Eq trait, so its objects cannot be compared; " +
+            traitFix(className, JvmBuiltinTraits.eq),
     )
 
     class PrintRequiresDisplayTrait(val className: Identifier) : JvmLoweringException(
-        "class ${className.display} does not have the Display trait, so its objects cannot be printed",
+        "class ${className.display} does not have the Display trait, so its objects cannot be printed; " +
+            traitFix(className, JvmBuiltinTraits.display),
     )
 
     class TemplateValueRequiresDisplayTrait(val className: Identifier) : JvmLoweringException(
-        "class ${className.display} does not have the Display trait, so its objects cannot be used in a string template",
+        "class ${className.display} does not have the Display trait, so its objects cannot be used in a string " +
+            "template; " + traitFix(className, JvmBuiltinTraits.display),
     )
 
     class ClassFieldRequiresTrait(
@@ -505,7 +539,8 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val fieldType: Identifier,
         val trait: Identifier,
     ) : JvmLoweringException(
-        "class ${className.display} field ${field.display} has type ${fieldType.display}, which does not have the ${trait.display} trait",
+        "class ${className.display} field ${field.display} has type ${fieldType.display}, which does not have the " +
+            "${trait.display} trait; " + traitFix(fieldType, trait),
     )
 
     /** A member named like a generated `java.lang.Object` method. */
@@ -538,7 +573,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val name: Identifier,
         val suggestion: Identifier? = null,
     ) : JvmLoweringException(
-        JvmNameHints.withHelp("trait ${name.display} is not defined", null, suggestion),
+        JvmNameHints.withHelp(
+            "trait ${name.display} is not defined",
+            if (suggestion == null) "the built-in traits are `Eq` and `Display`" else null,
+            suggestion,
+        ),
     )
 
     /** `+` with a `String` operand; Vera builds strings with templates. */
@@ -559,8 +598,10 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
         val trait: Identifier,
         val method: Identifier,
         val kind: VeraTraitKind = VeraTraitKind.TRAIT,
+        val signature: String? = null,
     ) : JvmLoweringException(
-        "${memberOwner(className, trait, kind)} no method ${method.display}",
+        "${memberOwner(className, trait, kind)} no method ${method.display}" +
+            (signature?.let { "; declare `$it`" } ?: ""),
     )
 
     class TraitMethodSignatureMismatch(
@@ -586,6 +627,11 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
 
     class MissingReturnValue(val actual: JvmType) : JvmLoweringException(
         "return without an expression requires a Unit function, but this function returns ${actual.render()}",
+    )
+
+    /** `point.x()`: a field followed by a call. */
+    class FieldCalled(val field: Identifier) : JvmLoweringException(
+        "${field.display} is a field, not a method; remove `()`",
     )
 
     class ValueCallNotSupported : JvmLoweringException(
@@ -665,6 +711,29 @@ sealed class JvmLoweringException(message: String) : VeraException(message) {
 
 private fun renderSignature(parameters: List<JvmType>, returnType: JvmType): String =
     "(${parameters.joinToString(", ") { it.render() }}) -> ${returnType.render()}"
+
+/**
+ * `function add requires 2 arguments, got 1`; a call that receives a value forwarded by `|>` says so,
+ * because its written arguments are one fewer than the count.
+ */
+private fun arityMessage(callee: String, expected: Int, actual: Int, forwarded: Boolean): String = when {
+    forwarded && expected == 0 -> "$callee takes no parameters, so it cannot receive a value forwarded by `|>`"
+    else -> "$callee requires $expected ${if (expected == 1) "argument" else "arguments"}, got $actual" +
+        if (forwarded) " (including the value forwarded by `|>`)" else ""
+}
+
+/**
+ * How to give [className] a built-in [trait]: a case gets its traits from its owner, which must require
+ * it; any other class declares it with `has`.
+ */
+private fun traitFix(className: Identifier, trait: Identifier): String {
+    val owner = className.value.substringBefore('$', missingDelimiterValue = "")
+    return if (owner.isNotEmpty()) {
+        "add `requires ${trait.display}` to trait $owner"
+    } else {
+        "declare `class ${className.display} has ${trait.display}`"
+    }
+}
 
 /** How a message about a member missing from a class starts: `class Login has trait Event but`. */
 private fun memberOwner(className: Identifier, trait: Identifier, kind: VeraTraitKind): String = when (kind) {

@@ -250,10 +250,15 @@ Shared concepts such as `Identifier` and `SourceLocation` intentionally have no 
 - `render()` returns the message plus `at line L, column C`. `VeraDiagnostics.render(exception,
   source, fileName)` (compiler module) renders the message, `file:line:column`, and the source line
   with the span underlined; the CLI uses it. Messages themselves never embed positions.
-- Hints: the lexer rejects Java operators with `VeraLexException.JavaOperator`, the parser rejects
-  Java syntax with `VeraParseException.JavaSyntax` only where parsing would fail anyway (so `new`,
-  `final`, and `for` stay ordinary identifiers), and lowering adds "did you mean" suggestions and
-  Java name advice to unknown-name errors through `JvmNameHints`.
+- Hints: Java and Kotlin habits get an error that says what to write in Vera. The lexer rejects their
+  operators with `VeraLexException.JavaOperator` (and has `BlockComment`, `CharLiteral`, `TextBlock`,
+  `UnsupportedNumberLiteral`); the parser rejects their syntax with `VeraParseException.JavaSyntax`
+  only where parsing would fail anyway (so `new`, `final`, `for`, `when`, and `fun` stay ordinary
+  identifiers); lowering adds "did you mean" suggestions (singleton values included) and Java or
+  Kotlin name advice through `JvmNameHints`, says why a value cannot convert (`conversionHint`: what a
+  class lacks to fit an interface via `JvmInterfaceConformance.fitReason`, a downcast needing `match`),
+  names the kind of a shadowed name, and says how to add a missing trait. Their tests live in
+  `HabitTests`, grouped like the language guide.
 - Do not use `error()`, `require`, `check`, `TODO()`, `!!`, or unsafe casts in compiler modules.
 - Unexpected JDK ClassFile API exceptions are compiler bugs and propagate unwrapped.
 - Arrow and `VeraResult` are not used.

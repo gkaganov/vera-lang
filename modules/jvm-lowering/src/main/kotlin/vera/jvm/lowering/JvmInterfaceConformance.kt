@@ -5,8 +5,11 @@ import vera.ast.VeraField
 import vera.ast.VeraParameter
 import vera.ast.VeraTraitDeclaration
 import vera.ast.VeraTraitKind
+import vera.ast.VeraTraitMethod
 import vera.ast.VeraType
+import vera.ast.render
 import vera.jvm.ir.JvmType
+import vera.jvm.ir.render
 import vera.shared.model.Identifier
 import vera.shared.model.SourceSpan
 import vera.shared.model.at
@@ -98,7 +101,13 @@ internal class JvmInterfaceConformance(
         }
         contract.methods.forEach { contractMethod ->
             val method = members.methods.firstOrNull { method -> method.name == contractMethod.name }
-                ?: return JvmLoweringException.MissingTraitMethod(className, contract.name, contractMethod.name, kind).at(span)
+                ?: return JvmLoweringException.MissingTraitMethod(
+                    className,
+                    contract.name,
+                    contractMethod.name,
+                    kind,
+                    sourceSignature(contractMethod),
+                ).at(span)
             val expectedParameters = parameterTypes(contractMethod.parameters)
             val expectedReturn = JvmTypeLowering.lowerReturn(contractMethod.returnType, typeNames)
             val actualParameters = located(method.span) { parameterTypes(method.parameters) }
@@ -136,6 +145,35 @@ internal class JvmInterfaceConformance(
         methods = veraClass.methods.map { method -> JvmMemberMethod(method.name, method.parameters, method.returnType, method.span) },
     )
 
+    /**
+     * Why [veraClass] does not fit [veraInterface], in the words of a hint (`it has no method name`), or
+     * `null` when it fits. Used where a class value is passed as an interface it does not fit.
+     */
+    fun fitReason(veraClass: VeraClassDeclaration, veraInterface: VeraTraitDeclaration): String? {
+        val members = classMembers(veraClass)
+        for (contract in contractsOf(veraInterface)) {
+            val mismatch = memberMismatch(veraClass.name, members, contract, contract.span) ?: continue
+            return when (mismatch) {
+                is JvmLoweringException.MissingTraitMethod -> "it has no method ${mismatch.method.display}" +
+                    (mismatch.signature?.let { signature -> "; declare `$signature`" } ?: "")
+                is JvmLoweringException.MissingTraitField -> "it has no field ${mismatch.field.display}"
+                is JvmLoweringException.TraitFieldTypeMismatch ->
+                    "its field ${mismatch.field.display} has type ${mismatch.actual.render()}, not ${mismatch.expected.render()}"
+                is JvmLoweringException.TraitMethodSignatureMismatch ->
+                    if (mismatch.expectedParameters == mismatch.actualParameters) {
+                        "its method ${mismatch.method.display} returns ${mismatch.actualReturn.render()}, not ${mismatch.expectedReturn.render()}"
+                    } else {
+                        "its method ${mismatch.method.display} takes different parameter types"
+                    }
+                is JvmLoweringException.TraitMethodParameterNameMismatch ->
+                    "its method ${mismatch.method.display} names a parameter ${mismatch.actual.display}, not ${mismatch.expected.display}"
+                else -> mismatch.message
+            }
+        }
+        return builtinsOf(veraInterface).firstOrNull { builtin -> builtin !in veraClass.traits }
+            ?.let { builtin -> "it does not have ${builtin.display}" }
+    }
+
     /** Whether [members] and [builtins] satisfy [veraInterface] and every interface it requires. */
     private fun fits(
         ownerName: Identifier,
@@ -155,4 +193,11 @@ internal class JvmInterfaceConformance(
 
     private fun parameterTypes(parameters: List<VeraParameter>): List<JvmType> =
         parameters.map { parameter -> JvmTypeLowering.lower(parameter.type, typeNames) }
+}
+
+/** [method] as it would be declared in a class: `fn scale(by: Int): Int`, without `: Unit`. */
+internal fun sourceSignature(method: VeraTraitMethod): String {
+    val parameters = method.parameters.joinToString(", ") { parameter -> "${parameter.name.display}: ${parameter.type.render()}" }
+    val returnType = method.returnType.takeUnless { type -> type == VeraType.UNKNOWN || type == VeraType.UNIT }
+    return "fn ${method.name.display}($parameters)" + (returnType?.let { type -> ": ${type.render()}" } ?: "")
 }

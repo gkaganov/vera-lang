@@ -72,7 +72,14 @@ class PrintTests {
         fun `rejects builtin calls with the wrong arity`() = assertCompilationFails(
             function("print(1, 2)"),
             JvmLoweringException.BuiltinArityMismatch::class,
-            "print requires exactly 1 argument",
+            "print requires exactly 1 argument, got 2",
+        )
+
+        @Test
+        fun `rejects print without an argument`() = assertCompilationFails(
+            function("print()"),
+            JvmLoweringException.BuiltinArityMismatch::class,
+            "print requires exactly 1 argument, got 0",
         )
     }
 }

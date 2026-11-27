@@ -159,8 +159,9 @@ class ForwardApplicationTests {
         @Test
         fun `rejects an or-expression on the right of forward application`() = assertCompilationFails(
             function("print(1 |> f or True)"),
-            JvmLoweringException.InvalidForwardApplication::class,
-            "right-hand side of '|>' must be a callable name or member call",
+            JvmLoweringException.ForwardApplicationIntoOperation::class,
+            "the right side of `|>` must be a call, not an operation with `or`; `|>` binds loosest, so group " +
+                "the forwarding: `(value |> f()) or other`",
         )
     }
 
@@ -232,6 +233,20 @@ class ForwardApplicationTests {
                 function("val calc = Calc(1)", "print(1 |> calc.add)"),
             JvmLoweringException.ForwardApplicationNeedsCall::class,
             "the right side of `|>` must be a call: write `calc.add()`",
+        )
+
+        @Test
+        fun `rejects forwarding into a function without parameters`() = assertCompilationFails(
+            "fn one(): Int = 1\n" + function("print(1 |> one())"),
+            JvmLoweringException.FunctionArityMismatch::class,
+            "function one takes no parameters, so it cannot receive a value forwarded by `|>`",
+        )
+
+        @Test
+        fun `rejects forwarding into a call that lacks arguments`() = assertCompilationFails(
+            "fn add(left: Int, right: Int): Int = left + right\n" + function("print(1 |> add())"),
+            JvmLoweringException.FunctionArityMismatch::class,
+            "function add requires 2 arguments, got 1 (including the value forwarded by `|>`)",
         )
 
         @Test

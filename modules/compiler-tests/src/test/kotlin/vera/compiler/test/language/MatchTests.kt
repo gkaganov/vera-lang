@@ -115,11 +115,19 @@ class MatchTests {
         )
 
         @Test
+        fun `rejects pattern bindings named differently from the field`() = assertCompilationFails(
+            "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
+                "fn area(shape: Shape): Int = match shape {\n    Circle(r) -> r\n}",
+            JvmLoweringException.UnknownClassField::class,
+            "class Circle has no field r; patterns bind fields by name; to use another name, write `radius = r`",
+        )
+
+        @Test
         fun `rejects match bindings that shadow locals`() = assertCompilationFails(
             "trait Shape {}\n" + classDeclaration("Circle has Shape", "val radius: Int") +
                 "fn area(shape: Shape, radius: Int): Int = match shape {\n    Circle(radius) -> radius\n}",
             JvmLoweringException.ShadowingNotAllowed::class,
-            "name radius is already in scope; shadowing is not allowed",
+            "name radius is already used by parameter radius; Vera does not allow shadowing, so rename it",
         )
 
         @Test

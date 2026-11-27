@@ -161,7 +161,77 @@ class InterfaceTests {
             "interface Named {\n    fn name(): String\n}\nclass Dog {}\n" +
                 "fn greet(named: Named) = print(named.name())\n" + function("greet(Dog)"),
             JvmLoweringException.FunctionArgumentTypeMismatch::class,
-            "function greet parameter named requires Named, got Dog",
+            "function greet parameter named requires Named, got Dog; Dog does not fit Named: it has no method name; declare `fn name(): String`",
+        )
+
+        @Test
+        fun `rejects classes whose method returns another type than the interface`() = assertCompilationFails(
+            "interface Named {\n    fn name(): String\n}\nclass Dog {\n    fn name(): Int = 1\n}\n" +
+                function("val named: Named = Dog"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "Dog does not fit Named: its method name returns Int, not String",
+        )
+
+        @Test
+        fun `rejects methods where an interface requires a field`() = assertCompilationFails(
+            "interface Timed {\n    val timestamp: Int\n}\nclass Tick {\n    fn timestamp(): Int = 1\n}\n" +
+                function("val timed: Timed = Tick"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "Tick does not fit Timed: it has no field timestamp",
+        )
+
+        @Test
+        fun `rejects fields where an interface requires a method`() = assertCompilationFails(
+            "interface Named {\n    fn name(): String\n}\nclass Dog {\n    val name: String\n}\n" +
+                function("val named: Named = Dog(\"Rex\")"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "Dog does not fit Named: it has no method name",
+        )
+
+        @Test
+        fun `rejects classes without a built-in trait the interface requires`() = assertCompilationFails(
+            "interface Named requires Display {\n    fn name(): String\n}\nclass Dog {\n    val age: Int\n    fn name(): String = \"Rex\"\n}\n" +
+                function("val named: Named = Dog(3)"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "Dog does not fit Named: it does not have Display",
+        )
+
+        @Test
+        fun `rejects built-in values where an interface is expected`() = assertCompilationFails(
+            "interface Anything {}\n" + function("val anything: Anything = 1"),
+            JvmLoweringException.BindTypeMismatch::class,
+            "built-in type Int cannot fit an interface yet",
+        )
+
+        @Test
+        fun `singletons fit interfaces that require Display`() = assertPrints(
+            """
+            interface Named requires Display {}
+            class Dog {}
+            fn show(named: Named) = print(named)
+            fn main() {
+                show(Dog)
+            }
+            """,
+            "Dog",
+        )
+
+        @Test
+        fun `interfaces can have Unit methods`() = assertPrints(
+            """
+            interface Resettable {
+                fn reset()
+            }
+            class Counter {
+                val value: Int
+                fn reset() = print("reset \{value}")
+            }
+            fn main() {
+                val resettable: Resettable = Counter(3)
+                resettable.reset()
+            }
+            """,
+            "reset 3",
         )
     }
 

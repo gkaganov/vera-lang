@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertPrints
 import vera.compiler.test.assertReturns
+import vera.compiler.test.classDeclaration
 import vera.compiler.test.function
 import vera.jvm.lowering.JvmLoweringException
 import vera.parser.VeraParseException
@@ -192,6 +193,20 @@ class BindingTests {
             function("missing = 1"),
             JvmLoweringException.UnknownVariable::class,
             "variable missing is not defined",
+        )
+
+        @Test
+        fun `rejects rebinding fields inside methods`() = assertCompilationFails(
+            classDeclaration("Counter", "val start: Int", "fn reset() {", "    start = 0", "}"),
+            JvmLoweringException.FieldRebound::class,
+            "field start cannot be rebound; objects are immutable, so create a new object with the new value",
+        )
+
+        @Test
+        fun `rejects rebinding function names`() = assertCompilationFails(
+            "fn helper() {\n}\n" + function("helper = 1"),
+            JvmLoweringException.FunctionRebound::class,
+            "helper is a function, not a variable, so it cannot be rebound",
         )
 
         @Test

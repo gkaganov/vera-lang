@@ -110,6 +110,14 @@ class BuiltinTraitTests {
         )
 
         @Test
+        fun `rejects comparing cases whose trait does not require Eq`() = assertCompilationFails(
+            "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" + function("print(Shape.Circle(1) == Shape.Circle(1))"),
+            JvmLoweringException.ObjectEqualityRequiresTrait::class,
+            "class Shape.Circle does not have the Eq trait, so its objects cannot be compared; add `requires Eq` " +
+                "to trait Shape",
+        )
+
+        @Test
         fun `rejects comparing trait values of singleton cases without requires Eq`() = assertCompilationFails(
             "trait Color { Red, Green }\nfn same(first: Color, second: Color): Bool = first == second\n",
             JvmLoweringException.TraitRequirementMissing::class,
@@ -139,14 +147,14 @@ class BuiltinTraitTests {
         fun `rejects object equality without the Eq trait`() = assertCompilationFails(
             classDeclaration("Point", "val x: Int") + function("print(Point(1) == Point(1))"),
             JvmLoweringException.ObjectEqualityRequiresTrait::class,
-            "class Point does not have the Eq trait",
+            "class Point does not have the Eq trait, so its objects cannot be compared; declare `class Point has Eq`",
         )
 
         @Test
         fun `rejects Eq fields whose types lack Eq`() = assertCompilationFails(
             "class Point {\n    val x: Int\n}\nclass Line has Eq {\n    val start: Point\n}",
             JvmLoweringException.ClassFieldRequiresTrait::class,
-            "class Line field start has type Point, which does not have the Eq trait",
+            "class Line field start has type Point, which does not have the Eq trait; declare `class Point has Eq`",
         )
     }
 

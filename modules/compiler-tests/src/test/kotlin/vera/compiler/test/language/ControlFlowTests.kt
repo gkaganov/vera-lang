@@ -143,7 +143,7 @@ class ControlFlowTests {
         fun `rejects non-Bool conditions`() = assertCompilationFails(
             function("if 1 {", "}"),
             JvmLoweringException.ConditionNotBool::class,
-            "conditions must result in a bool",
+            "a condition must be `Bool`, got Int",
         )
     }
 
