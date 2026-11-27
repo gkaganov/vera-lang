@@ -44,9 +44,9 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
      are always qualified, so they never meet. An import that would bring them together is a
      shadowing error.
   7. Deferred to the generics design: the type of a field-less case of a generic trait
-     (`Option.None`). It needs either a bottom type (`Never`) with covariance, or typing from
-     context. Owned cases share their owner's type parameters
-     (`trait Option<T> { Some { val value: T } None }`).
+     (`Tree.Leaf` in `trait Tree<T> { Node { val value: T }, Leaf }`). It needs either a bottom type
+     (`Never`) with covariance, or typing from context. Owned cases share their owner's type
+     parameters. An optional value is `T | None` (see union types), not a generic `Option` trait.
   8. Trait requirements: `trait Shape requires Display, Eq` means every member of `Shape` has
      those traits, so a `Shape` value can be printed, compared, or used where a required trait is
      expected. This is interface inheritance only: traits carry no storage or code. In the separate
@@ -56,8 +56,8 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
      other would have the same members, so they should be one trait.
   9. `Bool` is a built-in closed trait in block form, `trait Bool { True, False }`, whose cases are
      imported by default so they stay written `True` and `False`; a `match` on a `Bool` covers
-     `True` and `False`. It stays a JVM `boolean`. `Unit` is a built-in field-less class, so its
-     single value is written `Unit`.
+     `True` and `False`. It stays a JVM `boolean`. `None` is a built-in field-less class, so its
+     single value is written `None`.
   10. Open contracts are structural `interface`s instead of `open trait`. An interface is open: any
       class with matching members fits it, without declaring anything; parameter names are part of
       a member's signature, so `fn scale(by: Int)` does not fit `fn scale(factor: Int)`. Interfaces
@@ -78,7 +78,7 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
       uses its members instead.
 - Implementation steps:
   1. Every trait closed (drop `sealed`), and `match` on any trait. Done.
-  2. Field-less classes as singletons, with `Unit` as one of them. Done.
+  2. Field-less classes as singletons, with `None` as one of them. Done.
   3. Block-form cases: qualified names, nested JVM classes, unqualified patterns, qualified
      `Display`. Done.
   4. Trait requirements, including `equals(Object)` so `==` works on trait-typed values. Done; a
@@ -106,17 +106,34 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 - Acceptance: mutation works through object methods and is rejected for immutable objects and
   fields where appropriate.
 
-### Numeric edge-case semantics
+### Proven facts
 
-- Status: direction decided for overflow; design not started.
+- Status: direction decided; design not started.
 - Area: type system, lowering, and emitter.
-- Overflow: `Int` values may only hold legal values. Types will carry the range of values they can
-  hold, and every arithmetic result must be proven, or explicitly asserted, to stay in range at
-  compile time. Overflow does not wrap silently; until this exists, overflow is left untested so no
-  test pins the current wrapping behavior.
-- Division/modulo by zero: undecided; possibly ruled out by the same mechanism.
-- Acceptance: range-carrying `Int` types, the proof and assertion rules, and division/modulo by zero
-  are designed, documented, and tested.
+- Model: the compiler proves facts about values from checks, constructors, and assertions, and an
+  operation that needs a fact is accepted only where the fact is proven. Values are immutable, so a
+  proven fact cannot be broken by another thread or a later change. One mechanism covers:
+  - `Int` ranges: an `Int` may only hold legal values. Types carry the range of values they can hold,
+    and every arithmetic result must be proven, or explicitly asserted, to stay in range at compile
+    time. Overflow does not wrap silently; until this exists, overflow is left untested so no test
+    pins the current wrapping behavior.
+  - Division and modulo by zero: undecided; likely a divisor proven non-zero.
+  - Map keys: `map.get(key)` returns the value type, not `V | None`, and is allowed only where the key
+    is proven present, for example inside `if map.has(key) { ... }`, like a Kotlin smart cast. This
+    also keeps lookups clear of the `T | None` flattening (see union types).
+  - List bounds: indexing needs an index proven in range.
+- Rules to design:
+  - A rebinding (`mut val`) ends the facts about that variable. Keys and indexes must be stable: a
+    literal or a `val`, not a call.
+  - Facts known at construction: a map built with literal keys may carry them in its type, so `get`
+    needs no check.
+  - A single-lookup form for check-and-get, so `has` followed by `get` does not search twice.
+  - An explicit assertion that states a fact the compiler cannot prove and fails at run time when it
+    is wrong, so the Java behavior is available but always chosen on purpose.
+- Depends on: generics and persistent collections for map keys and list bounds; `Int` ranges can come
+  first.
+- Acceptance: `Int` ranges, division and modulo by zero, map keys, and list bounds are designed,
+  documented, and tested on one shared mechanism of proofs and assertions.
 
 ### Open language decisions
 
@@ -124,19 +141,22 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   document and test the result.
 - Update blocks: `x = { ... }` is currently rejected by the parser; either implement it as part of
   object mutation or remove the reserved syntax.
-- Union types (`Int | Unit`): an `if` without `else` could produce "the branch type or `Unit`", Vera's
+- Union types (`Int | None`): an `if` without `else` could produce "the branch type or `None`", Vera's
   null-free optional value. Decide whether unions are inferred (then `if c { 1 } else { "a" }` is
   `Int | String` and branch mismatches move to the use site) or only declared; how a union is consumed
   (`match` on built-in types such as `Int(n) -> ...`); what `==`, `print`, and templates do on one; the
   JVM representation (boxed values in an `Object` slot with `instanceof` checks); and how anonymous
   unions relate to closed traits. Until then, an `if` without `else` whose value is used must have a
-  `Unit` branch, so adding unions later changes no existing program.
-- Built-in types fitting interfaces: decided that `Int`, `String`, `Bool`, and `Unit` fit an interface
+  `None` branch, so adding unions later changes no existing program. Decided: `None` means both "no
+  result" and "absent", so `T | None` flattens when `T` is itself `None`, as Java's `null` does in
+  `Map.get`. An API that must tell the two apart returns a closed trait, and map lookups avoid it
+  through proven facts.
+- Built-in types fitting interfaces: decided that `Int`, `String`, `Bool`, and `None` fit an interface
   through their built-in traits (`Eq`, `Display`), so they fit interfaces without members of their
   own, such as `interface Anything {}`. Such interfaces need an `Object` representation on the JVM
   with boxed values and runtime-dispatched `==` and `print` (a boxed `Boolean` must print `True`), the
   same machinery as union types, so both are built together. Until then a built-in type passed as an
-  interface is rejected with "cannot fit an interface yet"; `Unit` does not fit early.
+  interface is rejected with "cannot fit an interface yet"; `None` does not fit early.
 - Several patterns per `match` arm: `Circle, Rect -> 1`, as in Java (`case A, B ->`) and Kotlin. Each
   listed case counts as covered; decide whether such an arm binds no fields or only fields every
   listed case shares with the same type. Until then the parser rejects it with a hint.
