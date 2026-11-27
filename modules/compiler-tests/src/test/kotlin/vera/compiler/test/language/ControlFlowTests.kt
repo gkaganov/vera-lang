@@ -14,111 +14,54 @@ class ControlFlowTests {
     @Nested
     inner class If {
         @Test
-        fun `if statements execute only then-block if True`() = assertPrints(
+        fun `if selects the first matching branch of an else if chain`() = assertPrints(
             """
-            fn main() {
-                if 1 + 1 < 3 {
-                    print("So true")
+            fn describe(n: Int): String {
+                if n < 0 {
+                    return "negative"
+                } else if n == 0 {
+                    return "zero"
+                } else if n < 10 {
+                    return "small"
                 } else {
-                    print("Never gonna happen")
+                    return "large"
                 }
             }
+            fn main() {
+                print(describe(-5))
+                print(describe(0))
+                print(describe(3))
+                print(describe(42))
+            }
             """,
-            "So true",
+            "negative",
+            "zero",
+            "small",
+            "large",
         )
 
         @Test
-        fun `if statements execute only else-block if False`() = assertPrints(
+        fun `if without else runs its block only when the condition holds`() = assertPrints(
             """
-            fn main() {
-                if False {
-                    print("So true")
-                } else {
-                    print("Absolutely false!")
+            fn check(n: Int) {
+                if n > 0 {
+                    print("positive")
+                } else if n < 0 {
+                    print("negative")
                 }
+                print("checked")
+            }
+            fn main() {
+                check(1)
+                check(0)
+                check(-1)
             }
             """,
-            "Absolutely false!",
-        )
-
-        @Test
-        fun `else if executes the matching branch`() = assertPrints(
-            """
-            fn main() {
-                if False {
-                    print("if")
-                } else if True {
-                    print("else if")
-                } else {
-                    print("else")
-                }
-            }
-            """,
-            "else if",
-        )
-
-        @Test
-        fun `else if falls through to else when no branch matches`() = assertPrints(
-            """
-            fn main() {
-                if False {
-                    print("if")
-                } else if False {
-                    print("else if")
-                } else {
-                    print("else")
-                }
-            }
-            """,
-            "else",
-        )
-
-        @Test
-        fun `else if chains select the first matching branch`() = assertPrints(
-            """
-            fn main() {
-                if False {
-                    print("if")
-                } else if False {
-                    print("second")
-                } else if True {
-                    print("third")
-                } else {
-                    print("else")
-                }
-            }
-            """,
-            "third",
-        )
-
-        @Test
-        fun `else if without a final else terminates before following statement`() = assertPrints(
-            """
-            fn main() {
-                if False {
-                    print("if")
-                } else if False {
-                    print("else if")
-                }
-
-                print("after")
-            }
-            """,
-            "after",
-        )
-
-        @Test
-        fun `if without else still terminates before following statement`() = assertPrints(
-            """
-            fn main() {
-                if False {
-                    print("then")
-                }
-
-                print("after")
-            }
-            """,
-            "after",
+            "positive",
+            "checked",
+            "checked",
+            "negative",
+            "checked",
         )
 
         @Test
@@ -313,7 +256,7 @@ class ControlFlowTests {
         fun `rejects if branches with different types`() = assertCompilationFails(
             function("val value = if True {", "    1", "} else {", "    \"no\"", "}"),
             JvmLoweringException.IfBranchTypeMismatch::class,
-            "if branches must have the same type",
+            "if branches must have the same type, got Int and String",
         )
     }
 
@@ -333,20 +276,6 @@ class ControlFlowTests {
         )
 
         @Test
-        fun `while executes its body when the condition is true`() = assertPrints(
-            """
-            fn main() {
-                while 1 + 1 < 3 {
-                    print("once")
-                    return
-                }
-                print("after")
-            }
-            """,
-            "once",
-        )
-
-        @Test
         fun `while loops can terminate through rebinding`() = assertPrints(
             """
             fn main() {
@@ -360,6 +289,13 @@ class ControlFlowTests {
             "0",
             "1",
             "2",
+        )
+
+        @Test
+        fun `rejects non-Bool while conditions`() = assertCompilationFails(
+            function("while 1 {", "}"),
+            JvmLoweringException.ConditionNotBool::class,
+            "a condition must be `Bool`, got Int",
         )
     }
 
@@ -422,6 +358,30 @@ class ControlFlowTests {
             }
             """,
             6,
+        )
+
+        @Test
+        fun `continue only skips the rest of the innermost loop`() = assertPrints(
+            """
+            fn main() {
+                mut val outer = 0
+                while outer < 2 {
+                    outer = outer + 1
+                    mut val inner = 0
+                    while inner < 3 {
+                        inner = inner + 1
+                        if inner == 2 {
+                            continue
+                        }
+                        print("\{outer}.\{inner}")
+                    }
+                }
+            }
+            """,
+            "1.1",
+            "1.3",
+            "2.1",
+            "2.3",
         )
 
         @Test

@@ -97,63 +97,21 @@ class ForwardApplicationTests {
     @Nested
     inner class Precedence {
         @Test
-        fun `forward application binds looser than arithmetic`() = assertPrints(
+        fun `forward application binds looser than every binary operator`() = assertPrints(
             """
+            fn double(value: Int): Int = value * 2
+            fn negate(value: Bool): Bool = not value
             fn main() {
                 print(1 + 2 |> double())
-            }
-            fn double(value: Int): Int {
-                return value * 2
+                print(True or False |> negate())
+                print(False and True |> negate())
+                print(1 == 1 |> negate())
             }
             """,
             "6",
-        )
-
-        @Test
-        fun `forward application binds looser than or`() = assertPrints(
-            """
-            fn main() {
-                print(True or False |> negate())
-            }
-            fn negate(value: Bool): Bool {
-                return if value {
-                    False
-                } else {
-                    True
-                }
-            }
-            """,
             "False",
-        )
-
-        @Test
-        fun `forward application binds looser than and`() = assertPrints(
-            """
-            fn main() {
-                print(False and True |> negate())
-            }
-            fn negate(value: Bool): Bool {
-                return if value {
-                    False
-                } else {
-                    True
-                }
-            }
-            """,
             "True",
-        )
-
-        @Test
-        fun `forward application binds looser than equality`() = assertPrints(
-            """
-            fn main() {
-                print(1 == 1 |> identityBool())
-            }
-            fn identityBool(value: Bool): Bool {
-                return value
-            }
-            """,
-            "True",
+            "False",
         )
 
         @Test
@@ -295,6 +253,24 @@ class ForwardApplicationTests {
             }
             """,
             15,
+        )
+
+        @Test
+        fun `forward application calls methods on trait values`() = assertPrints(
+            """
+            trait Shape {
+                fn scaled(factor: Int): Int
+            }
+            class Square has Shape {
+                val side: Int
+                fn scaled(factor: Int): Int = side * factor
+            }
+            fn main() {
+                val shape: Shape = Square(3)
+                print(2 |> shape.scaled())
+            }
+            """,
+            "6",
         )
 
         @Test

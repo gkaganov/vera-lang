@@ -21,6 +21,7 @@ class StringTests {
                 print("quote: \" backslash: \\")
                 print("line\nbreak")
                 print("tab\tend")
+                print("carriage\rreturn")
                 print("unicode: é 日本 😀")
             }
             """,
@@ -29,6 +30,7 @@ class StringTests {
             "quote: \" backslash: \\",
             "line\nbreak",
             "tab\tend",
+            "carriage\rreturn",
             "unicode: é 日本 😀",
         )
 
@@ -123,6 +125,22 @@ class StringTests {
             """,
             "hi! and inner 2",
             "status: go",
+        )
+
+        @Test
+        fun `placeholders can be adjacent or end the string`() = assertPrints(
+            """
+            fn main() {
+                val a = 1
+                val b = 2
+                print("\{a}\{b}")
+                print("\{a} items")
+                print("total: \{a + b}")
+            }
+            """,
+            "12",
+            "1 items",
+            "total: 3",
         )
 
         @Test

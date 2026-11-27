@@ -27,44 +27,40 @@ class PrintTests {
         }
 
         @Test
-        fun `print function prints to system-out`() = assertPrints(
+        fun `print writes each value on its own line`() = assertPrints(
             """
-            fn main() {
-                print(65)
+            class Point has Display {
+                val x: Int
             }
-            """,
-            "65",
-        )
-
-        @Test
-        fun `print evaluates arithmetic arguments`() = assertPrints(
-            """
-            fn main() {
-                print(1 + 2 * 3)
-            }
-            """,
-            "7",
-        )
-
-        @Test
-        fun `a String can be printed`() = assertPrints(
-            """
-            fn main() {
-                print("Hello World!")
-            }
-            """,
-            "Hello World!",
-        )
-
-        @Test
-        fun `Unit-returning calls can be printed`() = assertPrints(
-            """
             fn doNothing() {
             }
             fn main() {
+                print(65)
+                print(1 + 2 * 3)
+                print("Hello World!")
+                print(True)
+                print(Unit)
                 print(doNothing())
+                print(Point(1))
             }
             """,
+            "65",
+            "7",
+            "Hello World!",
+            "True",
+            "Unit",
+            "Unit",
+            "Point(x: 1)",
+        )
+
+        @Test
+        fun `print returns Unit`() = assertPrints(
+            """
+            fn main() {
+                print(print(1))
+            }
+            """,
+            "1",
             "Unit",
         )
 

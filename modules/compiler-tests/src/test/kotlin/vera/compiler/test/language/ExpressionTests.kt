@@ -13,25 +13,17 @@ class ExpressionTests {
     @Nested
     inner class Arithmetic {
         @Test
-        fun `Ints can be added`() = assertReturns(
+        fun `Ints can be added, subtracted, and multiplied`() = assertPrints(
             """
-            fn main(): Int {
-                val sum = 2 + 2
-                return sum
+            fn main() {
+                print(2 + 2)
+                print(100 - 37)
+                print(6 * 8)
             }
             """,
-            4,
-        )
-
-        @Test
-        fun `Ints can be subtracted`() = assertReturns(
-            """
-            fn main(): Int {
-                val difference = 100 - 37
-                return difference
-            }
-            """,
-            63,
+            "4",
+            "63",
+            "48",
         )
 
         @Test
@@ -44,6 +36,7 @@ class ExpressionTests {
                 print(-2 * 3)
                 print(1 - -2)
                 print(-(-4))
+                print(-(5))
             }
             """,
             "-1",
@@ -51,38 +44,35 @@ class ExpressionTests {
             "-6",
             "3",
             "4",
+            "-5",
         )
 
         @Test
-        fun `Ints can be multiplied`() = assertReturns(
+        fun `Int division truncates toward zero`() = assertPrints(
             """
-            fn main(): Int {
-                val product = 6 * 8
-                return product
+            fn main() {
+                print(16 / 4)
+                print(7 / 2)
+                print(-7 / 2)
             }
             """,
-            48,
+            "4",
+            "3",
+            "-3",
         )
 
         @Test
-        fun `Ints can be divided if the result is an Int`() = assertReturns(
+        fun `modulo takes the sign of the dividend`() = assertPrints(
             """
-            fn main(): Int {
-                val quotient = 16 / 4
-                return quotient
+            fn main() {
+                print(17 % 5)
+                print(-7 % 2)
+                print(7 % -2)
             }
             """,
-            4,
-        )
-
-        @Test
-        fun `Ints support modulo`() = assertReturns(
-            """
-            fn main(): Int {
-                return 17 % 5
-            }
-            """,
-            2,
+            "2",
+            "-1",
+            "1",
         )
 
         @Test
@@ -176,25 +166,17 @@ class ExpressionTests {
     @Nested
     inner class Equality {
         @Test
-        fun `equals compares Ints correctly`() = assertPrints(
+        fun `Int equality compares values`() = assertPrints(
             """
             fn main() {
                 print(3 == 3)
                 print(4 == 5)
-            }
-            """,
-            "True",
-            "False",
-        )
-
-        @Test
-        fun `not-equals compares Ints correctly`() = assertPrints(
-            """
-            fn main() {
                 print(3 != 52)
                 print(4 != 4)
             }
             """,
+            "True",
+            "False",
             "True",
             "False",
         )
@@ -220,12 +202,17 @@ class ExpressionTests {
             """
             fn main() {
                 print("hello" == "hello")
+                val count = 1
+                print("\{count}" == "1")
+                print("item \{count}" != "item 1")
                 print("hello" == "world")
                 print("hello" != "world")
                 print("hello" != "hello")
             }
             """,
             "True",
+            "True",
+            "False",
             "False",
             "True",
             "False",
@@ -379,6 +366,32 @@ class ExpressionTests {
                 print(1 + 1 == 2)
                 print(2 == 1 + 1)
                 print(1 + 1 == 3 - 1)
+            }
+            """,
+            "True",
+            "True",
+            "True",
+        )
+
+        @Test
+        fun `and binds tighter than or`() = assertPrints(
+            """
+            fn main() {
+                print(True or False and False)
+                print(False and True or True)
+            }
+            """,
+            "True",
+            "True",
+        )
+
+        @Test
+        fun `ordering binds tighter than equality, which is left-associative`() = assertPrints(
+            """
+            fn main() {
+                print(1 < 2 == True)
+                print(True == False == False)
+                print(1 + 2 == 3 and 2 < 3)
             }
             """,
             "True",

@@ -95,6 +95,32 @@ class DiagnosticsTests {
     }
 
     @Test
+    fun `diagnostics keep tab indentation so the underline lines up`() {
+        assertRendersAs(
+            "fn main() {\n\tprint(missing)\n}\n",
+            "error: variable missing is not defined\n" +
+                " --> main.vera:2:8\n" +
+                "  |\n" +
+                "2 | \tprint(missing)\n" +
+                "  | \t      ^^^^^^^",
+        )
+    }
+
+    @Test
+    fun `diagnostics show CRLF source lines without the carriage return`() {
+        assertRendersAs(
+            "fn main() {\r\n    print(missing)\r\n}\r\n",
+            """
+            error: variable missing is not defined
+             --> main.vera:2:11
+              |
+            2 |     print(missing)
+              |           ^^^^^^^
+            """,
+        )
+    }
+
+    @Test
     fun `diagnostics widen the gutter for multi-digit line numbers`() {
         assertRendersAs(
             "fn main() {\n" + "    print(1)\n".repeat(8) + "    print(missing)\n}\n",

@@ -108,10 +108,25 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
 
 ### Numeric edge-case semantics
 
-- Status: undecided.
-- Area: lowering and emitter.
-- Acceptance: division/modulo by zero and integer overflow behavior are decided, documented, and
-  tested.
+- Status: direction decided for overflow; design not started.
+- Area: type system, lowering, and emitter.
+- Overflow: `Int` values may only hold legal values. Types will carry the range of values they can
+  hold, and every arithmetic result must be proven, or explicitly asserted, to stay in range at
+  compile time. Overflow does not wrap silently; until this exists, overflow is left untested so no
+  test pins the current wrapping behavior.
+- Division/modulo by zero: undecided; possibly ruled out by the same mechanism.
+- Acceptance: range-carrying `Int` types, the proof and assertion rules, and division/modulo by zero
+  are designed, documented, and tested.
+
+### Bytecode verification in the compiler
+
+- Status: to discuss.
+- Area: emitter, compiler.
+- Idea: verify every generated class during compilation (for example with the ClassFile API's
+  `verify`, or by loading it through a verifying class loader), so invalid bytecode is reported as a
+  compiler bug at compile time instead of a `VerifyError` when the program runs.
+- Acceptance: decide whether to verify, where (emitter or `VeraCompiler`), whether it is always on or
+  test-only, and how failures are reported; then implement and test the result.
 
 ### Open language decisions
 
@@ -119,10 +134,24 @@ Reasonable short- and mid-term goals that make ordinary programs correct and com
   document and test the result.
 - Update blocks: `x = { ... }` is currently rejected by the parser; either implement it as part of
   object mutation or remove the reserved syntax.
-- Recursion: recursive top-level functions and methods appear to work; add integration tests and
-  document them explicitly.
-- Default class field values: decide whether fields may omit constructor arguments by declaring a
-  default, or keep every field required at construction.
+- Union types (`Int | Unit`): an `if` without `else` could produce "the branch type or `Unit`", Vera's
+  null-free optional value. Decide whether unions are inferred (then `if c { 1 } else { "a" }` is
+  `Int | String` and branch mismatches move to the use site) or only declared; how a union is consumed
+  (`match` on built-in types such as `Int(n) -> ...`); what `==`, `print`, and templates do on one; the
+  JVM representation (boxed values in an `Object` slot with `instanceof` checks); and how anonymous
+  unions relate to closed traits. Until then, an `if` without `else` whose value is used must have a
+  `Unit` branch, so adding unions later changes no existing program.
+- Built-in types fitting interfaces: decided that `Int`, `String`, `Bool`, and `Unit` fit an interface
+  through their built-in traits (`Eq`, `Display`), so they fit interfaces without members of their
+  own, such as `interface Anything {}`. Such interfaces need an `Object` representation on the JVM
+  with boxed values and runtime-dispatched `==` and `print` (a boxed `Boolean` must print `True`), the
+  same machinery as union types, so both are built together. Until then a built-in type passed as an
+  interface is rejected with "cannot fit an interface yet"; `Unit` does not fit early.
+- Several patterns per `match` arm: `Circle, Rect -> 1`, as in Java (`case A, B ->`) and Kotlin. Each
+  listed case counts as covered; decide whether such an arm binds no fields or only fields every
+  listed case shares with the same type. Until then the parser rejects it with a hint.
+- Default values: decide whether fields and function parameters may declare a default so callers can
+  omit them, or keep every field and parameter required. Until then both are rejected with a hint.
 
 ## Long-term ideas and advanced features
 

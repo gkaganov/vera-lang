@@ -46,9 +46,13 @@ class BuiltinTraitTests {
                 val end: Point
             }
             fn main() {
-                print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) == Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)))
-                print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) == Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 5)))
-                print(Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4)) != Line(start = Point(x = 0, y = 2), end = Point(x = 3, y = 4)))
+                val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
+                val same = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
+                val movedEnd = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 5))
+                val movedStart = Line(start = Point(x = 0, y = 2), end = Point(x = 3, y = 4))
+                print(line == same)
+                print(line == movedEnd)
+                print(line != movedStart)
             }
             """,
             "True",
@@ -125,22 +129,46 @@ class BuiltinTraitTests {
         )
 
         @Test
-        fun `object equality works on variables`() = assertReturns(
+        fun `Eq compares Unit fields`() = assertPrints(
+            """
+            class Signal has Eq {
+                val flag: Unit
+                val level: Int
+            }
+            fn main() {
+                print(Signal(flag = Unit, level = 1) == Signal(flag = Unit, level = 1))
+                print(Signal(flag = Unit, level = 1) == Signal(flag = Unit, level = 2))
+            }
+            """,
+            "True",
+            "False",
+        )
+
+        @Test
+        fun `object equality evaluates both operands in order`() = assertPrints(
             """
             class Point has Eq {
                 val x: Int
-                val y: Int
             }
-            fn main(): Int {
-                val first = Point(x = 1, y = 2)
-                val second = Point(x = 1, y = 2)
-                if first == second {
-                    return 1
-                }
-                return 0
+            fn left(): Point {
+                print("left")
+                return Point(1)
+            }
+            fn right(): Point {
+                print("right")
+                return Point(1)
+            }
+            fn main() {
+                print(left() == right())
+                print(left() != right())
             }
             """,
-            1,
+            "left",
+            "right",
+            "True",
+            "left",
+            "right",
+            "False",
         )
 
         @Test
@@ -172,22 +200,6 @@ class BuiltinTraitTests {
             }
             """,
             "Point(x: 1, y: 2)",
-        )
-
-        @Test
-        fun `Display objects can be forwarded to print`() = assertPrints(
-            """
-            class Point has Display {
-                val x: Int
-                val y: Int
-            }
-            fn main() {
-                Point(x = 1, y = 2) |> print()
-                Point(x = 3, y = 4) |> print()
-            }
-            """,
-            "Point(x: 1, y: 2)",
-            "Point(x: 3, y: 4)",
         )
 
         @Test

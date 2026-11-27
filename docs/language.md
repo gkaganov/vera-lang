@@ -118,7 +118,9 @@ fn log(text: String) = print(text)
 - A statement after `return`, `break`, `continue`, or an `if` whose branches all return, in the same
   block, is a compile error (`unreachable statement`), as in Java. This includes the value expression
   at the end of an `if` block.
-- Functions can only be declared at top level.
+- Functions can only be declared at top level, in any order; a function can call one declared after
+  it.
+- Functions and methods can call themselves and each other recursively.
 
 ## Classes and objects
 
@@ -241,6 +243,22 @@ class Square has Shape {
   covers every one. Each trait compiles to a JVM sealed interface that permits exactly its classes.
   For open contracts, see [Interfaces](#interfaces).
   Writing `sealed trait` is an error with a hint, since every trait is already closed.
+- When `if` or `match` branches produce objects of different classes, the result has the one user
+  trait they all share: `if big { Circle(5) } else { Empty }` is a `Shape`.
+- Two built-in traits are always available and are implemented by the compiler:
+  - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
+  - `Display` generates a `toString`, enabling `print` of the class's objects.
+- Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
+- A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
+  objects stay comparable and printable.
+- Classes without fields, including `Unit` and field-less trait cases, implicitly have `Eq` and
+  `Display`: they have a single value, so `Empty == Empty` holds and `print(Color.Red)` prints
+  `Color.Red`. Writing `has Eq` on them is allowed but redundant. A trait value still needs its trait
+  to require `Eq` or `Display`.
+- `toString`, `equals`, and `hashCode` are reserved member names in every class, trait, and
+  interface: they are the JVM's `Object` methods, which `Display` and `Eq` generate. Customizing
+  them by hand, as in Java or Kotlin, is an error that points to the trait.
+
 ### Trait cases
 
 A trait can list its own cases in a block instead of letting classes join it:
@@ -285,22 +303,6 @@ fn name(color: Color): String = match color {
 - `Display` prints a case qualified: `Color.Red`, `Shape.Circle(radius: 2)`.
 - A case name may match a top-level class name: `Tree.Leaf` and `Leaf` never meet.
 - Cases compile to static nested JVM classes, which Java sees as `Shape.Circle`.
-
-- When `if` or `match` branches produce objects of different classes, the result has the one user
-  trait they all share: `if big { Circle(5) } else { Empty() }` is a `Shape`.
-- Two built-in traits are always available and are implemented by the compiler:
-  - `Eq` generates a structural `equals`, enabling `==` and `!=` on the class's objects.
-  - `Display` generates a `toString`, enabling `print` of the class's objects.
-- Built-in trait names are reserved: no function, class, or trait can be named `Eq` or `Display`.
-- A class with `Eq` or `Display` must have the same trait on every class-typed field, so nested
-  objects stay comparable and printable.
-- Classes without fields, including `Unit` and field-less trait cases, implicitly have `Eq` and
-  `Display`: they have a single value, so `Empty == Empty` holds and `print(Color.Red)` prints
-  `Color.Red`. Writing `has Eq` on them is allowed but redundant. A trait value still needs its trait
-  to require `Eq` or `Display`.
-- `toString`, `equals`, and `hashCode` are reserved member names in every class, trait, and
-  interface: they are the JVM's `Object` methods, which `Display` and `Eq` generate. Customizing
-  them by hand, as in Java or Kotlin, is an error that points to the trait.
 
 ## Interfaces
 
@@ -700,7 +702,7 @@ fn total(orders: Orders): Int {
 ## Newlines and blocks
 
 - A newline ends a statement, a class member, or a trait signature. A closing `}` also ends the
-  last one, so blocks fit on one line: `if c { 1 } else { 2 }`, `class Point { x: Int }`.
+  last one, so blocks fit on one line: `if c { 1 } else { 2 }`, `class Point { val x: Int }`.
 - Semicolons are not used; writing one is a compile error that says so.
 - A statement continues on the next line only when that is visible on the line itself:
   - inside an open `(`, newlines are ignored, so argument lists and grouped expressions can span

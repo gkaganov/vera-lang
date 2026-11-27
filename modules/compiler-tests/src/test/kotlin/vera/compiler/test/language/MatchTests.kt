@@ -29,19 +29,10 @@ class MatchTests {
                     Point(x, y) -> x + y
                 }
                 print(sum)
-                mut val count = 0
-                while count < 3 {
-                    count = count + 1
-                    match Point(x = count, y = 0) {
-                        Point(x) -> if x == 2 { break }
-                    }
-                }
-                print(count)
             }
             """,
             "origin",
             "7",
-            "2",
         )
 
         @Test
@@ -167,6 +158,71 @@ class MatchTests {
             """,
             "click 8",
             "quit",
+        )
+
+        @Test
+        fun `match arms can break, continue, or jump from inside an if`() = assertPrints(
+            """
+            trait Step { Skip, Stop, Show }
+            class Point {
+                val x: Int
+            }
+            fn step(n: Int): Step = if n == 2 { Step.Skip } else if n == 4 { Step.Stop } else { Step.Show }
+            fn main() {
+                mut val n = 0
+                while n < 10 {
+                    n = n + 1
+                    match step(n) {
+                        Skip -> continue
+                        Stop -> break
+                        Show -> print(n)
+                    }
+                }
+                mut val count = 0
+                while count < 3 {
+                    count = count + 1
+                    match Point(count) {
+                        Point(x) -> if x == 2 { break }
+                    }
+                }
+                print(count)
+            }
+            """,
+            "1",
+            "3",
+            "2",
+        )
+
+        @Test
+        fun `match bindings are local to their arm`() = assertPrints(
+            """
+            trait Shape {
+                Circle {
+                    val size: Int
+                }
+                Square {
+                    val size: Int
+                }
+            }
+            fn measure(shape: Shape): Int = match shape {
+                Circle(size) -> size
+                Square(size) -> size * 2
+            }
+            fn main() {
+                print(measure(Shape.Circle(4)))
+                print(measure(Shape.Square(3)))
+            }
+            """,
+            "4",
+            "6",
+        )
+
+        @Test
+        fun `rejects match bindings used after the match`() = assertCompilationFails(
+            "trait Shape {\n    Circle {\n        val radius: Int\n    }\n}\n" +
+                "fn area(shape: Shape): Int {\n    match shape {\n        Circle(radius) -> print(radius)\n    }\n    return radius\n}",
+            JvmLoweringException.UnknownVariable::class,
+            "variable radius is not defined",
         )
 
         @Test

@@ -90,22 +90,30 @@ class ClassTests {
     @Nested
     inner class Objects {
         @Test
-        fun `objects can be constructed and fields read`() = assertReturns(
+        fun `objects can be constructed and their fields read`() = assertPrints(
             """
-            class Point {
-                val x: Int
-                val y: Int
+            class Message {
+                val count: Int
+                val text: String
+                val active: Bool
+                val unit: Unit
             }
-            fn main(): Int {
-                val point = Point(x = 1, y = 2)
-                return point.x + point.y
+            fn main() {
+                val message = Message(count = 1, text = "Hello", active = False, unit = Unit)
+                print(message.count)
+                print(message.text)
+                print(message.active)
+                print(message.unit)
             }
             """,
-            3,
+            "1",
+            "Hello",
+            "False",
+            "Unit",
         )
 
         @Test
-        fun `class fields can hold objects and chained field access works`() = assertReturns(
+        fun `fields can hold objects and field access chains`() = assertPrints(
             """
             class Point {
                 val x: Int
@@ -115,79 +123,33 @@ class ClassTests {
                 val start: Point
                 val end: Point
             }
-            fn main(): Int {
-                val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
-                return line.start.x + line.end.y
-            }
-            """,
-            5,
-        )
-
-        @Test
-        fun `objects can be passed to and returned from functions`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-            }
-            fn add(left: Point, right: Point): Point {
-                return Point(x = left.x + right.x, y = left.y + right.y)
-            }
-            fn main(): Int {
-                val result = add(left = Point(x = 1, y = 2), right = Point(x = 3, y = 4))
-                return result.x * 10 + result.y
-            }
-            """,
-            46,
-        )
-
-        @Test
-        fun `class fields can hold String and Bool values`() = assertPrints(
-            """
-            class Message {
-                val text: String
-                val active: Bool
-            }
             fn main() {
-                val message = Message(text = "Hello", active = False)
-                print(message.text)
-                print(message.active)
+                val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
+                print(line.start.x + line.end.y)
             }
             """,
-            "Hello",
-            "False",
+            "5",
         )
 
         @Test
-        fun `field access can follow a constructor call`() = assertReturns(
+        fun `fields can be read from call results and passed objects`() = assertPrints(
             """
             class Point {
                 val x: Int
                 val y: Int
             }
-            fn main(): Int {
-                return Point(x = 4, y = 5).y
-            }
-            """,
-            5,
-        )
-
-        @Test
-        fun `class types work in local annotations and field access follows function calls`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-            }
-            fn makePoint(): Point {
-                return Point(x = 7, y = 8)
-            }
-            fn main(): Int {
+            fn makePoint(): Point = Point(x = 7, y = 8)
+            fn add(left: Point, right: Point): Point = Point(x = left.x + right.x, y = left.y + right.y)
+            fn main() {
                 val point: Point = makePoint()
-                return point.x + makePoint().y
+                print(point.x + makePoint().y)
+                print(Point(x = 4, y = 5).y)
+                print(add(left = Point(x = 1, y = 2), right = Point(x = 3, y = 4)).x)
             }
             """,
-            15,
+            "15",
+            "5",
+            "4",
         )
 
         @Test
@@ -243,259 +205,94 @@ class ClassTests {
     @Nested
     inner class Methods {
         @Test
-        fun `class methods can read fields implicitly`() = assertReturns(
+        fun `methods take and return every type and read fields implicitly`() = assertPrints(
             """
-            class Point {
+            class Point has Display {
                 val x: Int
                 val y: Int
-
-                fn sum(): Int {
-                    return x + y
-                }
-            }
-            fn main(): Int {
-                return Point(x = 1, y = 2).sum()
-            }
-            """,
-            3,
-        )
-
-        @Test
-        fun `class methods accept parameters and return objects`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-
-                fn offset(dx: Int, dy: Int): Point {
-                    return Point(x = x + dx, y = y + dy)
-                }
-            }
-            fn main(): Int {
-                val point = Point(x = 1, y = 2).offset(dx = 3, dy = 4)
-                return point.x * 10 + point.y
-            }
-            """,
-            46,
-        )
-
-        @Test
-        fun `class methods can call sibling methods`() = assertReturns(
-            """
-            class Counter {
-                val value: Int
-
-                fn doubled(): Int {
-                    return value * 2
-                }
-
-                fn quadrupled(): Int {
-                    return doubled() * 2
-                }
-            }
-            fn main(): Int {
-                return Counter(3).quadrupled()
-            }
-            """,
-            12,
-        )
-
-        @Test
-        fun `class methods can call top-level functions and print`() = assertPrints(
-            """
-            fn increment(value: Int): Int {
-                return value + 1
-            }
-            class Counter {
-                val value: Int
-
-                fn printNext() {
-                    print(increment(value))
-                }
+                fn sum(): Int = x + y
+                fn offset(dx: Int, dy: Int): Point = Point(x = x + dx, y = y + dy)
+                fn label(prefix: String): String = "\{prefix} \{x}"
+                fn above(limit: Int): Bool = y > limit
+                fn total(other: Point): Int = sum() + other.sum()
+                fn sign(): Int = if x < 0 { -1 } else { 1 }
             }
             fn main() {
+                val point = Point(x = 1, y = 2)
+                print(point.sum())
+                print(point.offset(dx = 3, dy = 4))
+                print(point.label("x is"))
+                print(point.above(1))
+                print(point.total(Point(x = 3, y = 4)))
+                print(point.sign())
+            }
+            """,
+            "3",
+            "Point(x: 4, y: 6)",
+            "x is 1",
+            "True",
+            "10",
+            "1",
+        )
+
+        @Test
+        fun `methods call sibling methods, top-level functions, and print`() = assertPrints(
+            """
+            fn increment(value: Int): Int = value + 1
+            class Counter {
+                val value: Int
+                fn doubled(): Int = value * 2
+                fn quadrupled(): Int = doubled() * 2
+                fn printNext() = print(increment(value))
+            }
+            fn main() {
+                print(Counter(3).quadrupled())
                 Counter(41).printNext()
             }
             """,
+            "12",
             "42",
         )
 
         @Test
-        fun `class methods can be called on nested object values`() = assertReturns(
+        fun `methods can be called on any object expression`() = assertPrints(
             """
             class Point {
                 val x: Int
-                val y: Int
-
-                fn sum(): Int {
-                    return x + y
-                }
-            }
-            class Line {
-                val start: Point
-                val end: Point
-            }
-            fn main(): Int {
-                val line = Line(start = Point(x = 1, y = 2), end = Point(x = 3, y = 4))
-                return line.start.sum() + line.end.sum()
-            }
-            """,
-            10,
-        )
-
-        @Test
-        fun `class methods can call methods on field values`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-
-                fn value(): Int {
-                    return x
-                }
+                fn withX(newX: Int): Point = Point(newX)
+                fn value(): Int = x
             }
             class Box {
                 val point: Point
-
-                fn value(): Int {
-                    return point.value()
-                }
+                fn value(): Int = point.value()
+                fn shifted(dx: Int): Int = point.withX(point.x + dx).value()
             }
-            fn main(): Int {
-                return Box(Point(9)).value()
-            }
-            """,
-            9,
-        )
-
-        @Test
-        fun `class methods can be called on constructor results`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-
-                fn withX(newX: Int): Point {
-                    return Point(x = newX, y = y)
-                }
-            }
-            fn main(): Int {
-                return Point(x = 1, y = 2).withX(7).x
-            }
-            """,
-            7,
-        )
-
-        @Test
-        fun `class methods can use if expressions`() = assertReturns(
-            """
-            class Number {
-                val value: Int
-
-                fn sign(): Int {
-                    return if value < 0 {
-                        0
-                    } else {
-                        1
-                    }
-                }
-            }
-            fn main(): Int {
-                return Number(5).sign()
-            }
-            """,
-            1,
-        )
-
-        @Test
-        fun `class methods support string parameters and returns`() = assertPrints(
-            """
-            class Label {
-                val text: String
-
-                fn value(): String {
-                    return text
-                }
-
-                fn echo(message: String): String {
-                    return message
-                }
-            }
+            fn makeBox(): Box = Box(Point(1))
             fn main() {
-                print(Label("hello").value())
-                print(Label("unused").echo("world"))
+                val box = Box(Point(9))
+                print(box.value())
+                print(box.point.value())
+                print(Point(1).withX(7).x)
+                print(makeBox().shifted(4))
             }
             """,
-            "hello",
-            "world",
+            "9",
+            "9",
+            "7",
+            "5",
         )
 
         @Test
-        fun `class methods support bool parameters and returns`() = assertReturns(
+        fun `methods can call themselves recursively`() = assertPrints(
             """
-            class Flag {
-                val value: Bool
-
-                fn select(useValue: Bool): Bool {
-                    return if useValue {
-                        value
-                    } else {
-                        False
-                    }
-                }
+            class Countdown {
+                val from: Int
+                fn total(n: Int): Int = if n == 0 { 0 } else { n + total(n - 1) }
+                fn sum(): Int = total(from)
             }
-            fn main(): Int {
-                return if Flag(True).select(True) and Flag(False).select(True) {
-                    0
-                } else {
-                    1
-                }
-            }
+            fn main() = print(Countdown(4).sum())
             """,
-            1,
-        )
-
-        @Test
-        fun `class methods on field values accept arguments`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-
-                fn offset(dx: Int, dy: Int): Point {
-                    return Point(x = x + dx, y = y + dy)
-                }
-            }
-            class Box {
-                val point: Point
-
-                fn shifted(dx: Int, dy: Int): Int {
-                    val moved = point.offset(dx, dy)
-                    return moved.x * 10 + moved.y
-                }
-            }
-            fn main(): Int {
-                return Box(Point(x = 1, y = 2)).shifted(dx = 3, dy = 4)
-            }
-            """,
-            46,
-        )
-
-        @Test
-        fun `class methods accept object parameters`() = assertReturns(
-            """
-            class Point {
-                val x: Int
-                val y: Int
-
-                fn total(other: Point): Int {
-                    return x + y + other.x + other.y
-                }
-            }
-            fn main(): Int {
-                return Point(x = 1, y = 2).total(Point(x = 3, y = 4))
-            }
-            """,
-            10,
+            "10",
         )
 
         @Test
@@ -586,7 +383,7 @@ class ClassTests {
             trait Shape {
                 fn area(): Int
             }
-            class Nothing has Shape {
+            class NoShape has Shape {
                 fn area(): Int = 0
             }
             fn describe(shape: Shape): Int = shape.area()
@@ -595,7 +392,7 @@ class ClassTests {
                 print(Empty == Empty)
                 print("empty: \{Empty}")
                 print(Geometry.square(3))
-                print(describe(Nothing))
+                print(describe(NoShape))
                 val geometry = Geometry
                 print(4 |> geometry.square())
             }

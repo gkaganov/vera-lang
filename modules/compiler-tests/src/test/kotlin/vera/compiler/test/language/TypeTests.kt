@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import vera.compiler.test.assertCompilationFails
 import vera.compiler.test.assertPrints
-import vera.compiler.test.assertReturns
 import vera.compiler.test.function
+import vera.jvm.lowering.JvmLoweringException
 import vera.parser.VeraParseException
 
 /** The built-in types `Int`, `Bool`, and `Unit`. */
@@ -13,17 +13,17 @@ class TypeTests {
     @Nested
     inner class Int {
         @Test
-        fun `the smallest Int literal can be written`() = assertPrints(
+        fun `the smallest and largest Int literals can be written`() = assertPrints(
             """
             fn main() {
                 print(-2147483648)
                 print(-2147483648 + 1)
-                print(-(5))
+                print(2147483647)
             }
             """,
             "-2147483648",
             "-2147483647",
-            "-5",
+            "2147483647",
         )
 
         @Test
@@ -61,46 +61,36 @@ class TypeTests {
     @Nested
     inner class Unit {
         @Test
-        fun `Unit values can be stored in objects and read back`() = assertReturns(
+        fun `Unit values can be stored in objects and read back`() = assertPrints(
             """
             class Signal {
                 val flag: Unit
             }
-            fn main(): Int {
+            fn main() {
                 val signal = Signal(Unit)
                 val flag: Unit = signal.flag
-                return 1
+                print(flag)
             }
             """,
-            1,
+            "Unit",
         )
 
         @Test
-        fun `Unit values can be passed and returned`() = assertReturns(
+        fun `Unit values can be passed and returned`() = assertPrints(
             """
             fn identity(unit: Unit) {
                 return unit
             }
-            fn main(): Int {
-                val unit = identity(Unit)
-                return 1
-            }
-            """,
-            1,
-        )
-
-        @Test
-        fun `Unit can be returned explicitly`() = assertReturns(
-            """
             fn explicitUnit() {
                 return Unit
             }
-            fn main(): Int {
-                val unit = explicitUnit()
-                return 1
+            fn main() {
+                print(identity(Unit))
+                print(explicitUnit())
             }
             """,
-            1,
+            "Unit",
+            "Unit",
         )
 
         @Test
@@ -145,6 +135,13 @@ class TypeTests {
             }
             """,
             "Unit",
+        )
+
+        @Test
+        fun `rejects constructing Unit`() = assertCompilationFails(
+            function("val unit = Unit()"),
+            JvmLoweringException.SingletonConstructed::class,
+            "Unit has no fields, so it has a single value; write `Unit` instead of `Unit()`",
         )
     }
 }

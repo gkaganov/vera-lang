@@ -15,15 +15,15 @@ class BindingTests {
     @Nested
     inner class Val {
         @Test
-        fun `val with explicit type declaration can be bound and accessed`() = assertReturns(
+        fun `annotated vals take their declared type`() = assertPrints(
             """
-            fn main(): Int {
-                val myVar1: Int = 50
-                val myVar2: Int = 51
-                return myVar1 + myVar2 + 52
+            fn main() {
+                val width: Int = 50
+                val label: String = "size"
+                print("\{label}: \{width + 1}")
             }
             """,
-            153,
+            "size: 51",
         )
 
         @Test
@@ -49,7 +49,7 @@ class BindingTests {
     }
 
     @Nested
-    inner class Rebinding {
+    inner class MutVal {
         @Test
         fun `mut val bindings can be rebound`() = assertPrints(
             """
@@ -71,39 +71,6 @@ class BindingTests {
             """,
             "3",
             "Point(x: 6, y: 0)",
-        )
-
-        @Test
-        fun `mut val without a value makes a parameter rebindable`() = assertPrints(
-            """
-            class Counter {
-                val start: Int
-                fn countUp(steps: Int): Int {
-                    mut val steps
-                    mut val total = start
-                    while steps > 0 {
-                        total = total + 1
-                        steps = steps - 1
-                    }
-                    return total
-                }
-            }
-            fn countdown(from: Int) {
-                mut val from
-                while from > 0 {
-                    print(from)
-                    from = from - 1
-                }
-            }
-            fn main() {
-                countdown(3)
-                print(Counter(10).countUp(2))
-            }
-            """,
-            "3",
-            "2",
-            "1",
-            "12",
         )
 
         @Test
@@ -151,6 +118,99 @@ class BindingTests {
             "count is immutable; declare it with `mut val` to rebind it",
         )
 
+
+
+
+        @Test
+        fun `rejects rebinding unknown variables`() = assertCompilationFails(
+            function("missing = 1"),
+            JvmLoweringException.UnknownVariable::class,
+            "variable missing is not defined",
+        )
+
+        @Test
+        fun `rejects rebinding fields inside methods`() = assertCompilationFails(
+            classDeclaration("Counter", "val start: Int", "fn reset() {", "    start = 0", "}"),
+            JvmLoweringException.FieldRebound::class,
+            "field start cannot be rebound; objects are immutable, so create a new object with the new value",
+        )
+
+        @Test
+        fun `rejects rebinding function names`() = assertCompilationFails(
+            "fn helper() {\n}\n" + function("helper = 1"),
+            JvmLoweringException.FunctionRebound::class,
+            "helper is a function, not a variable, so it cannot be rebound",
+        )
+
+        @Test
+        fun `rejects rebinding to a different type`() = assertCompilationFails(
+            function("mut val value = 1", "value = \"text\""),
+            JvmLoweringException.RebindTypeMismatch::class,
+            "cannot rebind variable value of type Int to String",
+        )
+
+        @Test
+        fun `annotated mut vals can be rebound`() = assertPrints(
+            """
+            fn main() {
+                mut val count: Int = 1
+                count = count + 1
+                print(count)
+            }
+            """,
+            "2",
+        )
+
+        @Test
+        fun `an outer mut val can be rebound inside an if branch`() = assertPrints(
+            """
+            fn main() {
+                mut val count = 1
+                if count > 0 {
+                    count = 10
+                }
+                print(count)
+            }
+            """,
+            "10",
+        )
+    }
+
+    @Nested
+    inner class RebindableParameters {
+        @Test
+        fun `mut val without a value makes a parameter rebindable`() = assertPrints(
+            """
+            class Counter {
+                val start: Int
+                fn countUp(steps: Int): Int {
+                    mut val steps
+                    mut val total = start
+                    while steps > 0 {
+                        total = total + 1
+                        steps = steps - 1
+                    }
+                    return total
+                }
+            }
+            fn countdown(from: Int) {
+                mut val from
+                while from > 0 {
+                    print(from)
+                    from = from - 1
+                }
+            }
+            fn main() {
+                countdown(3)
+                print(Counter(10).countUp(2))
+            }
+            """,
+            "3",
+            "2",
+            "1",
+            "12",
+        )
+
         @Test
         fun `rejects rebinding parameters`() = assertCompilationFails(
             "fn next(value: Int): Int {\n    value = value + 1\n    return value\n}",
@@ -186,34 +246,6 @@ class BindingTests {
             "fn next(value: Int) {\n    if True {\n        mut val value\n    }\n}",
             JvmLoweringException.MutableParameterOutsideFunctionBody::class,
             "`mut val value` must be written directly in the function body, not inside a block",
-        )
-
-        @Test
-        fun `rejects rebinding unknown variables`() = assertCompilationFails(
-            function("missing = 1"),
-            JvmLoweringException.UnknownVariable::class,
-            "variable missing is not defined",
-        )
-
-        @Test
-        fun `rejects rebinding fields inside methods`() = assertCompilationFails(
-            classDeclaration("Counter", "val start: Int", "fn reset() {", "    start = 0", "}"),
-            JvmLoweringException.FieldRebound::class,
-            "field start cannot be rebound; objects are immutable, so create a new object with the new value",
-        )
-
-        @Test
-        fun `rejects rebinding function names`() = assertCompilationFails(
-            "fn helper() {\n}\n" + function("helper = 1"),
-            JvmLoweringException.FunctionRebound::class,
-            "helper is a function, not a variable, so it cannot be rebound",
-        )
-
-        @Test
-        fun `rejects rebinding to a different type`() = assertCompilationFails(
-            function("mut val value = 1", "value = \"text\""),
-            JvmLoweringException.RebindTypeMismatch::class,
-            "cannot rebind variable value",
         )
     }
 

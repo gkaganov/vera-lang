@@ -1204,7 +1204,11 @@ private class JvmFunctionLoweringState(
                     }
                 }
 
-                is VeraArguments -> throw JvmLoweringException.ValueCallNotSupported().at(chainedData.span)
+                is VeraArguments -> throw if (dataIndex == 0 && veraChainedExpression.primaryExpression is VeraUnitLiteral) {
+                    JvmLoweringException.SingletonConstructed(JvmUnitType.name).at(chainedData.span)
+                } else {
+                    JvmLoweringException.ValueCallNotSupported().at(chainedData.span)
+                }
             }
         }
 

@@ -20,6 +20,9 @@ Vera source cannot reach them: `FlatInstructionLoweringTests` in `jvm-instructio
 
 - Put a test in the file of the feature it exercises, in the nested class of its sub-feature, next
   to that feature's other tests. Error tests sit beside the successful ones.
+- Hints for Java and Kotlin habits are the exception: they all live in `HabitTests`, grouped in
+  language-guide order and named after the language the habit comes from (`Kotlin data classes`),
+  so the covered habits can be reviewed in one place.
 - Name tests as descriptive backticked sentences. Error tests start with `rejects` (`rejects duplicate
   class fields`).
 - When a feature gets its own section in `language.md`, give it its own file or nested class.

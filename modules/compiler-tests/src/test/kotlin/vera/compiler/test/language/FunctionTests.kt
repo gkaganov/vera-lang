@@ -15,16 +15,16 @@ class FunctionTests {
     @Nested
     inner class Calls {
         @Test
-        fun `functions can be called`() = assertPrints(
+        fun `functions can be called before their declaration`() = assertPrints(
             """
             fn main() {
-                print1()
-                print2()
+                greet()
+                farewell()
             }
-            fn print1() {
+            fn greet() {
                 print(1)
             }
-            fn print2() {
+            fn farewell() {
                 print(2)
             }
             """,
@@ -33,30 +33,61 @@ class FunctionTests {
         )
 
         @Test
-        fun `one Int parameter can be passed`() = assertReturns(
+        fun `functions take and return every type`() = assertPrints(
             """
-            fn main(): Int {
-                val numberResult: Int = receiveAndReturn(369)
-                return numberResult
+            trait Shape {
+                fn area(): Int
             }
-            fn receiveAndReturn(int: Int): Int {
-                return int
+            class Square has Shape, Display {
+                val side: Int
+                fn area(): Int = side * side
+            }
+            fn sum(first: Int, second: Int, third: Int): Int = first + second + third
+            fn shout(text: String): String = "\{text}!"
+            fn flip(flag: Bool): Bool = not flag
+            fn pass(unit: Unit) = unit
+            fn grow(square: Square): Square = Square(square.side + 1)
+            fn measure(shape: Shape): Shape = shape
+            fn main() {
+                print(sum(first = 99, second = 98, third = 2 * 48 + 1))
+                print(shout("hi"))
+                print(flip(True))
+                print(pass(Unit))
+                print(grow(Square(2)))
+                print(measure(Square(3)).area())
             }
             """,
-            369,
+            "294",
+            "hi!",
+            "False",
+            "Unit",
+            "Square(side: 3)",
+            "9",
         )
 
         @Test
-        fun `multiple Int parameters can be passed`() = assertReturns(
+        fun `functions can call themselves recursively`() = assertPrints(
             """
-            fn main(): Int {
-                return add3Ints(int1 = 99, int2 = 98, int3 = 2 * 48 + 1)
-            }
-            fn add3Ints(int1: Int, int2: Int, int3: Int): Int {
-                return int1 + int2 + int3
+            fn factorial(n: Int): Int = if n <= 1 { 1 } else { n * factorial(n - 1) }
+            fn main() {
+                print(factorial(5))
             }
             """,
-            294,
+            "120",
+        )
+
+        @Test
+        fun `functions can call each other recursively`() = assertPrints(
+            """
+            fn isEven(n: Int): Bool = if n == 0 { True } else { isOdd(n - 1) }
+            fn isOdd(n: Int): Bool = if n == 0 { False } else { isEven(n - 1) }
+            fn main() {
+                print(isEven(10))
+                print(isOdd(7))
+            }
+            """,
+            "True",
+            "True",
         )
 
         @Test
@@ -283,17 +314,27 @@ class FunctionTests {
     @Nested
     inner class Returns {
         @Test
-        fun `Int can be returned`() = assertReturns(
+        fun `return without a value ends a Unit function`() = assertPrints(
             """
-            fn main(): Int {
-                val numberResult: Int = getInt() + 0
-                return numberResult
+            fn report(ready: Bool) {
+                if not ready {
+                    return
+                }
+                print("ready")
             }
-            fn getInt(): Int {
-                return 698
+            fn main() {
+                report(False)
+                report(True)
             }
             """,
-            698,
+            "ready",
+        )
+
+        @Test
+        fun `rejects an if without else as the only return`() = assertCompilationFails(
+            "fn sign(value: Int): Int {\n    if value > 0 {\n        return 1\n    }\n}",
+            JvmLoweringException.MissingReturnStatement::class,
+            "missing return statement for type Int",
         )
 
         @Test
@@ -385,23 +426,35 @@ class FunctionTests {
             fn double(value: Int): Int = value * 2
             fn greet(name: String): String = "Hello, \{name}!"
             fn sign(value: Int): Int = if value > 0 { 1 } else if value < 0 { -1 } else { 0 }
-            fn total(first: Int, second: Int): Int =
-                first + second
-            fn log(text: String) = print(text)
             fn main() {
                 print(Square(3).area())
                 print(4 |> double())
                 print(greet("Vera"))
                 print(sign(-7))
-                print(total(first = 2, second = 3))
-                log("done")
             }
             """,
             "9",
             "8",
             "Hello, Vera!",
             "-1",
+        )
+
+        @Test
+        fun `an expression body can start on the next line`() = assertPrints(
+            """
+            fn total(first: Int, second: Int): Int =
+                first + second
+            fn main() = print(total(first = 2, second = 3))
+            """,
             "5",
+        )
+
+        @Test
+        fun `Unit functions can have expression bodies`() = assertPrints(
+            """
+            fn log(text: String) = print(text)
+            fn main() = log("done")
+            """,
             "done",
         )
 

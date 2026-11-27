@@ -14,6 +14,20 @@ class LexicalTests {
     @Nested
     inner class Tokens {
         @Test
+        fun `rejects keywords used as names`() = assertCompilationFails(
+            function("val match = 1"),
+            VeraParseException.ExpectedToken::class,
+            "expected variable name, found `match`",
+        )
+
+        @Test
+        fun `rejects keywords used as function names`() = assertCompilationFails(
+            "fn has() {\n}",
+            VeraParseException.ExpectedToken::class,
+            "expected function name, found `has`",
+        )
+
+        @Test
         fun `rejects unexpected characters`() = assertCompilationFails(
             "fn main() { # }",
             VeraLexException.UnexpectedCharacter::class,
@@ -22,7 +36,7 @@ class LexicalTests {
     }
 
     @Nested
-    inner class Newlines {
+    inner class BlankLines {
         @Test
         fun `blank lines inside if blocks are ignored`() = assertPrints(
             """
@@ -147,7 +161,10 @@ class LexicalTests {
             """.trimIndent().replace("\n", "\r\n"),
             "1",
         )
+    }
 
+    @Nested
+    inner class StatementEnds {
         @Test
         fun `blocks can be written on one line`() = assertPrints(
             """
@@ -289,6 +306,44 @@ class LexicalTests {
             }
             """,
             1,
+        )
+
+        @Test
+        fun `a leading not starts a new statement`() = assertReturns(
+            """
+            fn main(): Int {
+                val value = 1
+                not True
+                return value
+            }
+            """,
+            1,
+        )
+
+        @Test
+        fun `a trailing not, dot, or arrow continues the statement`() = assertPrints(
+            """
+            class Box {
+                val size: Int
+            }
+            trait Shape { Square, Round }
+            fn main() {
+                val flag = not
+                    True
+                print(flag)
+                print(Box(3).
+                    size)
+                val shape: Shape = Shape.Square
+                print(match shape {
+                    Square ->
+                        "square"
+                    Round -> "round"
+                })
+            }
+            """,
+            "False",
+            "3",
+            "square",
         )
     }
 
